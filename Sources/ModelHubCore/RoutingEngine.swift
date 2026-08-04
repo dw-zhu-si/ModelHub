@@ -1,0 +1,215 @@
+import Foundation
+
+public actor RoutingEngine {
+    private var roundRobinCounters: [UUID: Int] = [:]
+
+    public init() {}
+
+    public func candidates(
+        for requestedModel: String,
+        routes: [RouteConfig],
+        providers: [ProviderConfig],
+        healthRecords: [ModelHealthRecord] = [],
+        usage: [UsageAggregate] = [],
+        requiredCapabilities: Set<ModelCapability> = []
+    ) -> [RouteTarget] {
+        candidates(
+            for: requestedModel,
+            routes: routes,
+            providers: providers,
+            health: ModelHealthIndex(records: healthRecords),
+            usage: usage,
+            requiredCapabilities: requiredCapabilities
+        )
+    }
+
+    public func candidates(
+        for requestedModel: String,
+        routes: [RouteConfig],
+        providers: [ProviderConfig],
+        health: ModelHealthIndex,
+        usage: [UsageAggregate] = [],
+        requiredCapabilities: Set<ModelCapability> = []
+    ) -> [RouteTarget] {
+        let enabledProviders = Set(providers.filter(\.enabled).map(\.id))
+
+        if let route = routes.first(where: {
+            $0.enabled && $0.alias.caseInsensitiveCompare(requestedModel) == .orderedSame
+        }) {
+            let providerIndex = Dictionary(uniqueKeysWithValues: providers.map { ($0.id, $0) })
+            let targets = route.targets.map { target in
+                guard target.profile == nil,
+                      let inherited = providerIndex[target.providerID]?.modelProfiles?[target.model]
+                else { return target }
+                var enriched = target
+                enriched.profile = inherited
+                return enriched
+            }.filter {
+                enabledProviders.contains($0.providerID)
+                    && !$0.model.trimmingCharacters(in: .whitespaces).isEmpty
+                    && health.status(
+                        providerID: $0.providerID,
+                        model: $0.model
+                    ).isRoutable
+                    && supports(requiredCapabilities, profile: $0.profile)
+            }
+            return orderedTargets(targets, route: route, health: health, usage: usage)
+        }
+
+        let directMatches = providers
+            .filter(\.enabled)
+            .flatMap { provider in
+                provider.models.compactMap { model -> RouteTarget? in
+                    let names = [
+                        model,
+                        "\(provider.name)/\(model)",
+                        "\(provider.id.uuidString)/\(model)"
+                    ]
+                    guard names.contains(where: {
+                        $0.caseInsensitiveCompare(requestedModel) == .orderedSame
+                    }),
+                    health.status(providerID: provider.id, model: model).isRoutable
+                    else { return nil }
+                    return RouteTarget(
+                        providerID: provider.id,
+                        model: model,
+                        profile: provider.modelProfiles?[model]
+                    )
+                }
+            }
+        return health.order(targets: directMatches)
+            .filter { supports(requiredCapabilities, profile: $0.profile) }
+            .sorted {
+            capabilityRank($0.profile, required: requiredCapabilities)
+                < capabilityRank($1.profile, required: requiredCapabilities)
+            }
+    }
+
+    private func supports(
+        _ required: Set<ModelCapability>,
+        profile: TargetProfile?
+    ) -> Bool {
+        guard !required.isEmpty, let profile, !profile.capabilities.isEmpty else { return true }
+        return required.isSubset(of: profile.capabilities)
+    }
+
+    private func capabilityRank(
+        _ profile: TargetProfile?,
+        required: Set<ModelCapability>
+    ) -> Int {
+        guard !required.isEmpty else { return 0 }
+        guard let profile, !profile.capabilities.isEmpty else { return 1 }
+        return required.isSubset(of: profile.capabilities) ? 0 : 2
+    }
+
+    private func orderedTargets(
+        _ targets: [RouteTarget],
+        route: RouteConfig,
+        health: ModelHealthIndex,
+        usage: [UsageAggregate]
+    ) -> [RouteTarget] {
+        guard !targets.isEmpty else { return [] }
+
+        let tiers = ModelAvailability.allCases
+            .sorted { $0.routingRank < $1.routingRank }
+            .map { status in
+                targets.filter {
+                    health.status(providerID: $0.providerID, model: $0.model) == status
+                }
+            }
+            .filter { !$0.isEmpty }
+
+        switch route.strategy {
+        case .priority:
+            return tiers.flatMap { tier in
+                tier.sorted {
+                    if $0.priority == $1.priority { return $0.weight > $1.weight }
+                    return $0.priority < $1.priority
+                }
+            }
+        case .roundRobin:
+            let counter = roundRobinCounters[route.id, default: 0]
+            roundRobinCounters[route.id] = counter + 1
+            return tiers.flatMap { tier in
+                let offset = counter % tier.count
+                return Array(tier[offset...] + tier[..<offset])
+            }
+        case .weightedRandom:
+            return tiers.flatMap { tier in
+                let weighted = tier.flatMap { target in
+                    Array(repeating: target, count: max(1, min(target.weight, 100)))
+                }
+                guard let first = weighted.randomElement() else { return tier }
+                return [first] + tier.filter { $0.id != first.id }
+            }
+        case .lowestLatency:
+            return tiers.flatMap { tier in
+                tier.sorted {
+                    latency(for: $0, health: health) < latency(for: $1, health: health)
+                }
+            }
+        case .highestStability:
+            return tiers.flatMap { tier in
+                tier.sorted {
+                    stability(for: $0, usage: usage) > stability(for: $1, usage: usage)
+                }
+            }
+        case .lowestCost:
+            return tiers.flatMap { tier in
+                tier.sorted { estimatedUnitCost(for: $0) < estimatedUnitCost(for: $1) }
+            }
+        case .largestContext:
+            return tiers.flatMap { tier in
+                tier.sorted {
+                    ($0.profile?.contextWindow ?? -1) > ($1.profile?.contextWindow ?? -1)
+                }
+            }
+        case .balanced:
+            return tiers.flatMap { tier in
+                tier.sorted {
+                    balancedScore(for: $0, health: health, usage: usage)
+                        < balancedScore(for: $1, health: health, usage: usage)
+                }
+            }
+        }
+    }
+
+    private func latency(for target: RouteTarget, health: ModelHealthIndex) -> Int {
+        let measured = health.record(providerID: target.providerID, model: target.model)?
+            .latencyMilliseconds
+        return measured.flatMap { $0 > 0 ? $0 : nil } ?? Int.max
+    }
+
+    private func estimatedUnitCost(for target: RouteTarget) -> Double {
+        guard let profile = target.profile, profile.hasKnownPrice else {
+            return .greatestFiniteMagnitude
+        }
+        return (profile.inputCostPerMillionTokens ?? 0)
+            + (profile.outputCostPerMillionTokens ?? 0)
+    }
+
+    private func stability(for target: RouteTarget, usage: [UsageAggregate]) -> Double {
+        let matching = usage.filter {
+            $0.providerID == target.providerID && $0.model == target.model
+        }
+        let requests = matching.reduce(0) { $0 + $1.requests }
+        guard requests > 0 else { return -1 }
+        let success = matching.reduce(0) { $0 + $1.successfulRequests }
+        return Double(success) / Double(requests)
+    }
+
+    private func balancedScore(
+        for target: RouteTarget,
+        health: ModelHealthIndex,
+        usage: [UsageAggregate]
+    ) -> Double {
+        let latencyScore = Double(min(latency(for: target, health: health), 60_000)) / 1_000
+        let cost = estimatedUnitCost(for: target)
+        let costScore = cost.isFinite ? min(cost, 1_000) : 100
+        let context = Double(target.profile?.contextWindow ?? 0)
+        let contextCredit = min(context / 100_000, 20)
+        let priorityPenalty = Double(max(target.priority, 0)) * 2
+        let stabilityCredit = max(0, stability(for: target, usage: usage)) * 20
+        return latencyScore + costScore + priorityPenalty - contextCredit - stabilityCredit
+    }
+}

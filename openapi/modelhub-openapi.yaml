@@ -1,0 +1,542 @@
+openapi: 3.1.0
+info:
+  title: ModelHub Local Gateway API
+  version: 1.8.0
+  description: >
+    模型枢纽提供的本机统一接口，覆盖聊天、图像、视频、语音、转录、
+    Embedding 与 Rerank。服务仅监听 127.0.0.1，客户端使用应用中生成的
+    Bearer 令牌访问。请求体支持 Content-Length 和 chunked；请求头上限
+    64 KiB，解码后请求体上限 32 MiB，已知路径的错误方法返回 405。
+servers:
+  - url: http://127.0.0.1:11435
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      summary: 检查本地网关状态
+      security: []
+      responses:
+        "200":
+          description: 服务可用
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /v1/models:
+    get:
+      summary: 获取当前明确可用的模型与路由
+      description: >
+        默认目录只读取本机持久健康状态，不调用上游。仅返回状态为 available
+        的启用供应商模型，以及至少包含一个明确可用目标的启用路由；隔离、
+        不可用、未知状态和无可用目标的条目不会输出。
+      responses:
+        "200":
+          description: OpenAI 兼容模型列表
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/models/available:
+    get:
+      summary: 获取当前明确可用的模型与路由（兼容别名）
+      description: >
+        与 GET /v1/models 返回相同结果，保留此路径用于兼容旧客户端。
+      responses:
+        "200":
+          description: 当前可用模型列表及数量
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/providers:
+    get:
+      summary: 获取供应商列表与原生透传标识
+      responses:
+        "200":
+          description: 不含 API Key 的供应商列表
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/analytics:
+    get:
+      summary: 获取本月本机聚合用量
+      description: 不返回提示词、响应正文或密钥；未知价格不会伪算。
+      responses:
+        "200":
+          description: 按请求模型、供应商和真实模型聚合的成功率、延迟、Token 与估算费用
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/native:
+    post:
+      summary: 透传供应商专用原生协议
+      description: >
+        保留原始请求方法、正文、Content-Type、供应商扩展请求头和上游响应。
+        provider 只能选择已配置供应商，path 只能是该供应商主机内的绝对路径。
+        运行时同时支持 GET、POST、PUT、PATCH、DELETE。
+      parameters:
+        - name: provider
+          in: query
+          required: true
+          description: GET /v1/providers 返回的供应商 UUID 或供应商名称
+          schema:
+            type: string
+        - name: path
+          in: query
+          required: true
+          description: 供应商文档中的原生路径，必须以 / 开头
+          schema:
+            type: string
+            examples: [/mj/submit/imagine]
+        - name: model
+          in: query
+          required: true
+          description: 当前原生动作对应的已配置模型，用于状态记录与隔离
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          $ref: "#/components/responses/NativeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: 供应商不存在或未启用
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: 模型已隔离，未调用上游
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/chat/completions:
+    post:
+      summary: 创建聊天补全
+      description: >
+        model 可以是路由别名，也可以是“供应商名称/模型名称”。
+        路由遇到网络错误、HTTP 429 或 5xx 时按配置尝试下一个目标。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatCompletionRequest"
+      responses:
+        "200":
+          description: OpenAI 兼容聊天补全响应
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatCompletion"
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: 模型或路由不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: 上游模型服务调用失败
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/responses:
+    post:
+      summary: 创建 OpenAI Responses API 响应
+      description: 保留工具调用与多模态输入；stream=true 时以真正增量的 SSE 分块转发。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model]
+              additionalProperties: true
+              properties:
+                model: { type: string }
+                stream: { type: boolean }
+      responses:
+        "200":
+          description: Responses API JSON 或 SSE 响应
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+            text/event-stream:
+              schema: { type: string }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: 模型已隔离，未调用上游
+  /mcp:
+    post:
+      summary: 本机只读 MCP Streamable HTTP 入口
+      description: 使用独立 Agent Bearer 令牌；仅提供状态、可用模型和聚合用量工具。
+      responses:
+        "200": { description: JSON-RPC 响应 }
+        "204": { description: MCP 通知已接受 }
+        "401": { description: Agent 令牌无效 }
+        "403": { description: Origin 不是本机回环地址 }
+  /a2a:
+    post:
+      summary: 本机只读 A2A JSON-RPC 入口
+      responses:
+        "200": { description: JSON-RPC 响应 }
+        "401": { description: Agent 令牌无效 }
+  /.well-known/agent-card.json:
+    get:
+      summary: 获取 ModelHub 本机 A2A Agent Card
+      responses:
+        "200": { description: Agent Card }
+        "401": { description: Agent 令牌无效 }
+  /acp/manifest.json:
+    get:
+      summary: 获取 ACP stdio 启动清单
+      description: 清单只含令牌占位符，实际进程为应用包内 ModelHubACP。
+      responses:
+        "200": { description: ACP 清单 }
+        "401": { description: Agent 令牌无效 }
+  /v1/images/generations:
+    post:
+      summary: 创建图像生成任务
+      description: 保留供应商原生扩展字段，并将路由别名替换为真实模型名。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NativeJSONRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/NativeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ProtocolMismatch"
+  /v1/videos/generations:
+    post:
+      summary: 创建视频生成任务
+      description: >
+        APIMart 转发到 /v1/videos/generations，Agnes 转发到 /v1/videos；
+        供应商原生参数原样保留。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NativeJSONRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/NativeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ProtocolMismatch"
+  /v1/videos:
+    post:
+      summary: 创建视频生成任务（兼容别名）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NativeJSONRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/NativeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/tasks/{task_id}:
+    get:
+      summary: 查询异步视频任务
+      parameters:
+        - $ref: "#/components/parameters/TaskID"
+        - $ref: "#/components/parameters/RequiredModelQuery"
+      responses:
+        "200":
+          $ref: "#/components/responses/NativeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/videos/{task_id}:
+    get:
+      summary: 查询异步视频任务（视频路径）
+      parameters:
+        - $ref: "#/components/parameters/TaskID"
+        - $ref: "#/components/parameters/RequiredModelQuery"
+      responses:
+        "200":
+          $ref: "#/components/responses/NativeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/audio/speech:
+    post:
+      summary: 语音合成
+      description: >
+        OpenAI 兼容供应商使用 /v1/audio/speech；百炼按模型系列转发至
+        SpeechSynthesizer 或 multimodal-generation 原生 HTTP 接口。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NativeJSONRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/NativeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/audio/transcriptions:
+    post:
+      summary: 音频转录
+      description: >
+        JSON 请求从正文读取 model；multipart/form-data 请求需同时在
+        查询参数中提供 model，正文与 Content-Type 原样转发。
+      parameters:
+        - name: model
+          in: query
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NativeJSONRequest"
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          $ref: "#/components/responses/NativeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/embeddings:
+    post:
+      summary: 创建向量
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NativeJSONRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/NativeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/rerank:
+    post:
+      summary: 文档重排
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NativeJSONRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/NativeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: ModelHub token
+  responses:
+    NativeResponse:
+      description: 供应商原生响应，状态码和 Content-Type 保持不变
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    ProtocolMismatch:
+      description: 模型不存在或模型协议与当前端点不匹配
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: 访问令牌缺失或无效
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    BadRequest:
+      description: 请求体无效
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  parameters:
+    TaskID:
+      name: task_id
+      in: path
+      required: true
+      schema:
+        type: string
+    RequiredModelQuery:
+      name: model
+      in: query
+      required: true
+      description: 路由别名或“供应商名称/模型名称”
+      schema:
+        type: string
+  schemas:
+    Health:
+      type: object
+      required: [status, service, providers, routes]
+      properties:
+        status:
+          const: ok
+        service:
+          const: ModelHub
+        providers:
+          type: integer
+          minimum: 0
+        routes:
+          type: integer
+          minimum: 0
+    Model:
+      type: object
+      required: [id, object, created, owned_by]
+      properties:
+        id:
+          type: string
+        object:
+          const: model
+        created:
+          type: integer
+        owned_by:
+          type: string
+        availability:
+          type: string
+          enum: [unknown, available, unavailable, configurationRequired, unsupported]
+        quarantined:
+          type: boolean
+    ModelList:
+      type: object
+      required: [object, data]
+      properties:
+        object:
+          const: list
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Model"
+    ChatMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [system, user, assistant, tool]
+        content:
+          type: string
+    ChatCompletionRequest:
+      type: object
+      required: [model, messages]
+      additionalProperties: true
+      properties:
+        model:
+          type: string
+          examples: [smart, OpenAI/gpt-4.1]
+        messages:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        stream:
+          type: boolean
+          default: false
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+        max_tokens:
+          type: integer
+          minimum: 1
+    ChatCompletion:
+      type: object
+      additionalProperties: true
+      required: [id, object, model, choices]
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+        created:
+          type: integer
+        model:
+          type: string
+        choices:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+    NativeJSONRequest:
+      type: object
+      required: [model]
+      additionalProperties: true
+      properties:
+        model:
+          type: string
+          examples:
+            - APIMart Seedance/doubao-seedance-2.0
+            - Agnes AI/agnes-image-2.1-flash
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [message, type, code]
+          properties:
+            message:
+              type: string
+            type:
+              type: string
+            code:
+              type: string

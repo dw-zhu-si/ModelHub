@@ -1,0 +1,37 @@
+:root {
+  color-scheme: light dark;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+  line-height: 1.65;
+  background: Canvas;
+  color: CanvasText;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  width: min(760px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 72px 0 96px;
+}
+
+h1 {
+  font-size: clamp(2rem, 7vw, 3.6rem);
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+
+h2 {
+  margin-top: 2.2rem;
+}
+
+a {
+  color: #2878ff;
+}
+
+code {
+  padding: 0.12em 0.35em;
+  border-radius: 0.35em;
+  background: color-mix(in srgb, CanvasText 8%, Canvas);
+}

@@ -1,0 +1,20 @@
+{
+  "developerCollectsData": false,
+  "tracking": false,
+  "thirdPartyAdvertising": false,
+  "analyticsSDK": false,
+  "accountSystem": false,
+  "providerDisclosure": "Requests are sent directly from the user's Mac to the third-party model provider selected and configured by the user. The ModelHub developer does not receive or store prompt or response content.",
+  "localData": [
+    "Provider configuration",
+    "Model health and quarantine state",
+    "Aggregated request count, status, latency, tokens, and user-entered pricing",
+    "Credentials and gateway tokens in macOS Keychain"
+  ],
+  "excludedFromLogs": [
+    "API keys",
+    "Gateway and Agent tokens",
+    "Prompts",
+    "Model response bodies"
+  ]
+}

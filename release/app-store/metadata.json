@@ -1,0 +1,80 @@
+{
+  "version": "1.9.0",
+  "build": "17",
+  "price": "FREE",
+  "availability": "ALL_AVAILABLE_STOREFRONTS",
+  "releaseMode": "MANUAL_AFTER_APPROVAL",
+  "primaryCategory": "DEVELOPER_TOOLS",
+  "secondaryCategory": "PRODUCTIVITY",
+  "privacyPolicyURL": "https://pm.jcm99.com/apple/modelhub/privacy.html",
+  "supportURL": "https://pm.jcm99.com/apple/modelhub/support.html",
+  "marketingURL": "https://pm.jcm99.com/apple/modelhub/",
+  "localizations": {
+    "zh-Hans": {
+      "name": "ModelHub",
+      "subtitle": "本机多模型 API 网关",
+      "description": "在 Mac 上统一管理多个模型供应商、密钥、模型和稳定路由。ModelHub 只监听本机回环地址，凭证保存在 macOS 钥匙串，并提供可用模型过滤、故障转移、预算、用量分析、菜单栏后台运行和桌面小组件。",
+      "keywords": "模型,API,网关,OpenAI,Claude,Gemini,路由,开发工具,本机"
+    },
+    "zh-Hant": {
+      "name": "ModelHub",
+      "subtitle": "本機多模型 API 閘道",
+      "description": "在 Mac 上統一管理多個模型供應商、金鑰、模型和穩定路由。ModelHub 只監聽本機回環位址，憑證儲存在 macOS 鑰匙圈，並提供可用模型過濾、容錯移轉、預算、用量分析、選單列背景執行和桌面小工具。",
+      "keywords": "模型,API,閘道,OpenAI,Claude,Gemini,路由,開發工具,本機"
+    },
+    "en-US": {
+      "name": "ModelHub",
+      "subtitle": "Local Multi-Model API Gateway",
+      "description": "Manage multiple AI providers, credentials, models, and stable routes from one native Mac app. ModelHub listens only on the local loopback interface, stores secrets in macOS Keychain, filters unavailable models, and provides failover, budgets, usage analytics, menu-bar background operation, and a desktop widget.",
+      "keywords": "AI,API,gateway,OpenAI,Claude,Gemini,routing,developer,local"
+    },
+    "ja": {
+      "name": "ModelHub",
+      "subtitle": "ローカル マルチモデル API ゲートウェイ",
+      "description": "複数のAIプロバイダー、認証情報、モデル、安定したルートをMac上で一元管理します。ModelHubはローカルループバックだけを使用し、認証情報をmacOSキーチェーンに保存します。利用可能モデルの絞り込み、フェイルオーバー、予算、使用状況分析、メニューバー常駐、デスクトップウィジェットに対応します。",
+      "keywords": "AI,API,ゲートウェイ,OpenAI,Claude,Gemini,ルーティング,開発,ローカル"
+    },
+    "ko": {
+      "name": "ModelHub",
+      "subtitle": "로컬 멀티 모델 API 게이트웨이",
+      "description": "여러 AI 제공업체, 자격 증명, 모델 및 안정적인 경로를 하나의 Mac 앱에서 관리하세요. ModelHub는 로컬 루프백에서만 수신하고 비밀을 macOS 키체인에 저장하며, 사용 가능한 모델 필터링, 장애 조치, 예산, 사용량 분석, 메뉴 막대 백그라운드 실행 및 데스크톱 위젯을 제공합니다.",
+      "keywords": "AI,API,게이트웨이,OpenAI,Claude,Gemini,라우팅,개발자,로컬"
+    },
+    "es-ES": {
+      "name": "ModelHub",
+      "subtitle": "Gateway API local multimodelo",
+      "description": "Gestiona proveedores de IA, credenciales, modelos y rutas estables desde una app nativa para Mac. ModelHub solo escucha en la interfaz de bucle local, guarda los secretos en el llavero de macOS y ofrece filtrado de modelos, conmutación por error, presupuestos, análisis de uso, ejecución en la barra de menús y un widget de escritorio.",
+      "keywords": "IA,API,gateway,OpenAI,Claude,Gemini,rutas,desarrollo,local"
+    },
+    "fr-FR": {
+      "name": "ModelHub",
+      "subtitle": "Passerelle API IA locale",
+      "description": "Gérez plusieurs fournisseurs d’IA, identifiants, modèles et routes stables dans une app Mac native. ModelHub écoute uniquement sur l’interface locale, conserve les secrets dans le trousseau macOS et propose filtrage des modèles, basculement, budgets, analyse d’utilisation, fonctionnement dans la barre des menus et widget de bureau.",
+      "keywords": "IA,API,passerelle,OpenAI,Claude,Gemini,routage,développement,local"
+    },
+    "de-DE": {
+      "name": "ModelHub",
+      "subtitle": "Lokales KI-API-Gateway",
+      "description": "Verwalte mehrere KI-Anbieter, Anmeldedaten, Modelle und stabile Routen in einer nativen Mac-App. ModelHub lauscht nur auf der lokalen Loopback-Schnittstelle, speichert Geheimnisse im macOS-Schlüsselbund und bietet Modellfilter, Failover, Budgets, Nutzungsanalyse, Menüleistenbetrieb und ein Desktop-Widget.",
+      "keywords": "KI,API,Gateway,OpenAI,Claude,Gemini,Routing,Entwicklung,lokal"
+    },
+    "pt-BR": {
+      "name": "ModelHub",
+      "subtitle": "Gateway local de IA",
+      "description": "Gerencie provedores de IA, credenciais, modelos e rotas estáveis em um app nativo para Mac. O ModelHub escuta apenas na interface de loopback local, guarda segredos nas Chaves do macOS e oferece filtro de modelos, failover, orçamentos, análise de uso, execução na barra de menus e widget na mesa.",
+      "keywords": "IA,API,gateway,OpenAI,Claude,Gemini,rotas,desenvolvimento,local"
+    },
+    "ru": {
+      "name": "ModelHub",
+      "subtitle": "Локальный API-шлюз для моделей",
+      "description": "Управляйте поставщиками ИИ, учётными данными, моделями и стабильными маршрутами в нативном приложении для Mac. ModelHub слушает только локальный интерфейс, хранит секреты в Связке ключей macOS и поддерживает фильтрацию моделей, переключение при сбоях, бюджеты, аналитику, работу в строке меню и виджет.",
+      "keywords": "ИИ,API,шлюз,OpenAI,Claude,Gemini,маршрутизация,разработка,локально"
+    },
+    "ar-SA": {
+      "name": "ModelHub",
+      "subtitle": "بوابة API محلية متعددة النماذج",
+      "description": "أدِر مزوّدي الذكاء الاصطناعي وبيانات الاعتماد والنماذج والمسارات الثابتة من تطبيق Mac أصلي. يستمع ModelHub إلى الواجهة المحلية فقط، ويحفظ الأسرار في سلسلة مفاتيح macOS، ويوفر تصفية النماذج وتجاوز الأعطال والميزانيات وتحليلات الاستخدام والعمل في شريط القوائم وأداة سطح المكتب.",
+      "keywords": "ذكاء اصطناعي,API,بوابة,OpenAI,Claude,Gemini,توجيه,تطوير,محلي"
+    }
+  }
+}

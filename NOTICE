@@ -1,0 +1,6 @@
+ModelHub
+Copyright 2026 野路子工作室
+
+This product includes original macOS implementations of routing, resilience,
+budget, protocol, and local agent concepts informed by the open-source
+OmniRoute project. See THIRD_PARTY_NOTICES.md for its MIT license notice.
