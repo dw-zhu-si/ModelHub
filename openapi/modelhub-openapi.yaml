@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ModelHub Local Gateway API
-  version: 1.8.0
+  version: 1.9.0
   description: >
     模型枢纽提供的本机统一接口，覆盖聊天、图像、视频、语音、转录、
     Embedding 与 Rerank。服务仅监听 127.0.0.1，客户端使用应用中生成的
