@@ -95,7 +95,7 @@ enum L10n {
         _ = String(localized: "全部", locale: AppLanguage.saved.locale)
         _ = String(localized: "可用", locale: AppLanguage.saved.locale)
         _ = String(localized: "已隔离", locale: AppLanguage.saved.locale)
-        _ = String(localized: "未测试", locale: AppLanguage.saved.locale)
+        _ = String(localized: "待验证 · 已隔离", locale: AppLanguage.saved.locale)
         _ = String(localized: "需密钥", locale: AppLanguage.saved.locale)
         _ = String(localized: "待适配", locale: AppLanguage.saved.locale)
         _ = String(localized: "需配置密钥 · 已隔离", locale: AppLanguage.saved.locale)

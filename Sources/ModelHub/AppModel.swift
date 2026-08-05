@@ -375,6 +375,10 @@ final class AppModel: ObservableObject {
         configuration.modelHealth.removeAll {
             $0.providerID == provider.id && !currentModels.contains($0.model.lowercased())
         }
+        configuration.modelHealth = ModelHealthMigration.normalize(
+            records: configuration.modelHealth,
+            providers: providers
+        )
         rebuildHealthIndex()
         persistConfiguration()
         return true
@@ -615,6 +619,10 @@ final class AppModel: ObservableObject {
 
             try saveRollbackBackup()
             configuration = try ConfigurationBackup.configuration(from: data)
+            configuration.modelHealth = ModelHealthMigration.normalize(
+                records: configuration.modelHealth,
+                providers: configuration.providers
+            )
             rebuildHealthIndex()
             persistConfiguration()
             notice = String(localized: "备份已导入；如需撤销，请点击“恢复上次导入前配置”。", locale: AppLanguage.saved.locale)
@@ -627,6 +635,10 @@ final class AppModel: ObservableObject {
         do {
             let data = try Data(contentsOf: rollbackBackupURL, options: [.mappedIfSafe])
             configuration = try ConfigurationBackup.configuration(from: data)
+            configuration.modelHealth = ModelHealthMigration.normalize(
+                records: configuration.modelHealth,
+                providers: configuration.providers
+            )
             rebuildHealthIndex()
             persistConfiguration()
             notice = String(localized: "已恢复到上次导入前的本机配置。", locale: AppLanguage.saved.locale)
@@ -753,22 +765,17 @@ final class AppModel: ObservableObject {
             )
         }
         guard !targets.isEmpty else {
-            notice = plan.preflightSkipped > 0
-                ? L10n.format(
-                    "没有可自动测试的模型；%d 个已隔离的专用协议模型需通过对应原生接口复验。",
-                    plan.preflightSkipped
-                )
-                : String(localized: "没有可测试的模型。", locale: AppLanguage.saved.locale)
+            notice = String(localized: "没有可测试的模型。", locale: AppLanguage.saved.locale)
             return
         }
 
         isTestingModels = true
         modelTestProgress = ModelTestProgress(
-            total: targets.count + plan.preflightSkipped,
-            completed: plan.preflightSkipped,
+            total: targets.count,
+            completed: 0,
             available: 0,
             unavailable: 0,
-            skipped: plan.preflightSkipped,
+            skipped: 0,
             currentProvider: targets.first?.provider.name ?? "",
             isCancelled: false
         )
@@ -783,20 +790,11 @@ final class AppModel: ObservableObject {
     ) -> ManualModelTestPlan {
         var seen = Set<String>()
         var candidates: [ManualModelTestCandidate] = []
-        var preflightSkipped = 0
 
         for provider in providers {
             for model in provider.models {
                 let key = modelTestKey(providerID: provider.id, model: model)
                 guard seen.insert(key).inserted else { continue }
-
-                let status = health.status(providerID: provider.id, model: model)
-                if status.isQuarantined,
-                   ModelProbePolicy.nativeProtocol(provider: provider, model: model) != nil
-                {
-                    preflightSkipped += 1
-                    continue
-                }
                 candidates.append(
                     ManualModelTestCandidate(provider: provider, model: model)
                 )
@@ -805,7 +803,7 @@ final class AppModel: ObservableObject {
 
         return ManualModelTestPlan(
             candidates: candidates,
-            preflightSkipped: preflightSkipped
+            preflightSkipped: 0
         )
     }
 
@@ -933,8 +931,8 @@ final class AppModel: ObservableObject {
             return ModelHealthRecord(
                 providerID: target.provider.id,
                 model: target.model,
-                status: .unknown,
-                detail: "\(nativeProtocol.displayName)协议已接入；未自动发起可能计费的生成请求"
+                status: .unavailable,
+                detail: "\(nativeProtocol.displayName)尚未通过真实协议验证，已隔离（未自动发起可能计费的请求）"
             )
         case .readyForChatProbe:
             break

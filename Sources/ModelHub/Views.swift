@@ -445,11 +445,13 @@ private struct ProviderRow: View {
                         label: "已隔离",
                         status: .unavailable
                     )
-                    AvailabilityCountBadge(
-                        value: summary.unknown,
-                        label: "未测试",
-                        status: .unknown
-                    )
+                    if summary.unknown > 0 {
+                        AvailabilityCountBadge(
+                            value: summary.unknown,
+                            label: "待验证 · 已隔离",
+                            status: .unknown
+                        )
+                    }
                 }
                 if summary.configurationRequired > 0 || summary.unsupported > 0 {
                     HStack(spacing: 6) {
@@ -495,7 +497,7 @@ private struct ModelTestProgressBanner: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("正在检测 \(progress.currentProvider)")
                     .font(.headline)
-                Text("\(progress.completed)/\(progress.total) · 可用 \(progress.available) · 失败/隔离 \(progress.unavailable) · 跳过 \(progress.skipped)")
+                Text("\(progress.completed)/\(progress.total) · 可用 \(progress.available) · 失败/隔离 \(progress.unavailable) · 需配置/待处理 \(progress.skipped)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -524,7 +526,7 @@ private enum ModelAvailabilityFilter: String, CaseIterable, Identifiable {
         case .all: String(localized: "全部", locale: AppLanguage.saved.locale)
         case .available: String(localized: "可用", locale: AppLanguage.saved.locale)
         case .unavailable: String(localized: "已隔离", locale: AppLanguage.saved.locale)
-        case .unknown: String(localized: "未测试", locale: AppLanguage.saved.locale)
+        case .unknown: String(localized: "待验证 · 已隔离", locale: AppLanguage.saved.locale)
         case .configurationRequired: String(localized: "需密钥", locale: AppLanguage.saved.locale)
         case .unsupported: String(localized: "待适配", locale: AppLanguage.saved.locale)
         }
@@ -569,7 +571,7 @@ private struct ProviderModelBrowser: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(provider.name)
                             .font(.title2.weight(.semibold))
-                        Text("\(summary.total) 个模型 · 聊天在线检测；生成模型显示原生协议入口")
+                        Text("\(summary.total) 个模型 · 聊天模型在线检测；生成模型未通过原生验证时保持隔离")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -600,7 +602,13 @@ private struct ProviderModelBrowser: View {
                 HStack(spacing: 8) {
                     AvailabilityCountBadge(value: summary.available, label: "可用", status: .available)
                     AvailabilityCountBadge(value: summary.unavailable, label: "已隔离", status: .unavailable)
-                    AvailabilityCountBadge(value: summary.unknown, label: "未测试", status: .unknown)
+                    if summary.unknown > 0 {
+                        AvailabilityCountBadge(
+                            value: summary.unknown,
+                            label: "待验证 · 已隔离",
+                            status: .unknown
+                        )
+                    }
                     if summary.configurationRequired > 0 {
                         AvailabilityCountBadge(
                             value: summary.configurationRequired,
@@ -795,7 +803,7 @@ private extension ModelAvailability {
         switch self {
         case .available: String(localized: "可用", locale: AppLanguage.saved.locale)
         case .unavailable: String(localized: "已隔离", locale: AppLanguage.saved.locale)
-        case .unknown: String(localized: "未测试", locale: AppLanguage.saved.locale)
+        case .unknown: String(localized: "待验证 · 已隔离", locale: AppLanguage.saved.locale)
         case .configurationRequired: String(localized: "需配置密钥 · 已隔离", locale: AppLanguage.saved.locale)
         case .unsupported: String(localized: "待适配 · 已隔离", locale: AppLanguage.saved.locale)
         }
@@ -805,7 +813,7 @@ private extension ModelAvailability {
         switch self {
         case .available: "checkmark.circle.fill"
         case .unavailable: "xmark.circle.fill"
-        case .unknown: "questionmark.circle"
+        case .unknown: "exclamationmark.shield.fill"
         case .configurationRequired: "key.slash.fill"
         case .unsupported: "point.3.connected.trianglepath.dotted"
         }
@@ -815,7 +823,7 @@ private extension ModelAvailability {
         switch self {
         case .available: .green
         case .unavailable: .red
-        case .unknown: .secondary
+        case .unknown: .orange
         case .configurationRequired: .orange
         case .unsupported: .indigo
         }

@@ -98,7 +98,7 @@ final class ModelHealthTests: XCTestCase {
         XCTAssertEqual(configuration.server.port, 11_435)
     }
 
-    func testHealthIndexOrdersAvailableThenUnknownThenUnavailable() {
+    func testHealthIndexTreatsMissingRecordsAsUnavailable() {
         let providerID = UUID()
         let records = [
             ModelHealthRecord(providerID: providerID, model: "offline", status: .unavailable),
@@ -111,7 +111,8 @@ final class ModelHealthTests: XCTestCase {
             providerID: providerID
         )
 
-        XCTAssertEqual(ordered, ["online", "unknown", "offline"])
+        XCTAssertEqual(index.status(providerID: providerID, model: "unknown"), .unavailable)
+        XCTAssertEqual(ordered, ["online", "offline", "unknown"])
     }
 
     func testLatestDuplicateHealthRecordWins() {
@@ -141,6 +142,14 @@ final class ModelHealthTests: XCTestCase {
     func testFailureHTTPStatusIsUnavailable() {
         XCTAssertEqual(ModelAvailability(statusCode: 429), .unavailable)
         XCTAssertEqual(ModelAvailability(statusCode: 500), .unavailable)
+    }
+
+    func testOnlyVerifiedAvailableModelsAreRoutable() {
+        XCTAssertTrue(ModelAvailability.available.isRoutable)
+        XCTAssertFalse(ModelAvailability.unknown.isRoutable)
+        XCTAssertFalse(ModelAvailability.unavailable.isRoutable)
+        XCTAssertFalse(ModelAvailability.configurationRequired.isRoutable)
+        XCTAssertFalse(ModelAvailability.unsupported.isRoutable)
     }
 
     func testAuthenticationFailureRequiresCredentialInsteadOfMarkingModelUnavailable() {
@@ -274,7 +283,7 @@ final class ModelHealthTests: XCTestCase {
         )
     }
 
-    func testLegacyFalseUnavailableRecordsAreReclassifiedOnUpgrade() {
+    func testLegacyFalseUnavailableNativeRecordsRemainSafelyQuarantinedOnUpgrade() {
         let provider = ProviderConfig(
             name: "阿里云百炼 TTS",
             kind: .qwen,
@@ -309,10 +318,38 @@ final class ModelHealthTests: XCTestCase {
             providers: [provider, chatProvider]
         )
 
-        XCTAssertEqual(normalized[0].status, .unknown)
+        XCTAssertEqual(normalized[0].status, .unavailable)
         XCTAssertNil(normalized[0].statusCode)
-        XCTAssertTrue(normalized[0].detail.contains("协议已接入"))
+        XCTAssertTrue(normalized[0].detail.contains("已隔离"))
         XCTAssertEqual(normalized[1].status, .configurationRequired)
+    }
+
+    func testMigrationEliminatesUnknownAndSeedsMissingConfiguredModels() {
+        let provider = ProviderConfig(
+            name: "测试供应商",
+            kind: .openAICompatible,
+            baseURL: "https://example.com/v1",
+            models: ["chat-old", "chat-new", "image-new"]
+        )
+        let unknown = ModelHealthRecord(
+            providerID: provider.id,
+            model: "chat-old",
+            status: .unknown,
+            detail: "旧版未测试状态"
+        )
+
+        let normalized = ModelHealthMigration.normalize(
+            records: [unknown],
+            providers: [provider]
+        )
+        let index = ModelHealthIndex(records: normalized)
+
+        XCTAssertEqual(normalized.count, 3)
+        XCTAssertFalse(normalized.contains { $0.status == .unknown })
+        XCTAssertEqual(index.status(providerID: provider.id, model: "chat-old"), .unavailable)
+        XCTAssertEqual(index.status(providerID: provider.id, model: "chat-new"), .unavailable)
+        XCTAssertEqual(index.status(providerID: provider.id, model: "image-new"), .unavailable)
+        XCTAssertTrue(normalized.allSatisfy { $0.detail.contains("已隔离") })
     }
 
     func testVerifiedNativeHealthRecordSurvivesMigration() {

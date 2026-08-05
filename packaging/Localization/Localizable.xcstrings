@@ -631,72 +631,72 @@
         }
       }
     },
-    "%arg 个模型 · 聊天在线检测；生成模型显示原生协议入口" : {
+    "%arg 个模型 · 聊天模型在线检测；生成模型未通过原生验证时保持隔离" : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "نماذج %arg · اكتشاف الدردشة عبر الإنترنت؛ يعرض النموذج الذي تم إنشاؤه إدخال البروتوكول الأصلي"
+            "value" : "%arg نموذجًا · اختبار نماذج الدردشة عبر الإنترنت؛ تبقى نماذج التوليد معزولة حتى تجتاز التحقق الأصلي"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%arg-Modelle · Chat-Online-Erkennung; Das generierte Modell zeigt den nativen Protokolleintrag an"
+            "value" : "%arg Modelle · Chatmodelle werden online getestet; generative Modelle bleiben bis zur nativen Verifizierung isoliert"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%arg models · chat models are tested online; generative models show their native protocol"
+            "value" : "%arg models · chat models are tested online; generative models stay quarantined until native verification passes"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Modelos %arg · Detección de chat en línea; El modelo generado muestra la entrada del protocolo nativo."
+            "value" : "%arg modelos · los modelos de chat se prueban en línea; los modelos generativos permanecen aislados hasta superar la verificación nativa"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Modèles %arg · Détection de chat en ligne ; le modèle généré affiche l'entrée de protocole native"
+            "value" : "%arg modèles · les modèles de chat sont testés en ligne ; les modèles génératifs restent isolés jusqu’à validation native"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%arg モデル · チャット オンライン検出。生成されたモデルにはネイティブ プロトコル エントリが表示されます"
+            "value" : "%arg モデル · チャットモデルはオンラインでテストされ、生成モデルはネイティブ検証に合格するまで隔離されます"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%arg 모델 · 채팅 온라인 감지; 생성된 모델은 기본 프로토콜 항목을 표시합니다."
+            "value" : "%arg개 모델 · 채팅 모델은 온라인으로 테스트되며 생성 모델은 기본 프로토콜 검증을 통과할 때까지 격리됩니다"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Modelos %arg · Detecção de chat online; modelo gerado exibe entrada de protocolo nativo"
+            "value" : "%arg modelos · modelos de chat são testados online; modelos generativos ficam isolados até passarem pela verificação nativa"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Модели %arg · Обнаружение онлайн-чата; сгенерированная модель отображает запись собственного протокола"
+            "value" : "%arg моделей · чат-модели тестируются онлайн; генеративные модели остаются изолированными до прохождения нативной проверки"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$arg 个模型 · 聊天在线检测；生成模型显示原生协议入口"
+            "value" : "%1$arg 个模型 · 聊天模型在线检测；生成模型未通过原生验证时保持隔离"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$arg 個模型 · 聊天在線檢測；生成模型顯示原生協議入口"
+            "value" : "%1$arg 個模型 · 聊天模型在線檢測；生成模型未通過原生驗證時保持隔離"
           }
         }
       }
@@ -981,72 +981,72 @@
         }
       }
     },
-    "%arg/%arg · 可用 %arg · 失败/隔离 %arg · 跳过 %arg" : {
+    "%arg/%arg · 可用 %arg · 失败/隔离 %arg · 需配置/待处理 %arg" : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$arg/%2$arg · متاح %3$arg · فشل/معزول %4$arg · تم تخطي %5$arg"
+            "value" : "%1$arg/%2$arg · متاح %3$arg · فشل/معزول %4$arg · يحتاج إلى إعداد/إجراء %5$arg"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$arg/%2$arg · verfügbar %3$arg · fehlgeschlagen/isoliert %4$arg · übersprungen %5$arg"
+            "value" : "%1$arg/%2$arg · verfügbar %3$arg · fehlgeschlagen/isoliert %4$arg · Einrichtung/Aktion erforderlich %5$arg"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$arg/%2$arg · available %3$arg · failed/isolated %4$arg · skipped %5$arg"
+            "value" : "%1$arg/%2$arg · available %3$arg · failed/isolated %4$arg · needs setup/action %5$arg"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$arg/%2$arg · disponible %3$arg · fallido/aislado %4$arg · omitido %5$arg"
+            "value" : "%1$arg/%2$arg · disponible %3$arg · fallido/aislado %4$arg · requiere configuración/acción %5$arg"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$arg/%2$arg · disponible %3$arg · échec/isolé %4$arg · %5$arg ignoré"
+            "value" : "%1$arg/%2$arg · disponible %3$arg · échec/isolé %4$arg · configuration/action requise %5$arg"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$arg/%2$arg · 利用可能な %3$arg · 失敗/分離された %4$arg · スキップされた %5$arg"
+            "value" : "%1$arg/%2$arg · 利用可能 %3$arg · 失敗/隔離 %4$arg · 設定/対応が必要 %5$arg"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$arg/%2$arg · 사용 가능 %3$arg · 실패/격리됨 %4$arg · 건너뛰었습니다 %5$arg"
+            "value" : "%1$arg/%2$arg · 사용 가능 %3$arg · 실패/격리 %4$arg · 설정/조치 필요 %5$arg"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$arg/%2$arg · disponível %3$arg · falhou/isolado %4$arg · ignorado %5$arg"
+            "value" : "%1$arg/%2$arg · disponível %3$arg · falhou/isolado %4$arg · requer configuração/ação %5$arg"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$arg/%2$arg · доступен %3$arg · не выполнен/изолирован %4$arg · пропущен %5$arg"
+            "value" : "%1$arg/%2$arg · доступно %3$arg · сбой/изолировано %4$arg · нужна настройка/действие %5$arg"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$arg/%2$arg · 可用 %3$arg · 失败/隔离 %4$arg · 跳过 %5$arg"
+            "value" : "%1$arg/%2$arg · 可用 %3$arg · 失败/隔离 %4$arg · 需配置/待处理 %5$arg"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$arg/%2$arg · 可用 %3$arg · 失敗/隔離 %4$arg · 跳過 %5$arg"
+            "value" : "%1$arg/%2$arg · 可用 %3$arg · 失敗/隔離 %4$arg · 需配置/待處理 %5$arg"
           }
         }
       }
@@ -9871,72 +9871,72 @@
         }
       }
     },
-    "未测试" : {
+    "待验证 · 已隔离" : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "غير مختبر"
+            "value" : "بانتظار التحقق · معزول"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nicht getestet"
+            "value" : "Verifizierung ausstehend · isoliert"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Not Tested"
+            "value" : "Pending verification · quarantined"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sin probar"
+            "value" : "Pendiente de verificación · aislado"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Non testé"
+            "value" : "En attente de vérification · isolé"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未テスト"
+            "value" : "検証待ち · 隔離済み"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "테스트되지 않음"
+            "value" : "검증 대기 · 격리됨"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Não testado"
+            "value" : "Aguardando verificação · isolado"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Не проверено"
+            "value" : "Ожидает проверки · изолировано"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未测试"
+            "value" : "待验证 · 已隔离"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未測試"
+            "value" : "待驗證 · 已隔離"
           }
         }
       }

@@ -142,36 +142,89 @@ public enum ModelHealthMigration {
         providers: [ProviderConfig]
     ) -> [ModelHealthRecord] {
         let providersByID = Dictionary(uniqueKeysWithValues: providers.map { ($0.id, $0) })
-
-        return records.map { original in
+        var normalized = records.map { original in
             guard let provider = providersByID[original.providerID] else {
-                return original
-            }
-
-            var record = original
-            if let nativeProtocol = ModelProbePolicy.nativeProtocol(
-                provider: provider,
-                model: original.model
-            ) {
-                if original.status == .available || original.detail.hasPrefix("原生") {
-                    return original
-                }
-                record.status = .unknown
+                guard original.status == .unknown else { return original }
+                var record = original
+                record.status = .unavailable
                 record.latencyMilliseconds = nil
                 record.statusCode = nil
-                record.detail = "\(nativeProtocol.displayName)协议已接入；未自动发起可能计费的生成请求"
+                record.detail = "旧版待验证记录已隔离"
                 return record
             }
 
+            var record = original
             if original.detail == "未配置 API Key"
                 || original.statusCode == 401
                 || original.statusCode == 403
             {
                 record.status = .configurationRequired
+                record.latencyMilliseconds = nil
                 record.statusCode = nil
                 record.detail = "需要配置或更新 API Key（旧结果已纠正）"
+                return record
+            }
+
+            if let nativeProtocol = ModelProbePolicy.nativeProtocol(
+                provider: provider,
+                model: original.model
+            ) {
+                if original.status == .available
+                    || original.status == .configurationRequired
+                    || original.status == .unsupported
+                    || original.detail.hasPrefix("原生")
+                {
+                    return original
+                }
+                record.status = .unavailable
+                record.latencyMilliseconds = nil
+                record.statusCode = nil
+                record.detail = "\(nativeProtocol.displayName)尚未通过真实协议验证，已隔离（未自动发起可能计费的请求）"
+                return record
+            }
+
+            if original.status == .unknown {
+                record.status = .unavailable
+                record.latencyMilliseconds = nil
+                record.statusCode = nil
+                record.detail = "尚未完成在线验证，已隔离"
             }
             return record
         }
+
+        var recordedKeys = Set(normalized.map {
+            healthKey(providerID: $0.providerID, model: $0.model)
+        })
+        for provider in providers {
+            for model in provider.models {
+                let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmedModel.isEmpty else { continue }
+                let key = healthKey(providerID: provider.id, model: trimmedModel)
+                guard recordedKeys.insert(key).inserted else { continue }
+
+                let detail: String
+                if let nativeProtocol = ModelProbePolicy.nativeProtocol(
+                    provider: provider,
+                    model: trimmedModel
+                ) {
+                    detail = "\(nativeProtocol.displayName)尚未通过真实协议验证，已隔离（未自动发起可能计费的请求）"
+                } else {
+                    detail = "尚未完成在线验证，已隔离"
+                }
+                normalized.append(
+                    ModelHealthRecord(
+                        providerID: provider.id,
+                        model: trimmedModel,
+                        status: .unavailable,
+                        detail: detail
+                    )
+                )
+            }
+        }
+        return normalized
+    }
+
+    private static func healthKey(providerID: UUID, model: String) -> String {
+        "\(providerID.uuidString.lowercased())/\(model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())"
     }
 }

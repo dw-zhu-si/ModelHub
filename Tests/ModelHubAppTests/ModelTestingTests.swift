@@ -3,7 +3,7 @@ import XCTest
 @testable import ModelHubCore
 
 final class ModelTestingTests: XCTestCase {
-    func testManualTestPlanRetestsQuarantinedChatButPreservesQuarantinedNativeModels() {
+    func testManualTestPlanIncludesQuarantinedChatAndNativeModels() {
         let provider = ProviderConfig(
             name: "测试供应商",
             kind: .openAICompatible,
@@ -28,8 +28,8 @@ final class ModelTestingTests: XCTestCase {
             health: health
         )
 
-        XCTAssertEqual(plan.candidates.map(\.model), ["chat-model"])
-        XCTAssertEqual(plan.preflightSkipped, 1)
+        XCTAssertEqual(plan.candidates.map(\.model), ["chat-model", "image-model"])
+        XCTAssertEqual(plan.preflightSkipped, 0)
     }
 
     func testManualTestPlanDeduplicatesModelsWithoutFilteringHealthyCandidates() {

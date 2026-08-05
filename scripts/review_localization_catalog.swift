@@ -147,7 +147,7 @@ let reviewed: [String: [String: String]] = [
 
 let reviewedEnglish: [String: String] = [
     "%arg 个目标": "%arg targets",
-    "%arg 个模型 · 聊天在线检测；生成模型显示原生协议入口": "%arg models · chat models are tested online; generative models show their native protocol",
+    "%arg 个模型 · 聊天模型在线检测；生成模型未通过原生验证时保持隔离": "%arg models · chat models are tested online; generative models stay quarantined until native verification passes",
     "%arg原生入口": "%arg native endpoint",
     "%@原生入口": "%@ native endpoint",
     "一键测试": "Test All",

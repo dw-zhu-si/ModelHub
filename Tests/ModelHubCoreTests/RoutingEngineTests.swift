@@ -23,6 +23,10 @@ final class RoutingEngineTests: XCTestCase {
             for: "vision",
             routes: [route],
             providers: [provider],
+            healthRecords: [
+                ModelHealthRecord(providerID: provider.id, model: "text-only", status: .available),
+                ModelHealthRecord(providerID: provider.id, model: "vision-model", status: .available)
+            ],
             requiredCapabilities: [.chat, .vision]
         )
         XCTAssertEqual(result.map(\.model), ["vision-model"])
@@ -115,7 +119,12 @@ final class RoutingEngineTests: XCTestCase {
         let result = await RoutingEngine().candidates(
             for: "SMART",
             routes: [route],
-            providers: [enabled, disabled]
+            providers: [enabled, disabled],
+            healthRecords: [
+                ModelHealthRecord(providerID: enabled.id, model: "slow", status: .available),
+                ModelHealthRecord(providerID: disabled.id, model: "disabled", status: .available),
+                ModelHealthRecord(providerID: enabled.id, model: "fast", status: .available)
+            ]
         )
 
         XCTAssertEqual(result.map(\.model), ["fast", "slow"])
@@ -133,8 +142,22 @@ final class RoutingEngineTests: XCTestCase {
         )
         let engine = RoutingEngine()
 
-        let first = await engine.candidates(for: "balanced", routes: [route], providers: [provider])
-        let second = await engine.candidates(for: "balanced", routes: [route], providers: [provider])
+        let health = [
+            ModelHealthRecord(providerID: provider.id, model: "a", status: .available),
+            ModelHealthRecord(providerID: provider.id, model: "b", status: .available)
+        ]
+        let first = await engine.candidates(
+            for: "balanced",
+            routes: [route],
+            providers: [provider],
+            healthRecords: health
+        )
+        let second = await engine.candidates(
+            for: "balanced",
+            routes: [route],
+            providers: [provider],
+            healthRecords: health
+        )
 
         XCTAssertEqual(first.first?.model, "a")
         XCTAssertEqual(second.first?.model, "b")
@@ -151,14 +174,17 @@ final class RoutingEngineTests: XCTestCase {
         let result = await RoutingEngine().candidates(
             for: "OpenAI/gpt-test",
             routes: [],
-            providers: [provider]
+            providers: [provider],
+            healthRecords: [
+                ModelHealthRecord(providerID: provider.id, model: "gpt-test", status: .available)
+            ]
         )
 
         XCTAssertEqual(result.first?.providerID, provider.id)
         XCTAssertEqual(result.first?.model, "gpt-test")
     }
 
-    func testUnavailableTargetIsQuarantinedWhileAvailableAndUnknownRemainRoutable() async {
+    func testUnavailableAndUnknownTargetsAreQuarantined() async {
         let provider = ProviderConfig(
             name: "Provider",
             kind: .openAI,
@@ -194,7 +220,7 @@ final class RoutingEngineTests: XCTestCase {
             healthRecords: health
         )
 
-        XCTAssertEqual(result.map(\.model), ["healthy", "unknown"])
+        XCTAssertEqual(result.map(\.model), ["healthy"])
     }
 
     func testDirectMatchesPreferAvailableProvider() async {

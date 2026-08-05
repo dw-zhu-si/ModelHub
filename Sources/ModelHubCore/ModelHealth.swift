@@ -18,7 +18,7 @@ public enum ModelAvailability: String, Codable, CaseIterable, Sendable {
     }
 
     public var isRoutable: Bool {
-        self == .available || self == .unknown
+        self == .available
     }
 
     public var isQuarantined: Bool {
@@ -95,7 +95,7 @@ public struct ModelHealthIndex: Sendable {
     }
 
     public func status(providerID: UUID, model: String) -> ModelAvailability {
-        record(providerID: providerID, model: model)?.status ?? .unknown
+        record(providerID: providerID, model: model)?.status ?? .unavailable
     }
 
     public mutating func upsert(_ record: ModelHealthRecord) {
