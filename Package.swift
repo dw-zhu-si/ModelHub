@@ -29,7 +29,13 @@ let package = Package(
         .executableTarget(
             name: "ModelHubWidget",
             dependencies: ["ModelHubWidgetSupport"],
-            path: "Sources/ModelHubWidget"
+            path: "Sources/ModelHubWidget",
+            linkerSettings: [
+                .unsafeFlags(
+                    ["-Xlinker", "-e", "-Xlinker", "_NSExtensionMain"],
+                    .when(platforms: [.macOS])
+                )
+            ]
         ),
         .executableTarget(
             name: "ModelHubACP",

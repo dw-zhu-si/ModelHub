@@ -12,6 +12,10 @@ WIDGET_PROFILE=${MODELHUB_APPSTORE_WIDGET_PROFILE:-}
 APP_IDENTITY=${MODELHUB_APPSTORE_SIGNING_IDENTITY:-}
 INSTALLER_IDENTITY=${MODELHUB_APPSTORE_INSTALLER_IDENTITY:-}
 
+remove_item() {
+    /usr/bin/swift -e 'import Foundation; let path = CommandLine.arguments[1]; if FileManager.default.fileExists(atPath: path) { try FileManager.default.removeItem(atPath: path) }' "$1"
+}
+
 for value_name in APP_PROFILE WIDGET_PROFILE APP_IDENTITY INSTALLER_IDENTITY; do
     value=${(P)value_name}
     if [[ -z "${value}" ]]; then
@@ -28,11 +32,17 @@ if [[ ! -d "${SOURCE_APP}" ]]; then
     exit 2
 fi
 
+remove_item "${CANDIDATE_APP}"
 /usr/bin/ditto --noextattr "${SOURCE_APP}" "${CANDIDATE_APP}"
 /bin/cp "${PROJECT_ROOT}/packaging/Info.plist" "${CANDIDATE_APP}/Contents/Info.plist"
 /bin/cp "${APP_PROFILE}" "${CANDIDATE_APP}/Contents/embedded.provisionprofile"
 /bin/cp "${WIDGET_PROFILE}" \
     "${CANDIDATE_APP}/Contents/PlugIns/ModelHubWidget.appex/Contents/embedded.provisionprofile"
+/usr/bin/xattr -cr "${CANDIDATE_APP}"
+if /usr/bin/xattr -lr "${CANDIDATE_APP}" | /usr/bin/grep -q 'com.apple.quarantine'; then
+    echo "App Store 候选仍包含 com.apple.quarantine 扩展属性" >&2
+    exit 2
+fi
 
 codesign --force --options runtime --timestamp --sign "${APP_IDENTITY}" \
     --entitlements "${PROJECT_ROOT}/packaging/ModelHubACPAppStore.entitlements" \
@@ -45,6 +55,11 @@ codesign --force --options runtime --timestamp --sign "${APP_IDENTITY}" \
     "${CANDIDATE_APP}"
 codesign --verify --deep --strict "${CANDIDATE_APP}"
 lipo "${CANDIDATE_APP}/Contents/MacOS/ModelHub" -verify_arch arm64 x86_64
+if ! nm -u "${CANDIDATE_APP}/Contents/PlugIns/ModelHubWidget.appex/Contents/MacOS/ModelHubWidget" | \
+    /usr/bin/grep -q '_NSExtensionMain'; then
+    echo "Widget 缺少 App Extension 入口 _NSExtensionMain" >&2
+    exit 2
+fi
 
 APP_SIGNED_IDENTIFIER=$(codesign -d --entitlements :- "${CANDIDATE_APP}" 2>/dev/null | \
     plutil -extract 'com\.apple\.application-identifier' raw -o - -)
@@ -60,6 +75,7 @@ if [[ "${WIDGET_SIGNED_IDENTIFIER}" != "L4G2HAQ5B5.com.local.modelhub.widget" ]]
     exit 2
 fi
 
+remove_item "${PKG_PATH}"
 productbuild --component "${CANDIDATE_APP}" /Applications \
     --sign "${INSTALLER_IDENTITY}" \
     "${PKG_PATH}"
