@@ -9,6 +9,7 @@
   "privacyPolicyURL": "https://pm.jcm99.com/apple/modelhub/privacy.html",
   "supportURL": "https://pm.jcm99.com/apple/modelhub/support.html",
   "marketingURL": "https://pm.jcm99.com/apple/modelhub/",
+  "appReviewNotes": "ModelHub 是本机 API 网关。主应用使用 NWListener 严格绑定 127.0.0.1:11435，为本机 OpenAI 兼容 SDK、开发工具和自动化接收请求；它不是公网 Web/FTP 服务，不监听外部网卡。App Sandbox 的 com.apple.security.network.server 用于此本机入站监听，com.apple.security.network.client 仅用于向用户配置的模型供应商发起出站请求。无需登录即可检查或测试本机网关。",
   "localizations": {
     "zh-Hans": {
       "name": "ModelHub",
