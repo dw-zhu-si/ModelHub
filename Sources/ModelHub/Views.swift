@@ -112,7 +112,7 @@ struct OverviewView: View {
             VStack(alignment: .leading, spacing: 24) {
                 PageHeader(
                     title: "概览",
-                    subtitle: "把不同模型供应商统一成一个本机 OpenAI 兼容接口。"
+                    subtitle: "把不同模型供应商统一成一个本机兼容接口。"
                 )
 
                 if model.providers.isEmpty && !model.isReviewDemoMode {
@@ -147,7 +147,7 @@ struct OverviewView: View {
                         .font(.title3.weight(.semibold))
                     InstructionRow(number: 1, text: "在“模型供应商”中添加 API Key 和模型名称。")
                     InstructionRow(number: 2, text: "在“模型路由”中创建别名，例如 smart 或 fast。")
-                    InstructionRow(number: 3, text: "把现有 OpenAI 客户端的 Base URL 改为上方带 /v1 的地址。")
+                    InstructionRow(number: 3, text: "把兼容客户端的 Base URL 改为上方带 /v1 的地址。")
                 }
                 .cardStyle()
 
@@ -321,7 +321,7 @@ struct ProvidersView: View {
                 EmptyCallout(
                     icon: "server.rack",
                     title: "添加第一个模型供应商",
-                    detail: "支持 OpenAI、Claude、Gemini、Azure、DeepSeek、Qwen、Kimi、GLM、Grok、Groq、Mistral、Ollama 以及其他 OpenAI 兼容服务。",
+                    detail: "支持 Claude、Gemini、DeepSeek、Qwen、Kimi、GLM、Grok、Groq、Mistral、Ollama 以及其他兼容服务。",
                     action: "添加供应商"
                 ) {
                     showingNewProvider = true
@@ -996,9 +996,9 @@ struct ProviderEditorView: View {
 
     init(provider: ProviderConfig?) {
         let initial = provider ?? ProviderConfig(
-            name: "OpenAI",
-            kind: .openAI,
-            baseURL: ProviderKind.openAI.defaultBaseURL
+            name: "通用兼容供应商",
+            kind: .unifiedCompatible,
+            baseURL: ProviderKind.unifiedCompatible.defaultBaseURL
         )
         _provider = State(initialValue: initial)
         _apiKey = State(initialValue: "")
@@ -1073,7 +1073,7 @@ struct ProviderEditorView: View {
                     )
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    if provider.kind == .anthropic || provider.kind == .azureOpenAI {
+                    if provider.kind == .anthropic {
                         TextField("API 版本（可选）", text: $provider.apiVersion)
                     }
                 }
@@ -1082,7 +1082,7 @@ struct ProviderEditorView: View {
                     TextEditor(text: $modelsText)
                         .font(.system(.body, design: .monospaced))
                         .frame(minHeight: 100)
-                    Text("共 \(parsedModels.count) 个模型；每行一个名称。Azure OpenAI 这里填写部署名称。")
+                    Text("共 \(parsedModels.count) 个模型；每行一个名称。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -1940,7 +1940,7 @@ struct SettingsView: View {
             }
 
             Section("本地 API 服务") {
-                LabeledContent("OpenAI Base URL") {
+                LabeledContent("兼容 API Base URL") {
                     Text("http://127.0.0.1:\(ServerSettings.fixedPort)/v1")
                         .font(.system(.body, design: .monospaced))
                         .textSelection(.enabled)

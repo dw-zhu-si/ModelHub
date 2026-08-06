@@ -6,7 +6,7 @@ final class ModelTestingTests: XCTestCase {
     func testManualTestPlanIncludesQuarantinedChatAndNativeModels() {
         let provider = ProviderConfig(
             name: "测试供应商",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://example.com/v1",
             models: ["chat-model", "image-model"]
         )
@@ -35,7 +35,7 @@ final class ModelTestingTests: XCTestCase {
     func testManualTestPlanDeduplicatesModelsWithoutFilteringHealthyCandidates() {
         let provider = ProviderConfig(
             name: "测试供应商",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://example.com/v1",
             models: ["chat-model", "chat-model"]
         )

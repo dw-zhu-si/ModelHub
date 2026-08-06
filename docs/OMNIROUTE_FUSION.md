@@ -16,7 +16,7 @@
 
 | 功能族 | ModelHub 状态 | 说明 |
 |---|---|---|
-| OpenAI 兼容网关 | 已具备 | 本机 `/v1` API、Bearer 认证、供应商转发 |
+| 通用兼容网关 | 已具备 | 本机 `/v1` API、Bearer 认证、供应商转发 |
 | 组合/别名路由 | 已具备 | 优先级故障转移、轮询、权重随机 |
 | 多层故障规避 | 已具备基础能力 | 调用失败记录健康状态，后续调用跳过隔离目标 |
 | 模型健康与隔离 | 已完成强化 | `/v1/models`、路由和直接调用都只使用明确可用模型 |
@@ -35,14 +35,13 @@
 | 分析面板 | 已完成 | 按请求模型、供应商和真实模型统计成功率、延迟、Token、费用和上下文节省；不持久化正文 |
 | 本地备份 | 已完成 | 10 MiB 版本化 JSON、导入预览、导入前自动回滚和一键恢复；Configuration 模型不含 Keychain 字段 |
 | 本地 Agent 协议 | 已完成 | MCP Streamable HTTP、A2A JSON-RPC/Agent Card、ACP v1 stdio；独立 Agent 令牌和只读快照，非本机 Origin 拒绝 |
-| 协议覆盖 | 已完成 | OpenAI Chat/Responses 保留工具和多模态结构；Anthropic/Gemini 转换工具、工具结果、多模态内容与原生 SSE；客户端断开取消读取，无法安全表示的内容明确拒绝 |
+| 协议覆盖 | 已完成 | 通用协议 Chat/Responses 保留工具和多模态结构；Anthropic/Gemini 转换工具、工具结果、多模态内容与原生 SSE；客户端断开取消读取，无法安全表示的内容明确拒绝 |
 | 上下文优化 | 已完成 | 内置保守文本整理、默认关闭；跳过代码围栏、多模态结构和工具参数，不下载外部组件 |
 | CLI 配置辅助 | 已完成 | 应用只生成、显示和复制无密钥配置预览，不自动修改其他客户端文件，因此不存在静默覆盖风险 |
 
 ## 协议依据
 
-- OpenAI Responses 流式与事件语义：[Streaming API responses](https://developers.openai.com/api/docs/guides/streaming-responses)。
-- OpenAI 工具与视觉输入：[Function calling](https://developers.openai.com/api/docs/guides/function-calling)、[Images and vision](https://developers.openai.com/api/docs/guides/images-vision)。
+- 通用协议保留 Responses 流式事件、工具调用与视觉输入结构，并以本项目自动化测试和 OpenAPI 合同作为实现基线。
 - MCP 传输与只读工具：[Transports](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)、[Tools](https://modelcontextprotocol.io/specification/2025-06-18/server/tools)。
 - A2A Agent Card 与 JSON-RPC：[A2A v0.3.0 Specification](https://a2a-protocol.org/v0.3.0/specification/)。
 - ACP 初始化、会话与 stdio：[Initialization](https://agentclientprotocol.com/protocol/v1/initialization)、[Session Setup](https://agentclientprotocol.com/protocol/v1/session-setup)、[Transports](https://agentclientprotocol.com/protocol/v1/transports)。

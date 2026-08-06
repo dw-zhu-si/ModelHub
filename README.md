@@ -12,7 +12,7 @@ ModelHub 是一款面向 macOS 的本机多模型 API 网关。它把不同供�
 
 ModelHub 适合：
 
-- 使用 OpenAI SDK、Cursor、Continue、Cline 或自建 Agent 的开发者；
+- 使用兼容 SDK、Cursor、Continue、Cline 或自建 Agent 的开发者；
 - 同时使用多家模型供应商、需要统一凭证和 Base URL 的个人用户或小团队；
 - 需要故障转移、轮询、权重分流、成本控制或能力筛选的应用；
 - 希望 API Key、请求日志和模型目录留在自己的 Mac 上，而不是再托管到第三方网关的用户。
@@ -27,7 +27,7 @@ ModelHub 适合：
         ▼
 ModelHub 本机网关（127.0.0.1:11435）
         │  可用性、隔离、能力、成本、延迟与韧性策略
-        ├── OpenAI 兼容供应商
+        ├── 通用兼容供应商
         ├── Anthropic / Gemini 原生协议转换
         ├── 图像、视频、语音、Embedding、Rerank
         └── 已配置供应商的受限原生动作接口
@@ -55,8 +55,8 @@ ModelHub 本机网关（127.0.0.1:11435）
 
 ### 统一 API 与协议
 
-- OpenAI Chat Completions：`POST /v1/chat/completions`；
-- OpenAI Responses：`POST /v1/responses`，支持工具、多模态字段与增量 SSE；
+- 通用协议 Chat Completions：`POST /v1/chat/completions`；
+- 通用协议 Responses：`POST /v1/responses`，支持工具、多模态字段与增量 SSE；
 - 模型、供应商、健康和用量：`GET /v1/models`、`GET /v1/models/available`、`GET /v1/providers`、`GET /v1/analytics`；
 - 图像、视频、任务、语音、转录、向量和重排：`/v1/images/*`、`/v1/videos/*`、`/v1/tasks/*`、`/v1/audio/*`、`/v1/embeddings`、`/v1/rerank`；
 - 供应商动作协议：`POST /v1/native`，仅允许访问已配置供应商的固定主机；
@@ -97,9 +97,9 @@ ModelHub 本机网关（127.0.0.1:11435）
 
 | 类型 | 已覆盖范围 |
 | --- | --- |
-| OpenAI 兼容 | OpenAI、Azure OpenAI、DeepSeek、Qwen、Kimi、GLM、Grok、Groq、Mistral、Ollama，以及其他兼容 OpenAI 协议的服务 |
+| 通用兼容 | DeepSeek、Qwen、Kimi、GLM、Grok、Groq、Mistral、Ollama，以及其他通用兼容协议的服务 |
 | 原生文本协议 | Anthropic Claude、Google Gemini |
-| 原生媒体/任务协议 | APIMart Seedance、Agnes 图像/视频、阿里云百炼语音，以及 OpenAI 风格的图像、音频、Embedding、Rerank |
+| 原生媒体/任务协议 | APIMart Seedance、Agnes 图像/视频、阿里云百炼语音，以及 通用格式的图像、音频、Embedding、Rerank |
 | 专用动作协议 | 云雾 API 等已配置供应商的 Midjourney、Suno、可灵、PixVerse 等动作接口（通过受限原生透传） |
 
 “支持供应商”只表示协议和配置入口已实现，不代表用户账户拥有对应权限、余额或地区资格；真实可用性仍以用户自己的 Key 和供应商返回为准。
@@ -123,7 +123,7 @@ ModelHub 本机网关（127.0.0.1:11435）
 
 ### 普通用户：下载已公证 DMG
 
-从 [GitHub Releases](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.0-build21) 下载 `ModelHub-1.9.0-macos-universal.dmg`，打开后把 `ModelHub.app` 拖到“应用程序”文件夹。该 DMG 与其中的 App 均使用 Developer ID 签名，并已通过 Apple 公证、票据装订、镜像完整性和 Gatekeeper 验证。
+从 [GitHub Releases](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.0-build23) 下载 `ModelHub-1.9.0-macos-universal.dmg`，打开后把 `ModelHub.app` 拖到“应用程序”文件夹。该 DMG 与其中的 App 均使用 Developer ID 签名，并已通过 Apple 公证、票据装订、镜像完整性和 Gatekeeper 验证。
 
 也可以下载同一 Release 中的 Universal ZIP，解压后手动移动到“应用程序”。
 
@@ -136,8 +136,8 @@ ModelHub 本机网关（127.0.0.1:11435）
 ### 校验安装包
 
 ```text
-a11699b04203fef08de54d18dbdef866136a8181781ba1507a042713ffc57b12  ModelHub-1.9.0-macos-universal.zip
-a49c4a69f6a2fdd394a4c8ae12fdad3ad4f5e93dd98bec4fbc6c52f39dd66735  ModelHub-1.9.0-macos-universal.dmg
+ebe85bc9872c92182cd6925faf52e3b64e60b885e6474144f659ad6896c8021b  ModelHub-1.9.0-macos-universal.zip
+2f06fbcaeb91ed5300ff77128ee6b03e2d5faded4aa345ea695913874d0abf94  ModelHub-1.9.0-macos-universal.dmg
 ```
 
 下载 Release 中的 `ModelHub-1.9.0-SHA256.txt` 后，可执行：
@@ -255,7 +255,7 @@ docs/                         安全威胁模型与 OmniRoute 融合边界
 
 ## 协议边界与已知限制
 
-- OpenAI 兼容供应商的额外字段会尽量原样保留，路由别名会被替换为真实上游模型名；
+- 通用兼容供应商的额外字段会尽量原样保留，路由别名会被替换为真实上游模型名；
 - Anthropic 与 Gemini 支持文本、system、工具定义、工具调用/结果、图像等多模态内容和 SSE 转换；无法安全表达的内容会返回 400，不会静默丢弃；
 - 图像、视频、语音、转录、向量和重排模型必须使用对应端点，不会被聊天测试误判为聊天模型；
 - 一键测试聊天模型会真实请求上游，可能产生费用；媒体模型只验证本地协议适配，不会自动触发生成；

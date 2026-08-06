@@ -1,6 +1,6 @@
 import Foundation
 
-enum OpenAIProtocolBridge {
+enum UnifiedProtocolBridge {
     static func anthropicBody(from rawBody: Data, targetModel: String) throws -> Data {
         let root = try jsonObject(rawBody)
         let sourceMessages = try messages(root)
@@ -177,7 +177,7 @@ enum OpenAIProtocolBridge {
                 "message": message,
                 "finish_reason": finishReason(json["stop_reason"] as? String)
             ]],
-            "usage": openAIUsage(
+            "usage": unifiedUsage(
                 input: usage["input_tokens"],
                 output: usage["output_tokens"]
             )
@@ -236,7 +236,7 @@ enum OpenAIProtocolBridge {
                 delta["role"] = "assistant"
                 if let message = object["message"] as? [String: Any],
                    let sourceUsage = message["usage"] as? [String: Any] {
-                    usage = openAIUsage(input: sourceUsage["input_tokens"], output: 0)
+                    usage = unifiedUsage(input: sourceUsage["input_tokens"], output: 0)
                 }
             case "content_block_start":
                 guard let index = object["index"] as? Int,
@@ -267,7 +267,7 @@ enum OpenAIProtocolBridge {
                     finish = finishReason(sourceDelta["stop_reason"] as? String)
                 }
                 if let sourceUsage = object["usage"] as? [String: Any] {
-                    usage = openAIUsage(input: 0, output: sourceUsage["output_tokens"])
+                    usage = unifiedUsage(input: 0, output: sourceUsage["output_tokens"])
                 }
             case "error":
                 return [try sseData(["error": object["error"] ?? [:]])]
@@ -436,7 +436,7 @@ enum OpenAIProtocolBridge {
               let function = source["function"] as? [String: Any],
               let name = function["name"] as? String,
               !name.isEmpty
-        else { throw ProviderClientError.invalidRequest("仅支持 OpenAI function 工具") }
+        else { throw ProviderClientError.invalidRequest("仅支持 兼容协议 function 工具") }
         var result: [String: Any] = [
             "name": name,
             "input_schema": function["parameters"] as? [String: Any] ?? ["type": "object"]
@@ -450,7 +450,7 @@ enum OpenAIProtocolBridge {
               let function = source["function"] as? [String: Any],
               let name = function["name"] as? String,
               !name.isEmpty
-        else { throw ProviderClientError.invalidRequest("仅支持 OpenAI function 工具") }
+        else { throw ProviderClientError.invalidRequest("仅支持 兼容协议 function 工具") }
         var result: [String: Any] = [
             "name": name,
             "parameters": function["parameters"] as? [String: Any] ?? ["type": "object"]
@@ -626,7 +626,7 @@ enum OpenAIProtocolBridge {
         )
     }
 
-    private static func openAIUsage(input: Any?, output: Any?) -> [String: Any] {
+    private static func unifiedUsage(input: Any?, output: Any?) -> [String: Any] {
         let inputCount = integer(input)
         let outputCount = integer(output)
         return [

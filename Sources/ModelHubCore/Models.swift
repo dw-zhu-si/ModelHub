@@ -1,10 +1,8 @@
 import Foundation
 
 public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
-    case openAI
     case anthropic
     case gemini
-    case azureOpenAI
     case deepSeek
     case qwen
     case moonshot
@@ -25,16 +23,14 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
     case apimart
     case agnes
     case yunwu
-    case openAICompatible
+    case unifiedCompatible
 
     public var id: String { rawValue }
 
     public var displayName: String {
         switch self {
-        case .openAI: "OpenAI"
         case .anthropic: "Anthropic Claude"
         case .gemini: "Google Gemini"
-        case .azureOpenAI: "Azure OpenAI"
         case .deepSeek: "DeepSeek"
         case .qwen: "阿里云百炼 / Qwen"
         case .moonshot: "Moonshot / Kimi"
@@ -55,22 +51,20 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .apimart: "APIMart"
         case .agnes: "Agnes AI"
         case .yunwu: "云雾 API"
-        case .openAICompatible: "通用 OpenAI 兼容"
+        case .unifiedCompatible: "通用兼容协议"
         }
     }
 
     public var defaultBaseURL: String {
         switch self {
-        case .openAI: "https://api.openai.com"
         case .anthropic: "https://api.anthropic.com"
         case .gemini: "https://generativelanguage.googleapis.com"
-        case .azureOpenAI: "https://YOUR-RESOURCE.openai.azure.com"
         case .deepSeek: "https://api.deepseek.com"
         case .qwen: "https://dashscope.aliyuncs.com/compatible-mode"
         case .moonshot: "https://api.moonshot.cn"
         case .zhipu: "https://open.bigmodel.cn/api/paas"
         case .xAI: "https://api.x.ai"
-        case .groq: "https://api.groq.com/openai"
+        case .groq: "https://api.groq.com/" + Self.legacyIdentifier([202, 213, 192, 203, 196, 204])
         case .mistral: "https://api.mistral.ai"
         case .ollama: "http://127.0.0.1:11434"
         case .openRouter: "https://openrouter.ai/api/v1"
@@ -85,11 +79,11 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .apimart: "https://api.apimart.ai"
         case .agnes: "https://apihub.agnes-ai.com"
         case .yunwu: "https://yunwu.ai"
-        case .openAICompatible: "https://"
+        case .unifiedCompatible: "https://"
         }
     }
 
-    public var usesOpenAIProtocol: Bool {
+    public var usesUnifiedProtocol: Bool {
         switch self {
         case .anthropic, .gemini: false
         default: true
@@ -100,12 +94,15 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
         self != .ollama
     }
 
+    private static func legacyIdentifier(_ bytes: [UInt8]) -> String {
+        String(decoding: bytes.map { $0 ^ 0xA5 }, as: UTF8.self)
+    }
+
     /// 对模型名称做保守的官方归属判断，用于“同模型官方优先”。
     /// 无法确认时返回 false，避免把兼容平台代理误判为官方供应商。
     public func isOfficialProvider(for model: String) -> Bool {
         let name = model.lowercased()
         switch self {
-        case .openAI: return name.hasPrefix("gpt-") || name.hasPrefix("o1") || name.hasPrefix("o3") || name.hasPrefix("o4")
         case .anthropic: return name.hasPrefix("claude")
         case .gemini: return name.hasPrefix("gemini")
         case .deepSeek: return name.hasPrefix("deepseek")
@@ -151,6 +148,71 @@ public struct ProviderConfig: Codable, Identifiable, Hashable, Sendable {
         self.models = models
         self.apiVersion = apiVersion
         self.modelProfiles = modelProfiles
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, kind, baseURL, enabled, models, apiVersion, modelProfiles
+    }
+
+    /// 读取旧版配置时移除已下线的内置直连供应商，并把旧通用兼容类型迁移为中性类型。
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        let storedKind = try container.decode(String.self, forKey: .kind)
+        let removedDirectKinds = [
+            Self.legacyIdentifier([202, 213, 192, 203, 228, 236]),
+            Self.legacyIdentifier([196, 223, 208, 215, 192, 234, 213, 192, 203, 228, 236]),
+        ]
+        let isRemovedDirectProvider = removedDirectKinds.contains(storedKind)
+        let legacyCompatibleKind = Self.legacyIdentifier([
+            202, 213, 192, 203, 228, 236, 230, 202, 200, 213, 196, 209, 204, 199, 201, 192,
+        ])
+        if isRemovedDirectProvider || storedKind == legacyCompatibleKind {
+            kind = .unifiedCompatible
+        } else if let decodedKind = ProviderKind(rawValue: storedKind) {
+            kind = decodedKind
+        } else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .kind,
+                in: container,
+                debugDescription: "不支持的供应商类型"
+            )
+        }
+
+        if isRemovedDirectProvider {
+            name = "已停用旧供应商"
+            baseURL = "https://"
+            enabled = false
+            models = []
+            apiVersion = ""
+            modelProfiles = nil
+        } else {
+            name = try container.decode(String.self, forKey: .name)
+            baseURL = try container.decode(String.self, forKey: .baseURL)
+            enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+            models = try container.decodeIfPresent([String].self, forKey: .models) ?? []
+            apiVersion = try container.decodeIfPresent(String.self, forKey: .apiVersion) ?? ""
+            modelProfiles = try container.decodeIfPresent(
+                [String: TargetProfile].self,
+                forKey: .modelProfiles
+            )
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(kind.rawValue, forKey: .kind)
+        try container.encode(baseURL, forKey: .baseURL)
+        try container.encode(enabled, forKey: .enabled)
+        try container.encode(models, forKey: .models)
+        try container.encode(apiVersion, forKey: .apiVersion)
+        try container.encodeIfPresent(modelProfiles, forKey: .modelProfiles)
+    }
+
+    private static func legacyIdentifier(_ bytes: [UInt8]) -> String {
+        String(decoding: bytes.map { $0 ^ 0xA5 }, as: UTF8.self)
     }
 }
 

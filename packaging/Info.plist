@@ -2,10 +2,18 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleDevelopmentRegion</key>
+	<key>CFBundleDevelopmentRegion</key>
 	<string>zh-Hans</string>
-    <key>CFBundleDisplayName</key>
+	<key>CFBundleDisplayName</key>
 	<string>ModelHub</string>
+	<key>CFBundleExecutable</key>
+	<string>ModelHub</string>
+	<key>CFBundleIconFile</key>
+	<string>ModelHub</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.local.modelhub</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>zh-Hans</string>
@@ -20,33 +28,25 @@
 		<string>ru</string>
 		<string>ar</string>
 	</array>
-    <key>CFBundleExecutable</key>
-    <string>ModelHub</string>
-    <key>CFBundleIconFile</key>
-    <string>ModelHub</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.local.modelhub</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>ModelHub</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
+	<key>CFBundleName</key>
+	<string>ModelHub</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
 	<string>1.9.0</string>
 	<key>CFBundleVersion</key>
-	<string>21</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>14.0</string>
+	<string>23</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.developer-tools</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSHighResolutionCapable</key>
-    <true/>
-    <key>NSHumanReadableCopyright</key>
-    <string>Copyright © 2026. All rights reserved.</string>
-    <key>NSPrincipalClass</key>
-    <string>NSApplication</string>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026. All rights reserved.</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
 </dict>
 </plist>

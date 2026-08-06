@@ -2,10 +2,10 @@ import XCTest
 @testable import ModelHubCore
 
 final class ProviderClientTests: XCTestCase {
-    func testOpenAIEndpointAvoidsDuplicateV1() throws {
+    func testCompatibleEndpointAvoidsDuplicateV1() throws {
         let provider = ProviderConfig(
             name: "Compatible",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://example.com/v1"
         )
         let endpoint = try ProviderClient().endpoint(for: provider, model: "model")
@@ -37,7 +37,7 @@ final class ProviderClientTests: XCTestCase {
     func testResponsesRequestPreservesToolsAndMultimodalInput() throws {
         let provider = ProviderConfig(
             name: "Compatible",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://example.com/v1"
         )
         let body = Data(#"{"model":"route","input":[{"role":"user","content":[{"type":"input_text","text":"hi"},{"type":"input_image","image_url":"data:image/png;base64,AA=="}]}],"tools":[{"type":"function","name":"weather","parameters":{"type":"object"}}]}"#.utf8)
@@ -59,7 +59,7 @@ final class ProviderClientTests: XCTestCase {
     func testChatRequestPreservesToolsAndMultimodalMessages() throws {
         let provider = ProviderConfig(
             name: "Compatible",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://example.com/v1"
         )
         let body = Data(#"{"model":"route","messages":[{"role":"user","content":[{"type":"text","text":"hi"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AA=="}}]}],"tools":[{"type":"function","function":{"name":"weather","parameters":{"type":"object"}}}],"stream":true}"#.utf8)
@@ -148,7 +148,7 @@ final class ProviderClientTests: XCTestCase {
             headers: [:],
             body: Data(#"{"id":"msg_1","model":"claude","stop_reason":"tool_use","content":[{"type":"text","text":"Checking"},{"type":"tool_use","id":"toolu_1","name":"weather","input":{"city":"Paris"}}],"usage":{"input_tokens":10,"output_tokens":4}}"#.utf8)
         )
-        let normalizedAnthropic = try OpenAIProtocolBridge.normalizeAnthropic(anthropic)
+        let normalizedAnthropic = try UnifiedProtocolBridge.normalizeAnthropic(anthropic)
         let anthropicObject = try XCTUnwrap(
             JSONSerialization.jsonObject(with: normalizedAnthropic.body) as? [String: Any]
         )
@@ -162,7 +162,7 @@ final class ProviderClientTests: XCTestCase {
             headers: [:],
             body: Data(#"{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"Checking"},{"functionCall":{"name":"weather","args":{"city":"Paris"}}}]}}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":4,"totalTokenCount":14}}"#.utf8)
         )
-        let normalizedGemini = try OpenAIProtocolBridge.normalizeGemini(gemini, model: "gemini")
+        let normalizedGemini = try UnifiedProtocolBridge.normalizeGemini(gemini, model: "gemini")
         let geminiObject = try XCTUnwrap(
             JSONSerialization.jsonObject(with: normalizedGemini.body) as? [String: Any]
         )
@@ -171,7 +171,7 @@ final class ProviderClientTests: XCTestCase {
         XCTAssertNotNil(geminiMessage["tool_calls"])
     }
 
-    func testAnthropicSSETransformsIncrementallyToOpenAIChunks() async throws {
+    func testAnthropicSSETransformsIncrementallyToUnifiedChunks() async throws {
         let first = Data("event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":3}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hel".utf8)
         let second = Data("lo\"}}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":2}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n".utf8)
         let source = AsyncThrowingStream<Data, Error> { continuation in
@@ -179,7 +179,7 @@ final class ProviderClientTests: XCTestCase {
             continuation.yield(second)
             continuation.finish()
         }
-        let transformed = OpenAIProtocolBridge.anthropicStream(
+        let transformed = UnifiedProtocolBridge.anthropicStream(
             ProviderStreamResponse(statusCode: 200, headers: [:], body: source),
             model: "claude-test"
         )
@@ -191,7 +191,7 @@ final class ProviderClientTests: XCTestCase {
         XCTAssertTrue(text.hasSuffix("data: [DONE]\n\n"))
     }
 
-    func testGeminiSSETransformsIncrementallyToOpenAIChunks() async throws {
+    func testGeminiSSETransformsIncrementallyToUnifiedChunks() async throws {
         let first = Data("data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"hel".utf8)
         let second = Data("lo\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":3,\"candidatesTokenCount\":2,\"totalTokenCount\":5}}\n\n".utf8)
         let source = AsyncThrowingStream<Data, Error> { continuation in
@@ -199,7 +199,7 @@ final class ProviderClientTests: XCTestCase {
             continuation.yield(second)
             continuation.finish()
         }
-        let transformed = OpenAIProtocolBridge.geminiStream(
+        let transformed = UnifiedProtocolBridge.geminiStream(
             ProviderStreamResponse(statusCode: 200, headers: [:], body: source),
             model: "gemini-test"
         )
@@ -212,22 +212,10 @@ final class ProviderClientTests: XCTestCase {
         XCTAssertTrue(text.hasSuffix("data: [DONE]\n\n"))
     }
 
-    func testAzureEndpointContainsDeploymentAndVersion() throws {
-        let provider = ProviderConfig(
-            name: "Azure",
-            kind: .azureOpenAI,
-            baseURL: "https://resource.openai.azure.com",
-            apiVersion: "2025-01-01-preview"
-        )
-        let endpoint = try ProviderClient().endpoint(for: provider, model: "deployment-a")
-        XCTAssertTrue(endpoint.absoluteString.contains("/deployments/deployment-a/chat/completions"))
-        XCTAssertTrue(endpoint.absoluteString.contains("api-version=2025-01-01-preview"))
-    }
-
     func testAPIMartVideoUsesNativeGenerationEndpoint() throws {
         let provider = ProviderConfig(
             name: "APIMart Seedance",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://api.apimart.ai"
         )
 
@@ -251,7 +239,7 @@ final class ProviderClientTests: XCTestCase {
     func testGenericSeedanceVideoUsesNativeGenerationEndpoint() throws {
         let provider = ProviderConfig(
             name: "seedance",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://gn.euno-ai.com"
         )
 
@@ -274,7 +262,7 @@ final class ProviderClientTests: XCTestCase {
     func testAgnesVideoUsesCreateAndTaskEndpoints() throws {
         let provider = ProviderConfig(
             name: "Agnes AI",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://apihub.agnes-ai.com/v1"
         )
         let client = ProviderClient()
@@ -327,7 +315,7 @@ final class ProviderClientTests: XCTestCase {
     func testGenericNativeEndpointsAvoidDuplicateV1() throws {
         let provider = ProviderConfig(
             name: "云雾 API",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://yunwu.ai/v1"
         )
         let client = ProviderClient()
@@ -353,7 +341,7 @@ final class ProviderClientTests: XCTestCase {
     func testMultipartTranscriptionRewritesRouteAliasModelField() throws {
         let provider = ProviderConfig(
             name: "云雾 API",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://yunwu.ai/v1"
         )
         let boundary = "ModelHubBoundary"
@@ -382,7 +370,7 @@ final class ProviderClientTests: XCTestCase {
         XCTAssertFalse(rewritten.contains("\r\nroute-alias\r\n"))
     }
 
-    func testBailianSpeechNormalizesOpenAIStyleInput() throws {
+    func testBailianSpeechNormalizesCompatibleStyleInput() throws {
         let provider = ProviderConfig(
             name: "阿里云百炼 TTS",
             kind: .qwen,
@@ -412,7 +400,7 @@ final class ProviderClientTests: XCTestCase {
     func testNativePassthroughKeepsProviderHostAndOriginalProtocol() throws {
         let provider = ProviderConfig(
             name: "云雾 API",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://yunwu.ai/v1"
         )
 
@@ -443,7 +431,7 @@ final class ProviderClientTests: XCTestCase {
     func testNativePassthroughPreservesQueryOrderDuplicatesAndValuelessFlags() throws {
         let provider = ProviderConfig(
             name: "云雾 API",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://yunwu.ai/v1"
         )
 
@@ -470,7 +458,7 @@ final class ProviderClientTests: XCTestCase {
     func testNativePassthroughRejectsAbsoluteAndTraversalPaths() {
         let provider = ProviderConfig(
             name: "云雾 API",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://yunwu.ai/v1"
         )
         let client = ProviderClient()

@@ -58,11 +58,11 @@ let reviewed: [String: [String: String]] = [
         "ko": "ModelHub", "es": "ModelHub", "fr": "ModelHub", "de": "ModelHub",
         "pt-BR": "ModelHub", "ru": "ModelHub", "ar": "ModelHub",
     ],
-    "OpenAI Base URL": [
-        "zh-Hans": "OpenAI Base URL", "zh-Hant": "OpenAI Base URL", "en": "OpenAI Base URL",
-        "ja": "OpenAI Base URL", "ko": "OpenAI Base URL", "es": "URL base de OpenAI",
-        "fr": "URL de base OpenAI", "de": "OpenAI-Basis-URL", "pt-BR": "URL base da OpenAI",
-        "ru": "Базовый URL OpenAI", "ar": "عنوان URL الأساسي لـ OpenAI",
+    "兼容 API Base URL": [
+        "zh-Hans": "兼容 API Base URL", "zh-Hant": "相容 API Base URL", "en": "Compatible API Base URL",
+        "ja": "互換 API Base URL", "ko": "호환 API Base URL", "es": "URL base de API compatible",
+        "fr": "URL de base de l’API compatible", "de": "Basis-URL der kompatiblen API", "pt-BR": "URL base da API compatível",
+        "ru": "Базовый URL совместимого API", "ar": "عنوان URL الأساسي لواجهة API المتوافقة",
     ],
     "Token": [
         "zh-Hans": "Token", "zh-Hant": "Token", "en": "Token", "ja": "トークン",

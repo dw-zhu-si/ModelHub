@@ -111,7 +111,7 @@ enum L10n {
         _ = String(localized: "重排", locale: AppLanguage.saved.locale)
         _ = String(localized: "供应商专用", locale: AppLanguage.saved.locale)
         _ = String(localized: "Ollama（本地）", locale: AppLanguage.saved.locale)
-        _ = String(localized: "通用 OpenAI 兼容", locale: AppLanguage.saved.locale)
+        _ = String(localized: "通用兼容协议", locale: AppLanguage.saved.locale)
         _ = String(localized: "优先级故障转移", locale: AppLanguage.saved.locale)
         _ = String(localized: "轮询", locale: AppLanguage.saved.locale)
         _ = String(localized: "权重随机", locale: AppLanguage.saved.locale)

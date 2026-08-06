@@ -2241,76 +2241,6 @@
         }
       }
     },
-    "OpenAI Base URL" : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "عنوان URL الأساسي لـ OpenAI"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OpenAI-Basis-URL"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OpenAI Base URL"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "URL base de OpenAI"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "URL de base OpenAI"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OpenAI Base URL"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OpenAI Base URL"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "URL base da OpenAI"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Базовый URL OpenAI"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OpenAI Base URL"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OpenAI Base URL"
-          }
-        }
-      }
-    },
     "Token" : {
       "localizations" : {
         "ar" : {
@@ -4691,72 +4621,72 @@
         }
       }
     },
-    "共 %arg 个模型；每行一个名称。Azure OpenAI 这里填写部署名称。" : {
+    "共 %arg 个模型；每行一个名称。兼容协议 这里填写部署名称。" : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "إجمالي نماذج %arg؛ اسم واحد في كل سطر. Azure OpenAI قم بملء اسم النشر هنا."
+            "value" : "إجمالي نماذج %arg؛ اسم واحد في كل سطر. البروتوكول المتوافق قم بملء اسم النشر هنا."
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%arg Modelle insgesamt; ein Name pro Zeile. Geben Sie hier den Bereitstellungsnamen für Azure OpenAI ein."
+            "value" : "%arg Modelle insgesamt; ein Name pro Zeile. Geben Sie hier den Bereitstellungsnamen für kompatibles Protokoll ein."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%arg models total; one name per line. Azure OpenAI fill in the deployment name here."
+            "value" : "%arg models total; one name per line. compatible protocol fill in the deployment name here."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%arg modelos totales; un nombre por línea. Azure OpenAI complete el nombre de la implementación aquí."
+            "value" : "%arg modelos totales; un nombre por línea. protocolo compatible complete el nombre de la implementación aquí."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%arg modèles total ; un nom par ligne. Azure OpenAI indiquez le nom du déploiement ici."
+            "value" : "%arg modèles total ; un nom par ligne. protocole compatible indiquez le nom du déploiement ici."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%arg モデルの合計。 1 行に 1 つの名前。 Azure OpenAI ここにデプロイ名を入力します。"
+            "value" : "%arg モデルの合計。 1 行に 1 つの名前。 互換プロトコル ここにデプロイ名を入力します。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%arg 모델 총계; 한 줄에 하나의 이름. Azure OpenAI는 여기에 배포 이름을 입력합니다."
+            "value" : "%arg 모델 총계; 한 줄에 하나의 이름. 호환 프로토콜는 여기에 배포 이름을 입력합니다."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%arg total de modelos; um nome por linha. Azure OpenAI preencha o nome da implantação aqui."
+            "value" : "%arg total de modelos; um nome por linha. protocolo compatível preencha o nome da implantação aqui."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%arg моделей всего; одно имя в строке. Azure OpenAI введите здесь имя развертывания."
+            "value" : "%arg моделей всего; одно имя в строке. совместимый протокол введите здесь имя развертывания."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "共 %1$arg 个模型；每行一个名称。Azure OpenAI 这里填写部署名称。"
+            "value" : "共 %1$arg 个模型；每行一个名称。兼容协议 这里填写部署名称。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "共 %1$arg 個模型；每行一個名稱。Azure OpenAI 這裡填寫部署名稱。"
+            "value" : "共 %1$arg 個模型；每行一個名稱。相容協議 這裡填寫部署名稱。"
           }
         }
       }
@@ -4827,6 +4757,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "關閉"
+          }
+        }
+      }
+    },
+    "兼容协议 Base URL" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عنوان URL الأساسي لـ البروتوكول المتوافق"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "kompatibles Protokoll-Basis-URL"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "compatible protocol Base URL"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "URL base de protocolo compatible"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "URL de base protocole compatible"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "互換プロトコル Base URL"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "호환 프로토콜 Base URL"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "URL base da protocolo compatível"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Базовый URL совместимый протокол"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "兼容协议 Base URL"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相容協議 Base URL"
           }
         }
       }
@@ -17781,72 +17781,72 @@
         }
       }
     },
-    "通用 OpenAI 兼容" : {
+    "通用 兼容协议 兼容" : {
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "توافق عام مع OpenAI"
+            "value" : "توافق عام مع البروتوكول المتوافق"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Allgemein OpenAI-kompatibel"
+            "value" : "Allgemein kompatibles Protokoll-kompatibel"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Generic OpenAI-Compatible"
+            "value" : "Generic compatible protocol-Compatible"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Compatible genérico con OpenAI"
+            "value" : "Compatible genérico con protocolo compatible"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Compatible OpenAI générique"
+            "value" : "Compatible protocole compatible générique"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "汎用OpenAI互換"
+            "value" : "汎用互換プロトコル互換"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "일반 OpenAI 호환"
+            "value" : "일반 호환 프로토콜 호환"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Compatível genérico com OpenAI"
+            "value" : "Compatível genérico com protocolo compatível"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Универсальная совместимость с OpenAI"
+            "value" : "Универсальная совместимость с совместимый протокол"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "通用 OpenAI 兼容"
+            "value" : "通用 兼容协议 兼容"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "通用 OpenAI 兼容"
+            "value" : "通用 相容協議 兼容"
           }
         }
       }

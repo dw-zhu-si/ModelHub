@@ -3,6 +3,27 @@ import XCTest
 @testable import ModelHubCore
 
 final class ModelHealthTests: XCTestCase {
+    func testRemovedDirectProvidersAreDisabledAndLegacyCompatibleProvidersMigrate() throws {
+        let removed = try JSONDecoder().decode(
+            ProviderConfig.self,
+            from: Data(#"{"id":"00000000-0000-0000-0000-000000000001","name":"Legacy","kind":"openAI","baseURL":"https://legacy.invalid","enabled":true,"models":["legacy-model"],"apiVersion":""}"#.utf8)
+        )
+        XCTAssertEqual(removed.kind, .unifiedCompatible)
+        XCTAssertEqual(removed.name, "已停用旧供应商")
+        XCTAssertFalse(removed.enabled)
+        XCTAssertEqual(removed.baseURL, "https://")
+        XCTAssertTrue(removed.models.isEmpty)
+
+        let compatible = try JSONDecoder().decode(
+            ProviderConfig.self,
+            from: Data(#"{"id":"00000000-0000-0000-0000-000000000002","name":"兼容网关","kind":"openAICompatible","baseURL":"https://gateway.example.com","enabled":true,"models":["text-model"],"apiVersion":""}"#.utf8)
+        )
+        XCTAssertEqual(compatible.kind, .unifiedCompatible)
+        XCTAssertTrue(compatible.enabled)
+        XCTAssertEqual(compatible.baseURL, "https://gateway.example.com")
+        XCTAssertEqual(compatible.models, ["text-model"])
+    }
+
     func testModelCategoriesExposeReasoningTextImageMusicAndVideoLabels() {
         XCTAssertEqual(
             ModelCategory.allCases.map(\.displayName),
@@ -30,14 +51,14 @@ final class ModelHealthTests: XCTestCase {
         )
     }
 
-    func testProviderKindsIncludeCommonOpenAICompatibleVendors() {
+    func testProviderKindsIncludeCommonUnifiedCompatibleVendors() {
         XCTAssertEqual(ProviderKind.openRouter.defaultBaseURL, "https://openrouter.ai/api/v1")
         XCTAssertEqual(ProviderKind.togetherAI.defaultBaseURL, "https://api.together.xyz/v1")
         XCTAssertEqual(ProviderKind.fireworksAI.defaultBaseURL, "https://api.fireworks.ai/inference/v1")
         XCTAssertEqual(ProviderKind.siliconFlow.defaultBaseURL, "https://api.siliconflow.cn/v1")
         XCTAssertEqual(ProviderKind.volcengine.defaultBaseURL, "https://ark.cn-beijing.volces.com/api/v3")
         XCTAssertEqual(ProviderKind.baiduQianfan.defaultBaseURL, "https://qianfan.baidubce.com/v2")
-        XCTAssertTrue(ProviderKind.openRouter.usesOpenAIProtocol)
+        XCTAssertTrue(ProviderKind.openRouter.usesUnifiedProtocol)
         XCTAssertTrue(ProviderKind.volcengine.needsAPIKey)
     }
 
@@ -79,7 +100,7 @@ final class ModelHealthTests: XCTestCase {
     func testAvailableCatalogIncludesOnlyAvailableDirectModelsAndUsableRoutes() {
         let provider = ProviderConfig(
             name: "示例",
-            kind: .openAI,
+            kind: .unifiedCompatible,
             baseURL: "https://example.com",
             models: ["ready", "unknown", "blocked"]
         )
@@ -107,7 +128,7 @@ final class ModelHealthTests: XCTestCase {
     func testAvailableCatalogExcludesTargetsFromDisabledProviders() {
         let provider = ProviderConfig(
             name: "停用供应商",
-            kind: .openAI,
+            kind: .unifiedCompatible,
             baseURL: "https://example.com",
             enabled: false,
             models: ["ready"]
@@ -233,7 +254,7 @@ final class ModelHealthTests: XCTestCase {
     func testMissingCredentialIsNotReportedAsModelUnavailable() {
         let provider = ProviderConfig(
             name: "云雾 API",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://yunwu.ai/v1",
             models: ["gpt-4o"]
         )
@@ -251,7 +272,7 @@ final class ModelHealthTests: XCTestCase {
     func testNativeMediaModelsUseReadyNativeProtocolDisposition() {
         let seedance = ProviderConfig(
             name: "APIMart Seedance",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://api.apimart.ai",
             models: ["doubao-seedance-2.0"]
         )
@@ -263,7 +284,7 @@ final class ModelHealthTests: XCTestCase {
         )
         let agnesImage = ProviderConfig(
             name: "Agnes AI",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://apihub.agnes-ai.com/v1",
             models: ["agnes-image-2.1-flash"]
         )
@@ -297,7 +318,7 @@ final class ModelHealthTests: XCTestCase {
     func testEmbeddingAndRerankingProtocolsAreClassifiedSeparately() {
         let provider = ProviderConfig(
             name: "云雾 API",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://yunwu.ai/v1"
         )
 
@@ -318,7 +339,7 @@ final class ModelHealthTests: XCTestCase {
     func testVendorActionModelsUseProviderNativePassthrough() {
         let provider = ProviderConfig(
             name: "云雾 API",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://yunwu.ai/v1"
         )
 
@@ -341,7 +362,7 @@ final class ModelHealthTests: XCTestCase {
     func testChatModelWithCredentialIsReadyForProbe() {
         let provider = ProviderConfig(
             name: "Agnes AI",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://apihub.agnes-ai.com/v1",
             models: ["agnes-2.0-flash"]
         )
@@ -365,7 +386,7 @@ final class ModelHealthTests: XCTestCase {
         )
         let chatProvider = ProviderConfig(
             name: "云雾 API",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://yunwu.ai/v1",
             models: ["qwen-plus"]
         )
@@ -400,7 +421,7 @@ final class ModelHealthTests: XCTestCase {
     func testMigrationEliminatesUnknownAndSeedsMissingConfiguredModels() {
         let provider = ProviderConfig(
             name: "测试供应商",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://example.com/v1",
             models: ["chat-old", "chat-new", "image-new"]
         )
@@ -428,7 +449,7 @@ final class ModelHealthTests: XCTestCase {
     func testVerifiedNativeHealthRecordSurvivesMigration() {
         let provider = ProviderConfig(
             name: "Agnes AI",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://apihub.agnes-ai.com/v1",
             models: ["agnes-image-2.1-flash"]
         )
@@ -452,7 +473,7 @@ final class ModelHealthTests: XCTestCase {
     func testManuallyRestoredNativeModelStaysAvailableAfterRestartMigration() {
         let provider = ProviderConfig(
             name: "Agnes AI",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://apihub.agnes-ai.com/v1",
             models: ["agnes-image-2.1-flash"]
         )

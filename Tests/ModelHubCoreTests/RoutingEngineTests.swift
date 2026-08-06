@@ -7,35 +7,35 @@ final class RoutingEngineTests: XCTestCase {
         XCTAssertEqual(AppConfiguration().routing.activeRule, .sameModelLowestCost)
 
         let official = ProviderConfig(
-            name: "OpenAI 官方",
-            kind: .openAI,
-            baseURL: "https://api.openai.com",
-            models: ["gpt-4o"],
-            modelProfiles: ["gpt-4o": TargetProfile(inputCostPerMillionTokens: 10, outputCostPerMillionTokens: 10)]
+            name: "Anthropic 官方",
+            kind: .anthropic,
+            baseURL: "https://api.anthropic.com",
+            models: ["claude-sonnet"],
+            modelProfiles: ["claude-sonnet": TargetProfile(inputCostPerMillionTokens: 10, outputCostPerMillionTokens: 10)]
         )
         let compatible = ProviderConfig(
             name: "兼容代理",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://proxy.example.com",
-            models: ["gpt-4o"],
-            modelProfiles: ["gpt-4o": TargetProfile(inputCostPerMillionTokens: 1, outputCostPerMillionTokens: 1)]
+            models: ["claude-sonnet"],
+            modelProfiles: ["claude-sonnet": TargetProfile(inputCostPerMillionTokens: 1, outputCostPerMillionTokens: 1)]
         )
         let health = [
-            ModelHealthRecord(providerID: official.id, model: "gpt-4o", status: .available, latencyMilliseconds: 40),
-            ModelHealthRecord(providerID: compatible.id, model: "gpt-4o", status: .available, latencyMilliseconds: 200)
+            ModelHealthRecord(providerID: official.id, model: "claude-sonnet", status: .available, latencyMilliseconds: 40),
+            ModelHealthRecord(providerID: compatible.id, model: "claude-sonnet", status: .available, latencyMilliseconds: 200)
         ]
         let engine = RoutingEngine()
 
         let cost = await engine.candidates(
-            for: "gpt-4o", routes: [], providers: [official, compatible], healthRecords: health,
+            for: "claude-sonnet", routes: [], providers: [official, compatible], healthRecords: health,
             defaultRule: .sameModelLowestCost
         )
         let speed = await engine.candidates(
-            for: "gpt-4o", routes: [], providers: [official, compatible], healthRecords: health,
+            for: "claude-sonnet", routes: [], providers: [official, compatible], healthRecords: health,
             defaultRule: .sameModelLowestLatency
         )
         let officialFirst = await engine.candidates(
-            for: "gpt-4o", routes: [], providers: [compatible, official], healthRecords: health,
+            for: "claude-sonnet", routes: [], providers: [compatible, official], healthRecords: health,
             defaultRule: .sameModelOfficial
         )
 
@@ -54,7 +54,7 @@ final class RoutingEngineTests: XCTestCase {
     }
 
     func testCapabilityRequirementsExcludeExplicitlyIncompatibleTargets() async {
-        let provider = ProviderConfig(name: "P", kind: .openAICompatible, baseURL: "https://example.com")
+        let provider = ProviderConfig(name: "P", kind: .unifiedCompatible, baseURL: "https://example.com")
         let route = RouteConfig(
             alias: "vision",
             targets: [
@@ -88,7 +88,7 @@ final class RoutingEngineTests: XCTestCase {
         let provider = ProviderConfig(
             id: providerID,
             name: "测试",
-            kind: .openAICompatible,
+            kind: .unifiedCompatible,
             baseURL: "https://example.com",
             models: ["fast", "cheap", "large"]
         )
@@ -154,8 +154,8 @@ final class RoutingEngineTests: XCTestCase {
         XCTAssertEqual(stable, "cheap")
     }
     func testPriorityRouteSkipsDisabledProviderAndOrdersTargets() async {
-        let enabled = ProviderConfig(name: "Enabled", kind: .openAI, baseURL: "https://example.com")
-        var disabled = ProviderConfig(name: "Disabled", kind: .openAI, baseURL: "https://example.com")
+        let enabled = ProviderConfig(name: "Enabled", kind: .unifiedCompatible, baseURL: "https://example.com")
+        var disabled = ProviderConfig(name: "Disabled", kind: .unifiedCompatible, baseURL: "https://example.com")
         disabled.enabled = false
 
         let route = RouteConfig(
@@ -182,7 +182,7 @@ final class RoutingEngineTests: XCTestCase {
     }
 
     func testRoundRobinRotatesFirstCandidate() async {
-        let provider = ProviderConfig(name: "P", kind: .openAI, baseURL: "https://example.com")
+        let provider = ProviderConfig(name: "P", kind: .unifiedCompatible, baseURL: "https://example.com")
         let route = RouteConfig(
             alias: "balanced",
             strategy: .roundRobin,
@@ -216,29 +216,29 @@ final class RoutingEngineTests: XCTestCase {
 
     func testDirectModelCanUseProviderPrefix() async {
         let provider = ProviderConfig(
-            name: "OpenAI",
-            kind: .openAI,
-            baseURL: "https://api.openai.com",
-            models: ["gpt-test"]
+            name: "兼容供应商",
+            kind: .unifiedCompatible,
+            baseURL: "https://gateway.example.com",
+            models: ["text-test"]
         )
 
         let result = await RoutingEngine().candidates(
-            for: "OpenAI/gpt-test",
+            for: "兼容供应商/text-test",
             routes: [],
             providers: [provider],
             healthRecords: [
-                ModelHealthRecord(providerID: provider.id, model: "gpt-test", status: .available)
+                ModelHealthRecord(providerID: provider.id, model: "text-test", status: .available)
             ]
         )
 
         XCTAssertEqual(result.first?.providerID, provider.id)
-        XCTAssertEqual(result.first?.model, "gpt-test")
+        XCTAssertEqual(result.first?.model, "text-test")
     }
 
     func testUnavailableAndUnknownTargetsAreQuarantined() async {
         let provider = ProviderConfig(
             name: "Provider",
-            kind: .openAI,
+            kind: .unifiedCompatible,
             baseURL: "https://example.com",
             models: ["configured-first", "healthy", "unknown"]
         )
@@ -277,13 +277,13 @@ final class RoutingEngineTests: XCTestCase {
     func testDirectMatchesPreferAvailableProvider() async {
         let unavailable = ProviderConfig(
             name: "Unavailable",
-            kind: .openAI,
+            kind: .unifiedCompatible,
             baseURL: "https://one.example.com",
             models: ["shared-model"]
         )
         let available = ProviderConfig(
             name: "Available",
-            kind: .openAI,
+            kind: .unifiedCompatible,
             baseURL: "https://two.example.com",
             models: ["shared-model"]
         )
@@ -313,7 +313,7 @@ final class RoutingEngineTests: XCTestCase {
     func testQuarantinedTargetReturnsOnlyAfterStatusChangesToAvailable() async {
         let provider = ProviderConfig(
             name: "Provider",
-            kind: .openAI,
+            kind: .unifiedCompatible,
             baseURL: "https://example.com",
             models: ["model"]
         )
@@ -356,7 +356,7 @@ final class RoutingEngineTests: XCTestCase {
     func testCredentialAndUnsupportedStatusesAreNeverRouted() async {
         let provider = ProviderConfig(
             name: "Provider",
-            kind: .openAI,
+            kind: .unifiedCompatible,
             baseURL: "https://example.com",
             models: ["credential", "unsupported"]
         )

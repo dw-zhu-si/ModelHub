@@ -33,7 +33,7 @@ let specs = [
         filename: "01-unified-api-1440x900.jpg",
         eyebrow: "MODELHUB · 原生 macOS 多模型网关",
         title: "一个本机入口\n连接所有 AI 模型",
-        subtitle: "把多家供应商统一为稳定的 OpenAI 兼容地址，现有客户端只需配置一次。",
+        subtitle: "把多家供应商统一为稳定的通用兼容地址，现有客户端只需配置一次。",
         chips: ["统一 Base URL", "11 种语言", "Universal"],
         accent: NSColor(calibratedRed: 0.20, green: 0.72, blue: 1.00, alpha: 1)
     ),

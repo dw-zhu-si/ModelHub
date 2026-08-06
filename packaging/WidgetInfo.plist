@@ -2,10 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleDevelopmentRegion</key>
+	<key>CFBundleDevelopmentRegion</key>
 	<string>zh-Hans</string>
-    <key>CFBundleDisplayName</key>
+	<key>CFBundleDisplayName</key>
 	<string>ModelHub Widget</string>
+	<key>CFBundleExecutable</key>
+	<string>ModelHubWidget</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.local.modelhub.widget</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>zh-Hans</string>
@@ -20,26 +26,20 @@
 		<string>ru</string>
 		<string>ar</string>
 	</array>
-    <key>CFBundleExecutable</key>
-    <string>ModelHubWidget</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.local.modelhub.widget</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>ModelHubWidget</string>
-    <key>CFBundlePackageType</key>
-    <string>XPC!</string>
-    <key>CFBundleShortVersionString</key>
+	<key>CFBundleName</key>
+	<string>ModelHubWidget</string>
+	<key>CFBundlePackageType</key>
+	<string>XPC!</string>
+	<key>CFBundleShortVersionString</key>
 	<string>1.9.0</string>
 	<key>CFBundleVersion</key>
-	<string>21</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
-    <key>NSExtension</key>
-    <dict>
-        <key>NSExtensionPointIdentifier</key>
-        <string>com.apple.widgetkit-extension</string>
-    </dict>
+	<string>23</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.widgetkit-extension</string>
+	</dict>
 </dict>
 </plist>

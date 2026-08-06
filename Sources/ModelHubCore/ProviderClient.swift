@@ -105,7 +105,7 @@ public struct ProviderClient: Sendable {
                 timeoutInterval: timeoutInterval
             )
         default:
-            return try await sendOpenAICompatible(
+            return try await sendUnifiedCompatible(
                 rawBody: rawBody,
                 targetModel: targetModel,
                 provider: provider,
@@ -131,13 +131,6 @@ public struct ProviderClient: Sendable {
                 throw ProviderClientError.invalidBaseURL
             }
             return url
-        case .azureOpenAI:
-            let encodedModel = model.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? model
-            let version = provider.apiVersion.isEmpty ? "2024-10-21" : provider.apiVersion
-            guard let url = URL(string: "\(base)/openai/deployments/\(encodedModel)/chat/completions?api-version=\(version)") else {
-                throw ProviderClientError.invalidBaseURL
-            }
-            return url
         default:
             let hasVersionedAPIPath = ["/v1", "/v2", "/v3"].contains {
                 base.hasSuffix($0)
@@ -151,7 +144,7 @@ public struct ProviderClient: Sendable {
     }
 
     public func responsesEndpoint(for provider: ProviderConfig) throws -> URL {
-        guard provider.kind.usesOpenAIProtocol, provider.kind != .azureOpenAI else {
+        guard provider.kind.usesUnifiedProtocol else {
             throw ProviderClientError.invalidRequest("该供应商暂不支持 Responses API 透传")
         }
         let base = provider.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
@@ -200,7 +193,7 @@ public struct ProviderClient: Sendable {
         case .anthropic:
             var request = URLRequest(url: try endpoint(for: provider, model: targetModel))
             request.httpMethod = "POST"
-            request.httpBody = try OpenAIProtocolBridge.anthropicBody(
+            request.httpBody = try UnifiedProtocolBridge.anthropicBody(
                 from: rawBody,
                 targetModel: targetModel
             )
@@ -227,7 +220,7 @@ public struct ProviderClient: Sendable {
             guard let url = components?.url else { throw ProviderClientError.invalidBaseURL }
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
-            request.httpBody = try OpenAIProtocolBridge.geminiBody(from: rawBody)
+            request.httpBody = try UnifiedProtocolBridge.geminiBody(from: rawBody)
             request.timeoutInterval = timeoutInterval
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
@@ -242,9 +235,7 @@ public struct ProviderClient: Sendable {
         request.httpBody = try JSONSerialization.data(withJSONObject: json)
         request.timeoutInterval = timeoutInterval
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if provider.kind == .azureOpenAI {
-            request.setValue(apiKey, forHTTPHeaderField: "api-key")
-        } else if let apiKey, !apiKey.isEmpty {
+        if let apiKey, !apiKey.isEmpty {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
         return request
@@ -265,9 +256,9 @@ public struct ProviderClient: Sendable {
         guard (200..<300).contains(response.statusCode) else { return response }
         switch provider.kind {
         case .anthropic:
-            return OpenAIProtocolBridge.anthropicStream(response, model: targetModel)
+            return UnifiedProtocolBridge.anthropicStream(response, model: targetModel)
         case .gemini:
-            return OpenAIProtocolBridge.geminiStream(response, model: targetModel)
+            return UnifiedProtocolBridge.geminiStream(response, model: targetModel)
         default:
             return response
         }
@@ -420,9 +411,7 @@ public struct ProviderClient: Sendable {
             }
         }
 
-        if provider.kind == .azureOpenAI {
-            request.setValue(apiKey, forHTTPHeaderField: "api-key")
-        } else if let apiKey, !apiKey.isEmpty {
+        if let apiKey, !apiKey.isEmpty {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
         return request
@@ -630,8 +619,6 @@ public struct ProviderClient: Sendable {
         }
 
         switch provider.kind {
-        case .azureOpenAI:
-            request.setValue(apiKey, forHTTPHeaderField: "api-key")
         case .anthropic:
             request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
             if request.value(forHTTPHeaderField: "anthropic-version") == nil {
@@ -695,7 +682,7 @@ public struct ProviderClient: Sendable {
         )
     }
 
-    private func sendOpenAICompatible(
+    private func sendUnifiedCompatible(
         rawBody: Data,
         targetModel: String,
         provider: ProviderConfig,
@@ -727,7 +714,7 @@ public struct ProviderClient: Sendable {
         )
         let response = try await execute(request)
         guard (200..<300).contains(response.statusCode) else { return response }
-        return try OpenAIProtocolBridge.normalizeAnthropic(response)
+        return try UnifiedProtocolBridge.normalizeAnthropic(response)
     }
 
     private func sendGemini(
@@ -746,7 +733,7 @@ public struct ProviderClient: Sendable {
         )
         let response = try await execute(request)
         guard (200..<300).contains(response.statusCode) else { return response }
-        return try OpenAIProtocolBridge.normalizeGemini(response, model: targetModel)
+        return try UnifiedProtocolBridge.normalizeGemini(response, model: targetModel)
     }
 
     private func geminiEndpoint(

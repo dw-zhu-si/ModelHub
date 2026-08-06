@@ -6,13 +6,13 @@ English · [简体中文](README.md)
 
 ## Product overview
 
-ModelHub is a native macOS local gateway for multi-provider AI APIs. It gives your clients one OpenAI-compatible Base URL and stable model aliases, while ModelHub handles provider credentials, protocol differences, health checks, quarantine, routing, failover, budgets, usage analytics, and native media capabilities on the same Mac.
+ModelHub is a native macOS local gateway for multi-provider AI APIs. It gives your clients one widely compatible Base URL and stable model aliases, while ModelHub handles provider credentials, protocol differences, health checks, quarantine, routing, failover, budgets, usage analytics, and native media capabilities on the same Mac.
 
 The product is designed for developers, local agents, and power users who are tired of changing every client when a provider, model name, API key, or endpoint changes. A model that failed yesterday should not silently receive traffic today, and an untested model should not be exposed as if it were ready. ModelHub makes those states explicit and keeps normal catalog reads local and side-effect free.
 
 Typical users include:
 
-- developers using the OpenAI SDK, Cursor, Continue, Cline, or custom agents;
+- developers using the compatible SDK, Cursor, Continue, Cline, or custom agents;
 - individuals and small teams combining several model providers;
 - applications that need failover, weighted traffic, capability filtering, cost controls, or latency-aware routing;
 - users who want credentials, logs, and model availability to remain on their Mac instead of in another hosted gateway.
@@ -27,7 +27,7 @@ Your client or agent
         ▼
 ModelHub local gateway (127.0.0.1:11435)
         │  health, quarantine, capability, cost, latency, resilience
-        ├── OpenAI-compatible providers
+        ├── widely compatible providers
         ├── Anthropic / Gemini protocol adapters
         ├── image, video, speech, embeddings, reranking
         └── restricted native provider actions
@@ -55,8 +55,8 @@ ModelHub uses a native menu-bar extra and never shows a Dock icon. A clean insta
 
 ### API and protocols
 
-- OpenAI Chat Completions: `POST /v1/chat/completions`;
-- OpenAI Responses: `POST /v1/responses`, including tools, multimodal fields, and incremental SSE;
+- Unified Protocol Chat Completions: `POST /v1/chat/completions`;
+- Unified Protocol Responses: `POST /v1/responses`, including tools, multimodal fields, and incremental SSE;
 - model, provider, health, and usage catalogs: `/v1/models`, `/v1/models/available`, `/v1/providers`, `/v1/analytics`;
 - native image, video, task, speech, transcription, embedding, and reranking endpoints;
 - restricted provider actions through `POST /v1/native`;
@@ -97,9 +97,9 @@ Every model health record includes its last check time, latency, HTTP status, an
 
 | Category | Coverage |
 | --- | --- |
-| OpenAI-compatible | OpenAI, Azure OpenAI, DeepSeek, Qwen, Kimi, GLM, Grok, Groq, Mistral, Ollama, and other compatible services |
+| widely compatible | DeepSeek, Qwen, Kimi, GLM, Grok, Groq, Mistral, Ollama, and other compatible services |
 | Native text adapters | Anthropic Claude and Google Gemini |
-| Native media/task adapters | APIMart Seedance, Agnes image/video, Alibaba Cloud Bailian speech, and OpenAI-style image/audio/embedding/rerank APIs |
+| Native media/task adapters | APIMart Seedance, Agnes image/video, Alibaba Cloud Bailian speech, and standard image/audio/embedding/rerank APIs |
 | Restricted native actions | Configured providers such as Yunwu API for Midjourney, Suno, Kling, PixVerse, and similar provider-specific actions |
 
 “Supported provider” means that the protocol and configuration entry exist. It does not mean that your account has access, balance, regional permission, or a successful live check.
@@ -121,7 +121,7 @@ On a clean installation with no configured providers, the Overview screen offers
 
 ## Install
 
-Download the notarized [v1.9.0 build 21 release](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.0-build21), open `ModelHub-1.9.0-macos-universal.dmg`, and drag `ModelHub.app` to Applications. The DMG and the app are Developer ID signed and passed Apple notarization, ticket stapling, image integrity, and Gatekeeper checks. A Universal ZIP is also available in the same release.
+Download the notarized [v1.9.0 build 23 release](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.0-build23), open `ModelHub-1.9.0-macos-universal.dmg`, and drag `ModelHub.app` to Applications. The DMG and the app are Developer ID signed and passed Apple notarization, ticket stapling, image integrity, and Gatekeeper checks. A Universal ZIP is also available in the same release.
 
 ### Requirements
 
@@ -132,8 +132,8 @@ Download the notarized [v1.9.0 build 21 release](https://github.com/dw-zhu-si/Mo
 ### Verify the release
 
 ```text
-a11699b04203fef08de54d18dbdef866136a8181781ba1507a042713ffc57b12  ModelHub-1.9.0-macos-universal.zip
-a49c4a69f6a2fdd394a4c8ae12fdad3ad4f5e93dd98bec4fbc6c52f39dd66735  ModelHub-1.9.0-macos-universal.dmg
+ebe85bc9872c92182cd6925faf52e3b64e60b885e6474144f659ad6896c8021b  ModelHub-1.9.0-macos-universal.zip
+2f06fbcaeb91ed5300ff77128ee6b03e2d5faded4aa345ea695913874d0abf94  ModelHub-1.9.0-macos-universal.dmg
 ```
 
 ```bash
@@ -213,7 +213,7 @@ Local builds are ad-hoc signed by default. Developer ID notarization and Mac App
 
 ## Protocol boundaries and limitations
 
-- OpenAI-compatible extra fields are preserved where possible and aliases are replaced with the selected upstream model name;
+- widely compatible extra fields are preserved where possible and aliases are replaced with the selected upstream model name;
 - Anthropic and Gemini support text, system content, tool definitions/results, image content, and SSE conversion; content that cannot be represented safely returns HTTP 400 instead of being silently dropped;
 - image, video, speech, transcription, embedding, and reranking models must use their native endpoints;
 - chat tests make real upstream requests and may cost money; media models are checked for local protocol support without automatically generating media;

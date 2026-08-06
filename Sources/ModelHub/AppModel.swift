@@ -300,7 +300,7 @@ final class AppModel: ObservableObject {
             ProviderConfig(
                 id: secondaryID,
                 name: "Review Edge",
-                kind: .openAICompatible,
+                kind: .unifiedCompatible,
                 baseURL: "https://review-edge.invalid",
                 models: [textModel, reasoningModel],
                 modelProfiles: [
@@ -793,9 +793,9 @@ final class AppModel: ObservableObject {
 
     var cliConfigurationPreview: String {
         """
-        # 通用 OpenAI 兼容 CLI
-        export OPENAI_BASE_URL=\(endpointURL)
-        export OPENAI_API_KEY='<从 ModelHub 复制访问令牌>'
+        # ModelHub 通用兼容 CLI
+        export MODELHUB_BASE_URL=\(endpointURL)
+        export MODELHUB_API_KEY='<从 ModelHub 复制访问令牌>'
 
         # Responses API
         POST \(endpointURL)/responses
@@ -1597,7 +1597,7 @@ final class AppModel: ObservableObject {
         {
             guard let provider = providers.first(where: { $0.id == target.providerID }),
                   request.path == "/v1/chat/completions"
-                    || (provider.kind.usesOpenAIProtocol && provider.kind != .azureOpenAI),
+                    || provider.kind.usesUnifiedProtocol,
                   ModelProbePolicy.nativeProtocol(provider: provider, model: target.model) == nil
             else { continue }
             if attemptIndex > 0 {
@@ -2080,8 +2080,7 @@ final class AppModel: ObservableObject {
         let attemptedTargets = candidates.prefix(max(1, settings.maxFallbackAttempts))
         for (attemptIndex, target) in attemptedTargets.enumerated() {
             guard let provider = providers.first(where: { $0.id == target.providerID }),
-                  provider.kind.usesOpenAIProtocol,
-                  provider.kind != .azureOpenAI,
+                  provider.kind.usesUnifiedProtocol,
                   ModelProbePolicy.nativeProtocol(provider: provider, model: target.model) == nil
             else { continue }
             if attemptIndex > 0 {
@@ -3137,7 +3136,14 @@ final class AppModel: ObservableObject {
         guard let data = try? Data(contentsOf: configurationURL),
               var decoded = try? JSONDecoder().decode(AppConfiguration.self, from: data)
         else { return }
-        let hadRoutingSettings = ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["routing"] != nil
+        let rawConfiguration = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        let hadRoutingSettings = rawConfiguration?["routing"] != nil
+        let storedProviderKinds = (rawConfiguration?["providers"] as? [[String: Any]])?
+            .compactMap { $0["kind"] as? String } ?? []
+        let didMigrateProviderKinds = storedProviderKinds.count == decoded.providers.count
+            && zip(storedProviderKinds, decoded.providers).contains {
+                $0 != $1.kind.rawValue
+            }
         let normalizedHealth = ModelHealthMigration.normalize(
             records: decoded.modelHealth,
             providers: decoded.providers
@@ -3146,7 +3152,7 @@ final class AppModel: ObservableObject {
         decoded.modelHealth = normalizedHealth
         configuration = decoded
         rebuildHealthIndex()
-        if didMigrateHealth || !hadRoutingSettings {
+        if didMigrateHealth || didMigrateProviderKinds || !hadRoutingSettings {
             persistConfiguration()
         }
     }
