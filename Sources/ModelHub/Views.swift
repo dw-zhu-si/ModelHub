@@ -1,36 +1,43 @@
 import SwiftUI
+import AppKit
 import ModelHubCore
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        NavigationSplitView {
-            List(SidebarItem.allCases, selection: $model.selection) { item in
-                Label(item.title, systemImage: item.icon)
-                    .tag(item)
-                    .accessibilityLabel(item.title)
+        VStack(spacing: 0) {
+            if model.isReviewDemoMode {
+                ReviewDemoBanner()
             }
-            .navigationTitle("模型枢纽")
-            .navigationSplitViewColumnWidth(min: 180, ideal: 210)
-        } detail: {
-            Group {
-                switch model.selection ?? .overview {
-                case .overview: OverviewView()
-                case .providers: ProvidersView()
-                case .routes: RoutesView()
-                case .analytics: AnalyticsView()
-                case .operations: OperationsView()
-                case .console: ConsoleView()
-                case .logs: LogsView()
-                case .settings: SettingsView()
+            NavigationSplitView {
+                List(SidebarItem.allCases, selection: $model.selection) { item in
+                    Label(item.title, systemImage: item.icon)
+                        .tag(item)
+                        .accessibilityLabel(item.title)
                 }
-            }
-            .safeAreaPadding(.top, 24)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .toolbar {
-                ToolbarItem {
-                    ServerStatusButton()
+                .navigationTitle("模型枢纽")
+                .navigationSplitViewColumnWidth(min: 180, ideal: 210)
+            } detail: {
+                Group {
+                    switch model.selection ?? .overview {
+                    case .overview: OverviewView()
+                    case .providers: ProvidersView()
+                    case .routes: RoutesView()
+                    case .analytics: AnalyticsView()
+                    case .operations: OperationsView()
+                    case .console: ConsoleView()
+                    case .logs: LogsView()
+                    case .settings: SettingsView()
+                    }
+                }
+                .safeAreaPadding(.top, 24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .toolbar {
+                    ToolbarItem {
+                        ServerStatusButton()
+                    }
                 }
             }
         }
@@ -45,6 +52,30 @@ struct ContentView: View {
         } message: {
             Text(model.notice ?? "")
         }
+    }
+}
+
+private struct ReviewDemoBanner: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.shield.fill")
+                .foregroundStyle(.blue)
+            Text("审核演示模式")
+                .font(.headline)
+            Text("仅使用合成数据，不读取凭证、不访问模型供应商，也不会产生费用。")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button("退出演示") { model.exitReviewDemoMode() }
+                .buttonStyle(.bordered)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .background(Color.blue.opacity(0.08))
+        .overlay(alignment: .bottom) { Divider() }
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -83,6 +114,10 @@ struct OverviewView: View {
                     title: "概览",
                     subtitle: "把不同模型供应商统一成一个本机 OpenAI 兼容接口。"
                 )
+
+                if model.providers.isEmpty && !model.isReviewDemoMode {
+                    ReviewDemoEntryCard()
+                }
 
                 EndpointCard()
 
@@ -130,6 +165,32 @@ struct OverviewView: View {
             .padding(24)
         }
         .navigationTitle("概览")
+    }
+}
+
+private struct ReviewDemoEntryCard: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        HStack(spacing: 18) {
+            Image(systemName: "play.rectangle.on.rectangle.fill")
+                .font(.system(size: 34))
+                .foregroundStyle(.blue)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("无需账号即可完整体验")
+                    .font(.headline)
+                Text("进入审核演示模式，查看多供应商、模型分类、三种默认路由规则、故障转移、用量分析、请求日志和本机 API 调试。所有内容均为合成数据。")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 16)
+            Button("进入审核演示") { model.enterReviewDemoMode() }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+        }
+        .cardStyle()
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -540,6 +601,7 @@ private struct ProviderModelBrowser: View {
     let testAll: () -> Void
     @State private var query = ""
     @State private var filter: ModelAvailabilityFilter = .all
+    @State private var pendingNativeTest: NativeTestRequest?
 
     private var summary: ModelHealthSummary {
         model.healthSummary(for: provider)
@@ -651,6 +713,10 @@ private struct ProviderModelBrowser: View {
                                     provider: provider,
                                     model: modelName
                                 ),
+                                categories: ModelCategory.infer(
+                                    model: modelName,
+                                    capabilities: provider.modelProfiles?[modelName]?.capabilities ?? []
+                                ),
                                 record: model.healthRecord(
                                     providerID: provider.id,
                                     model: modelName
@@ -660,12 +726,7 @@ private struct ProviderModelBrowser: View {
                                     model: modelName
                                 )
                             ) {
-                                Task {
-                                    _ = await model.testModel(
-                                        providerID: provider.id,
-                                        model: modelName
-                                    )
-                                }
+                                beginTest(modelName: modelName)
                             }
                             Divider()
                                 .padding(.leading, 48)
@@ -674,7 +735,54 @@ private struct ProviderModelBrowser: View {
                 }
             }
         }
+        .confirmationDialog(
+            "测试原生协议？",
+            isPresented: Binding(
+                get: { pendingNativeTest != nil },
+                set: { if !$0 { pendingNativeTest = nil } }
+            )
+        ) {
+            Button("继续测试（可能产生费用）") {
+                guard let request = pendingNativeTest else { return }
+                pendingNativeTest = nil
+                Task {
+                    _ = await model.testModel(
+                        providerID: request.providerID,
+                        model: request.model,
+                        allowNativeProbe: true
+                    )
+                }
+            }
+            Button("取消", role: .cancel) { pendingNativeTest = nil }
+        } message: {
+            if let request = pendingNativeTest {
+                Text("将向 \(provider.name) 的 \(request.protocol.displayName) 原生接口发送一次最小真实请求。视频、图像或语音供应商可能按请求计费。")
+            }
+        }
     }
+
+    private func beginTest(modelName: String) {
+        guard let nativeProtocol = ModelProbePolicy.nativeProtocol(
+            provider: provider,
+            model: modelName
+        ), nativeProtocol != .providerNative else {
+            Task {
+                _ = await model.testModel(providerID: provider.id, model: modelName)
+            }
+            return
+        }
+        pendingNativeTest = NativeTestRequest(
+            providerID: provider.id,
+            model: modelName,
+            protocol: nativeProtocol
+        )
+    }
+}
+
+private struct NativeTestRequest {
+    let providerID: UUID
+    let model: String
+    let `protocol`: ModelNativeProtocol
 }
 
 private struct ModelHealthRow: View {
@@ -682,6 +790,7 @@ private struct ModelHealthRow: View {
     let providerID: UUID
     let modelName: String
     let nativeProtocol: ModelNativeProtocol?
+    let categories: Set<ModelCategory>
     let record: ModelHealthRecord?
     let isTesting: Bool
     let test: () -> Void
@@ -720,6 +829,16 @@ private struct ModelHealthRow: View {
                     .padding(.vertical, 2)
                     .background(.indigo.opacity(0.1), in: Capsule())
                 }
+                HStack(spacing: 5) {
+                    ForEach(ModelCategory.allCases.filter { categories.contains($0) }) { category in
+                        Label(category.displayName, systemImage: category.icon)
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(category.color)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(category.color.opacity(0.1), in: Capsule())
+                    }
+                }
                 HStack(spacing: 8) {
                     Text(isTesting ? "测试中" : status.title)
                     if let record {
@@ -744,16 +863,14 @@ private struct ModelHealthRow: View {
             }
 
             if status.isQuarantined {
-                if nativeProtocol == nil {
-                    Button(action: test) {
-                        Image(systemName: "arrow.clockwise")
-                            .frame(width: 28, height: 28)
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(isTesting || appModel.isTestingModels)
-                    .help("重新测试已隔离模型 \(modelName)")
-                    .accessibilityLabel("重新测试已隔离模型 \(modelName)")
+                Button(action: test) {
+                    Image(systemName: "arrow.clockwise")
+                        .frame(width: 28, height: 28)
                 }
+                .buttonStyle(.borderless)
+                .disabled(isTesting || appModel.isTestingModels)
+                .help(nativeProtocol == nil ? "重新测试已隔离模型 \(modelName)" : "重新测试 \(modelName) 的原生协议（可能产生费用）")
+                .accessibilityLabel("重新测试模型 \(modelName)")
                 Button {
                     appModel.markModelAvailable(providerID: providerID, model: modelName)
                 } label: {
@@ -844,6 +961,28 @@ private extension ModelNativeProtocol {
     }
 }
 
+private extension ModelCategory {
+    var icon: String {
+        switch self {
+        case .reasoning: "brain.head.profile"
+        case .text: "text.alignleft"
+        case .image: "photo"
+        case .music: "music.note"
+        case .video: "video"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .reasoning: .orange
+        case .text: .blue
+        case .image: .purple
+        case .music: .pink
+        case .video: .teal
+        }
+    }
+}
+
 struct ProviderEditorView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -853,6 +992,7 @@ struct ProviderEditorView: View {
     @State private var testResult = ""
     @State private var isTesting = false
     @State private var showingDeleteKeyConfirmation = false
+    @State private var pendingNativeProtocol: ModelNativeProtocol?
 
     init(provider: ProviderConfig?) {
         let initial = provider ?? ProviderConfig(
@@ -950,17 +1090,7 @@ struct ProviderEditorView: View {
                 Section("连接测试") {
                     HStack {
                         Button {
-                            Task {
-                                isTesting = true
-                                provider.models = parsedModels
-                                if model.saveProvider(provider, apiKey: apiKey) {
-                                    apiKey = ""
-                                    testResult = await model.testProvider(provider)
-                                } else {
-                                    testResult = "API Key 保存失败，请查看提示。"
-                                }
-                                isTesting = false
-                            }
+                            requestProviderTest()
                         } label: {
                             if isTesting {
                                 ProgressView()
@@ -992,6 +1122,52 @@ struct ProviderEditorView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("删除后无法恢复，需要重新输入才能调用此供应商。")
+        }
+        .confirmationDialog(
+            "测试原生协议？",
+            isPresented: Binding(
+                get: { pendingNativeProtocol != nil },
+                set: { if !$0 { pendingNativeProtocol = nil } }
+            )
+        ) {
+            Button("继续测试（可能产生费用）") {
+                pendingNativeProtocol = nil
+                runProviderTest(allowNativeProbe: true)
+            }
+            Button("取消", role: .cancel) { pendingNativeProtocol = nil }
+        } message: {
+            if let nativeProtocol = pendingNativeProtocol {
+                Text("将向 \(provider.name) 的 \(nativeProtocol.displayName) 原生接口发送一次最小真实请求。视频、图像或语音供应商可能按请求计费。")
+            }
+        }
+    }
+
+    private func requestProviderTest() {
+        guard let firstModel = parsedModels.first,
+              let nativeProtocol = ModelProbePolicy.nativeProtocol(
+                  provider: provider,
+                  model: firstModel
+              ), nativeProtocol != .providerNative else {
+            runProviderTest()
+            return
+        }
+        pendingNativeProtocol = nativeProtocol
+    }
+
+    private func runProviderTest(allowNativeProbe: Bool = false) {
+        Task {
+            isTesting = true
+            provider.models = parsedModels
+            if model.saveProvider(provider, apiKey: apiKey) {
+                apiKey = ""
+                testResult = await model.testProvider(
+                    provider,
+                    allowNativeProbe: allowNativeProbe
+                )
+            } else {
+                testResult = "API Key 保存失败，请查看提示。"
+            }
+            isTesting = false
         }
     }
 
@@ -1040,6 +1216,10 @@ struct RoutesView: View {
                 )
             )
             .padding(24)
+
+            DefaultRoutingRulePanel()
+                .padding(.horizontal, 24)
+                .padding(.bottom, 12)
 
             if model.routes.isEmpty {
                 Spacer()
@@ -1091,6 +1271,71 @@ struct RoutesView: View {
                 routeToDelete = nil
             }
         }
+    }
+}
+
+private struct DefaultRoutingRulePanel: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("默认路由规则")
+                        .font(.headline)
+                    Text("同名模型跨供应商时仅启用一项；三项规则均为内置规则，不可删除。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                StatusBadge(text: "已启用：\(model.configuration.routing.activeRule.displayName)", active: true)
+            }
+
+            ForEach(DefaultRoutingRule.allCases) { rule in
+                Button {
+                    model.setDefaultRoutingRule(rule)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: model.configuration.routing.activeRule == rule
+                            ? "checkmark.circle.fill"
+                            : "circle")
+                            .foregroundStyle(model.configuration.routing.activeRule == rule ? Color.accentColor : Color.secondary)
+                            .font(.title3)
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 8) {
+                                Text(rule.displayName)
+                                    .font(.subheadline.weight(.semibold))
+                                Text("内置 · 不可删除")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text(rule.detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.leading)
+                        }
+                        Spacer()
+                    }
+                    .padding(10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(model.configuration.routing.activeRule == rule
+                            ? Color.accentColor.opacity(0.08)
+                            : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(model.configuration.routing.activeRule == rule
+                            ? Color.accentColor.opacity(0.35)
+                            : Color.secondary.opacity(0.15), lineWidth: 1)
+                )
+            }
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .controlBackgroundColor)))
     }
 }
 
@@ -1519,6 +1764,8 @@ struct OperationsView: View {
     @State private var settings = OperationalSettings()
     @State private var monthlyBudget = ""
     @State private var showAgentToken = false
+    @State private var mcpStatus = ""
+    @State private var pendingMCPInstall: MCPInstallDestination?
 
     var body: some View {
         Form {
@@ -1556,8 +1803,54 @@ struct OperationsView: View {
                     Button("复制") { model.copyAgentToken() }
                 }
                 Button("重新生成独立 Agent 令牌", role: .destructive) { model.regenerateAgentToken() }
-                Text("仅监听 127.0.0.1；校验本机 Origin；工具全部只读，并且模型目录只返回未隔离目标。")
+                Text("仅监听 127.0.0.1 并校验本机 Origin；生成工具需确认可能计费，所有调用仍经过隔离、限流、预算与日志。")
                     .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("MCP 任务上下文与安装") {
+                LabeledContent("MCP 地址") {
+                    Text(model.mcpURL)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+                Text("MCP 可读取本机状态、可用模型、聚合用量和你保存的任务文本，也可调用文字、图片、视频、语音、向量与重排模型；不会自动读取 Codex/Claude 的全部会话或返回密钥。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Button("一键安装到 Codex") { pendingMCPInstall = .codex }
+                    Button("一键安装到 Claude") { pendingMCPInstall = .claude }
+                    Button("复制手动安装配置") {
+                        model.copyMCPManualConfiguration()
+                        mcpStatus = "手动配置已复制；剪贴板包含 Agent 令牌。"
+                    }
+                }
+                if !mcpStatus.isEmpty {
+                    Text(mcpStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+
+                Text("当前任务文本（可选，最多 12,000 字符）")
+                    .font(.subheadline.weight(.semibold))
+                TextEditor(text: Binding(
+                    get: { settings.agentProtocols.taskContext ?? "" },
+                    set: { settings.agentProtocols.taskContext = String($0.prefix(12_000)) }
+                ))
+                .font(.system(.body, design: .default))
+                .frame(minHeight: 110)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.2)))
+                HStack {
+                    Button("导入任务文本文件") { importTaskContext() }
+                    Button("清空") { settings.agentProtocols.taskContext = nil }
+                    Spacer()
+                    Text("保存后 MCP 才会读取")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text("请只粘贴或导入你授权共享的任务内容；ModelHub 不会自动扫描其他客户端的聊天记录。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section {
@@ -1567,6 +1860,25 @@ struct OperationsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("路由与协议")
+        .confirmationDialog(
+            "安装 ModelHub MCP？",
+            isPresented: Binding(
+                get: { pendingMCPInstall != nil },
+                set: { if !$0 { pendingMCPInstall = nil } }
+            )
+        ) {
+            if let destination = pendingMCPInstall {
+                Button("安装到 \(destination.title)") {
+                    mcpStatus = destination == .codex
+                        ? model.installMCPToCodex()
+                        : model.installMCPToClaude()
+                    pendingMCPInstall = nil
+                }
+            }
+            Button("取消", role: .cancel) { pendingMCPInstall = nil }
+        } message: {
+            Text("将更新用户主目录中的配置文件，并替换同名 modelhub MCP 条目；其他 MCP 条目会保留。")
+        }
         .onAppear {
             settings = model.configuration.operational
             monthlyBudget = settings.budget.monthlyLimitUSD.map { String($0) } ?? ""
@@ -1577,6 +1889,29 @@ struct OperationsView: View {
         settings.budget.monthlyLimitUSD = Double(monthlyBudget)
         model.persistOperationalSettings(settings)
     }
+
+    private func importTaskContext() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.allowsMultipleSelection = false
+        panel.title = "导入当前任务文本"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            settings.agentProtocols.taskContext = String(text.prefix(12_000))
+            mcpStatus = "已导入任务文本；点击下方保存后才会通过 MCP 暴露。"
+        } catch {
+            mcpStatus = "任务文本导入失败：\(error.localizedDescription)"
+        }
+    }
+}
+
+private enum MCPInstallDestination: String, Identifiable {
+    case codex
+    case claude
+
+    var id: String { rawValue }
+    var title: String { self == .codex ? "Codex" : "Claude" }
 }
 
 struct SettingsView: View {

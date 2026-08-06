@@ -109,6 +109,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var launchAtLoginRequested = false
     @Published private(set) var launchAtLoginStatusText = String(localized: "尚未启用", locale: AppLanguage.saved.locale)
     @Published private(set) var preferredLanguage = AppLanguage.saved
+    @Published private(set) var isReviewDemoMode = false
 
     private let router = RoutingEngine()
     private let providerClient = ProviderClient()
@@ -123,9 +124,18 @@ final class AppModel: ObservableObject {
     private var providerListCache: HTTPResponse?
     private var cachedGatewayToken: String?
     private var cachedAgentToken: String?
+    private var reviewDemoBackup: ReviewDemoBackup?
     private static let launchAtLoginRequestedKey = "launchAtLoginRequested"
     private static let launchAtLoginStatusKey = "launchAtLoginStatus"
     private static let launchAtLoginErrorKey = "launchAtLoginLastError"
+
+    private struct ReviewDemoBackup {
+        let configuration: AppConfiguration
+        let logs: [GatewayLogEntry]
+        let totalRequests: Int
+        let successfulRequests: Int
+        let consoleOutput: String
+    }
 
     var interfaceLocale: Locale {
         preferredLanguage.locale
@@ -199,6 +209,10 @@ final class AppModel: ObservableObject {
         "\(serverRootURL)/v1"
     }
 
+    var mcpURL: String {
+        "\(serverRootURL)/mcp"
+    }
+
     private var serverRootURL: String {
         "http://127.0.0.1:\(activePort ?? configuration.server.port)"
     }
@@ -221,6 +235,179 @@ final class AppModel: ObservableObject {
             return L10n.format("本月已知价格估算 $%.4f，已使用预算的 %.0f%%。", spent, fraction * 100)
         }
         return nil
+    }
+
+    func enterReviewDemoMode() {
+        guard !isReviewDemoMode else { return }
+        flushPendingPersistence()
+        reviewDemoBackup = ReviewDemoBackup(
+            configuration: configuration,
+            logs: logs,
+            totalRequests: totalRequests,
+            successfulRequests: successfulRequests,
+            consoleOutput: consoleOutput
+        )
+        isReviewDemoMode = true
+        configuration = Self.reviewDemoConfiguration()
+        logs = Self.reviewDemoLogs()
+        totalRequests = 128
+        successfulRequests = 124
+        consoleOutput = String(localized: "演示模式已就绪。选择任一演示模型并发送请求，可查看本机生成的示例响应。", locale: AppLanguage.saved.locale)
+        rebuildHealthIndex()
+        selection = .overview
+    }
+
+    func exitReviewDemoMode() {
+        guard isReviewDemoMode, let backup = reviewDemoBackup else { return }
+        pendingPersistenceTask?.cancel()
+        pendingPersistenceTask = nil
+        configuration = backup.configuration
+        logs = backup.logs
+        totalRequests = backup.totalRequests
+        successfulRequests = backup.successfulRequests
+        consoleOutput = backup.consoleOutput
+        reviewDemoBackup = nil
+        isReviewDemoMode = false
+        rebuildHealthIndex()
+        selection = .overview
+    }
+
+    nonisolated static func reviewDemoConfiguration(now: Date = .now) -> AppConfiguration {
+        let primaryID = UUID(uuidString: "00000000-0000-0000-0000-000000000101")!
+        let secondaryID = UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+        let textModel = "review-text-1"
+        let reasoningModel = "review-reasoning-1"
+        let imageModel = "review-image-1"
+        let musicModel = "review-music-1"
+        let videoModel = "review-video-1"
+        let primaryModels = [textModel, reasoningModel, imageModel, musicModel, videoModel]
+        let primaryProfiles: [String: TargetProfile] = [
+            textModel: TargetProfile(contextWindow: 128_000, capabilities: [.chat, .tools]),
+            reasoningModel: TargetProfile(contextWindow: 64_000, capabilities: [.chat, .reasoning]),
+            imageModel: TargetProfile(capabilities: [.imageGeneration]),
+            musicModel: TargetProfile(capabilities: [.audio]),
+            videoModel: TargetProfile(capabilities: [.videoGeneration])
+        ]
+        let providers = [
+            ProviderConfig(
+                id: primaryID,
+                name: "Review Cloud",
+                kind: .gemini,
+                baseURL: "https://review.invalid",
+                models: primaryModels,
+                modelProfiles: primaryProfiles
+            ),
+            ProviderConfig(
+                id: secondaryID,
+                name: "Review Edge",
+                kind: .openAICompatible,
+                baseURL: "https://review-edge.invalid",
+                models: [textModel, reasoningModel],
+                modelProfiles: [
+                    textModel: TargetProfile(
+                        contextWindow: 64_000,
+                        inputCostPerMillionTokens: 0.15,
+                        outputCostPerMillionTokens: 0.60,
+                        capabilities: [.chat, .tools],
+                        pricingSource: "Review fixture"
+                    ),
+                    reasoningModel: TargetProfile(
+                        contextWindow: 64_000,
+                        capabilities: [.chat, .reasoning]
+                    )
+                ]
+            )
+        ]
+        let routes = [
+            RouteConfig(
+                alias: "smart",
+                strategy: .balanced,
+                targets: [
+                    RouteTarget(providerID: primaryID, model: textModel, priority: 0),
+                    RouteTarget(providerID: secondaryID, model: textModel, priority: 1)
+                ]
+            ),
+            RouteConfig(
+                alias: "reasoning",
+                strategy: .lowestLatency,
+                targets: [
+                    RouteTarget(providerID: primaryID, model: reasoningModel, priority: 0),
+                    RouteTarget(providerID: secondaryID, model: reasoningModel, priority: 1)
+                ]
+            ),
+            RouteConfig(
+                alias: "creative-media",
+                strategy: .priority,
+                targets: [
+                    RouteTarget(providerID: primaryID, model: imageModel),
+                    RouteTarget(providerID: primaryID, model: musicModel),
+                    RouteTarget(providerID: primaryID, model: videoModel)
+                ]
+            )
+        ]
+        let health = providers.flatMap { provider in
+            provider.models.enumerated().map { index, model in
+                ModelHealthRecord(
+                    providerID: provider.id,
+                    model: model,
+                    status: .available,
+                    checkedAt: now,
+                    latencyMilliseconds: 180 + (index * 45),
+                    statusCode: 200,
+                    detail: "审核演示数据：可用"
+                )
+            }
+        }
+        let month = UsageAccounting.monthKey(for: now)
+        let usage = [
+            UsageAggregate(
+                month: month,
+                requestedModel: "smart",
+                providerID: primaryID,
+                providerName: "Review Cloud",
+                model: textModel,
+                requests: 84,
+                successfulRequests: 82,
+                totalLatencyMilliseconds: 18_480,
+                inputTokens: 31_200,
+                outputTokens: 9_600,
+                pricedRequests: 84,
+                estimatedCostUSD: 0.0104,
+                contextCharactersSaved: 12_800,
+                lastUsedAt: now
+            ),
+            UsageAggregate(
+                month: month,
+                requestedModel: "reasoning",
+                providerID: secondaryID,
+                providerName: "Review Edge",
+                model: reasoningModel,
+                requests: 44,
+                successfulRequests: 42,
+                totalLatencyMilliseconds: 14_520,
+                inputTokens: 18_400,
+                outputTokens: 7_900,
+                pricedRequests: 44,
+                estimatedCostUSD: 0.0075,
+                contextCharactersSaved: 4_200,
+                lastUsedAt: now.addingTimeInterval(-600)
+            )
+        ]
+        return AppConfiguration(
+            providers: providers,
+            routes: routes,
+            routing: RoutingRuleSettings(activeRule: .sameModelLowestCost),
+            modelHealth: health,
+            usage: usage
+        )
+    }
+
+    nonisolated private static func reviewDemoLogs(now: Date = .now) -> [GatewayLogEntry] {
+        [
+            GatewayLogEntry(timestamp: now, model: "smart", provider: "Review Cloud", statusCode: 200, latencyMilliseconds: 218, detail: "演示请求成功"),
+            GatewayLogEntry(timestamp: now.addingTimeInterval(-120), model: "reasoning", provider: "Review Edge", statusCode: 200, latencyMilliseconds: 334, detail: "演示故障转移成功"),
+            GatewayLogEntry(timestamp: now.addingTimeInterval(-300), model: "creative-media", provider: "Review Cloud", statusCode: 200, latencyMilliseconds: 421, detail: "演示多模态路由成功")
+        ]
     }
 
     func bootstrap(initializeSecrets: Bool = true) {
@@ -351,6 +538,10 @@ final class AppModel: ObservableObject {
 
     @discardableResult
     func saveProvider(_ provider: ProviderConfig, apiKey: String) -> Bool {
+        guard !isReviewDemoMode else {
+            notice = String(localized: "审核演示模式不会保存供应商或凭证。退出演示模式后可正常配置。", locale: AppLanguage.saved.locale)
+            return false
+        }
         if let index = providers.firstIndex(where: { $0.id == provider.id }) {
             providers[index] = provider
         } else {
@@ -385,7 +576,8 @@ final class AppModel: ObservableObject {
     }
 
     func apiKey(for provider: ProviderConfig) -> String {
-        KeychainStore.read(account: KeychainStore.providerAccount(provider.id)) ?? ""
+        guard !isReviewDemoMode else { return "" }
+        return KeychainStore.read(account: KeychainStore.providerAccount(provider.id)) ?? ""
     }
 
     func hasAPIKey(for provider: ProviderConfig) -> Bool {
@@ -436,6 +628,12 @@ final class AppModel: ObservableObject {
             routes.append(route)
         }
         persistConfiguration()
+    }
+
+    func setDefaultRoutingRule(_ rule: DefaultRoutingRule) {
+        configuration.routing.activeRule = rule
+        persistConfiguration()
+        notice = L10n.format("默认路由规则已切换为“%@”。", rule.displayName)
     }
 
     func deleteRoute(_ route: RouteConfig) {
@@ -550,6 +748,49 @@ final class AppModel: ObservableObject {
         notice = String(localized: "Agent 管理令牌已复制。", locale: AppLanguage.saved.locale)
     }
 
+    func installMCPToCodex() -> String {
+        guard configuration.operational.agentProtocols.mcpEnabled else {
+            return "请先启用 MCP（/mcp）后再安装。"
+        }
+        do {
+            let url = try MCPInstaller.installCodex(endpoint: mcpURL, token: agentToken)
+            let message = "已写入 Codex MCP 配置：\(url.path)"
+            notice = message
+            return message
+        } catch {
+            let message = "Codex MCP 安装失败：\(error.localizedDescription)"
+            notice = message
+            return message
+        }
+    }
+
+    func installMCPToClaude() -> String {
+        guard configuration.operational.agentProtocols.mcpEnabled else {
+            return "请先启用 MCP（/mcp）后再安装。"
+        }
+        do {
+            let url = try MCPInstaller.installClaude(endpoint: mcpURL, token: agentToken)
+            let message = "已写入 Claude MCP 配置：\(url.path)"
+            notice = message
+            return message
+        } catch {
+            let message = "Claude MCP 安装失败：\(error.localizedDescription)"
+            notice = message
+            return message
+        }
+    }
+
+    func copyMCPManualConfiguration() {
+        do {
+            let snippet = try MCPInstaller.manualSnippet(endpoint: mcpURL, token: agentToken)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(snippet, forType: .string)
+            notice = "手动 MCP 配置已复制；剪贴板包含 Agent 令牌，请勿粘贴到公开位置。"
+        } catch {
+            notice = "生成手动 MCP 配置失败：\(error.localizedDescription)"
+        }
+    }
+
     var cliConfigurationPreview: String {
         """
         # 通用 OpenAI 兼容 CLI
@@ -559,7 +800,7 @@ final class AppModel: ObservableObject {
         # Responses API
         POST \(endpointURL)/responses
 
-        # 本机只读 Agent 协议（使用独立 Agent 令牌）
+        # 本机 Agent 协议（使用独立 Agent 令牌）
         MCP  \(serverRootURL)/mcp
         A2A  \(serverRootURL)/.well-known/agent-card.json
         ACP  \(serverRootURL)/acp/manifest.json
@@ -647,11 +888,18 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func testProvider(_ provider: ProviderConfig) async -> String {
+    func testProvider(
+        _ provider: ProviderConfig,
+        allowNativeProbe: Bool = false
+    ) async -> String {
         guard let model = provider.models.first, !model.isEmpty else {
             return String(localized: "请先填写至少一个模型名称。", locale: AppLanguage.saved.locale)
         }
-        guard let record = await testModel(providerID: provider.id, model: model) else {
+        guard let record = await testModel(
+            providerID: provider.id,
+            model: model,
+            allowNativeProbe: allowNativeProbe
+        ) else {
             return String(localized: "供应商或模型不存在。", locale: AppLanguage.saved.locale)
         }
         return record.detail
@@ -710,15 +958,28 @@ final class AppModel: ObservableObject {
         notice = L10n.format("“%@”已解除隔离并恢复路由。", model)
     }
 
-    func testModel(providerID: UUID, model: String) async -> ModelHealthRecord? {
+    func testModel(
+        providerID: UUID,
+        model: String,
+        allowNativeProbe: Bool = false
+    ) async -> ModelHealthRecord? {
         guard let provider = providers.first(where: { $0.id == providerID }),
               provider.models.contains(model)
         else { return nil }
+        if isReviewDemoMode {
+            notice = String(localized: "审核演示模式只使用合成数据，不会连接模型供应商或产生费用。", locale: AppLanguage.saved.locale)
+            return healthRecord(providerID: providerID, model: model)
+        }
+        let nativeProtocol = ModelProbePolicy.nativeProtocol(
+            provider: provider,
+            model: model
+        )
         if let existing = healthRecord(providerID: providerID, model: model),
-           existing.status.isQuarantined,
-           let nativeProtocol = ModelProbePolicy.nativeProtocol(
-               provider: provider,
-               model: model
+           let nativeProtocol,
+           ModelProbePolicy.shouldSkipNativeProbe(
+               status: existing.status,
+               nativeProtocol: nativeProtocol,
+               allowNativeProbe: allowNativeProbe
            )
         {
             notice = L10n.format(
@@ -737,7 +998,10 @@ final class AppModel: ObservableObject {
         testingModelIDs.insert(target.key)
         defer { testingModelIDs.remove(target.key) }
 
-        let record = await Self.probeModel(target)
+        let record = await Self.probeModel(
+            target,
+            allowNativeProbe: allowNativeProbe
+        )
         upsertHealthRecord(record)
         persistConfiguration()
         return record
@@ -745,6 +1009,10 @@ final class AppModel: ObservableObject {
 
     func startTestingAllModels(providerID: UUID? = nil) {
         guard !isTestingModels else { return }
+        guard !isReviewDemoMode else {
+            notice = String(localized: "审核演示模式不会发起模型测试；当前健康状态均为合成演示数据。", locale: AppLanguage.saved.locale)
+            return
+        }
 
         let selectedProviders: [ProviderConfig]
         if let providerID {
@@ -914,7 +1182,10 @@ final class AppModel: ObservableObject {
         scheduleConfigurationPersistence()
     }
 
-    nonisolated private static func probeModel(_ target: ModelTestTarget) async -> ModelHealthRecord {
+    nonisolated private static func probeModel(
+        _ target: ModelTestTarget,
+        allowNativeProbe: Bool = false
+    ) async -> ModelHealthRecord {
         switch ModelProbePolicy.disposition(
             provider: target.provider,
             model: target.model,
@@ -928,12 +1199,74 @@ final class AppModel: ObservableObject {
                 detail: "需要配置 API Key（未发起请求）"
             )
         case .readyForNativeProtocol(let nativeProtocol):
-            return ModelHealthRecord(
-                providerID: target.provider.id,
-                model: target.model,
-                status: .unavailable,
-                detail: "\(nativeProtocol.displayName)尚未通过真实协议验证，已隔离（未自动发起可能计费的请求）"
-            )
+            guard allowNativeProbe,
+                  let operation = ModelProbePolicy.nativeOperation(for: nativeProtocol),
+                  let body = ModelProbePolicy.nativeProbeBody(
+                      for: nativeProtocol,
+                      model: target.model
+                  )
+            else {
+                return ModelHealthRecord(
+                    providerID: target.provider.id,
+                    model: target.model,
+                    status: .unavailable,
+                    detail: "\(nativeProtocol.displayName)尚未通过真实协议验证，已隔离（未自动发起可能计费的请求）"
+                )
+            }
+
+            let started = ContinuousClock.now
+            do {
+                let response = try await ProviderClient().sendNative(
+                    rawBody: body,
+                    targetModel: target.model,
+                    provider: target.provider,
+                    apiKey: target.apiKey,
+                    operation: operation,
+                    timeoutInterval: 60
+                )
+                let latency = milliseconds(from: started.duration(to: .now))
+                let status = ModelAvailability(statusCode: response.statusCode)
+                let detail: String
+                if status == .available {
+                    detail = "原生\(nativeProtocol.displayName)验证成功 · HTTP \(response.statusCode) · \(latency) ms"
+                } else if status == .configurationRequired {
+                    detail = "API Key 无效或无权限 · HTTP \(response.statusCode)"
+                } else {
+                    detail = "原生\(nativeProtocol.displayName)验证失败，已隔离 · HTTP \(response.statusCode)"
+                }
+                return ModelHealthRecord(
+                    providerID: target.provider.id,
+                    model: target.model,
+                    status: status,
+                    latencyMilliseconds: latency,
+                    statusCode: response.statusCode,
+                    detail: detail
+                )
+            } catch let error as ProviderClientError {
+                return ModelHealthRecord(
+                    providerID: target.provider.id,
+                    model: target.model,
+                    status: .unavailable,
+                    latencyMilliseconds: milliseconds(from: started.duration(to: .now)),
+                    detail: error.localizedDescription
+                )
+            } catch let error as URLError {
+                return ModelHealthRecord(
+                    providerID: target.provider.id,
+                    model: target.model,
+                    status: .unavailable,
+                    latencyMilliseconds: milliseconds(from: started.duration(to: .now)),
+                    detail: "网络错误（\(error.code.rawValue)）"
+                )
+            } catch {
+                return ModelHealthRecord(
+                    providerID: target.provider.id,
+                    model: target.model,
+                    status: .unavailable,
+                    latencyMilliseconds: milliseconds(from: started.duration(to: .now)),
+                    detail: "请求失败"
+                )
+            }
         case .readyForChatProbe:
             break
         }
@@ -1001,6 +1334,27 @@ final class AppModel: ObservableObject {
     func runConsole(model: String, prompt: String) async {
         consoleIsRunning = true
         defer { consoleIsRunning = false }
+        if isReviewDemoMode {
+            try? await Task.sleep(for: .milliseconds(250))
+            let response: [String: Any] = [
+                "id": "modelhub-review-demo",
+                "object": "chat.completion",
+                "model": model,
+                "choices": [[
+                    "index": 0,
+                    "message": [
+                        "role": "assistant",
+                        "content": String(localized: "这是由 ModelHub 在本机生成的审核演示响应；没有访问任何模型供应商，也不会产生费用。", locale: AppLanguage.saved.locale)
+                    ],
+                    "finish_reason": "stop"
+                ]],
+                "usage": ["prompt_tokens": 8, "completion_tokens": 18, "total_tokens": 26]
+            ]
+            let data = try? JSONSerialization.data(withJSONObject: response, options: [.prettyPrinted, .sortedKeys])
+            consoleOutput = "HTTP 200 · REVIEW DEMO\n\n" + (data.flatMap { String(data: $0, encoding: .utf8) } ?? "{}")
+            record(model: model, provider: "Review Demo", statusCode: 200, latency: 250, detail: "本机合成响应（未访问上游）")
+            return
+        }
         guard isServerRunning else {
             consoleOutput = String(localized: "本地 API 服务尚未启动。", locale: AppLanguage.saved.locale)
             return
@@ -1106,6 +1460,14 @@ final class AppModel: ObservableObject {
         if request.method == "POST" && request.path == "/mcp",
            configuration.operational.agentProtocols.mcpEnabled
         {
+            if let invocation = LocalAgentProtocols.mcpActionInvocation(
+                requestBody: request.body
+            ) {
+                return await handleMCPAction(
+                    invocation,
+                    requestBody: request.body
+                )
+            }
             return agentHTTPResponse(LocalAgentProtocols.mcp(
                 requestBody: request.body,
                 snapshot: agentSnapshot()
@@ -1224,7 +1586,8 @@ final class AppModel: ObservableObject {
             providers: providers,
             health: healthIndex,
             usage: configuration.usage,
-            requiredCapabilities: requestCapabilities(from: request.body)
+            requiredCapabilities: requestCapabilities(from: request.body),
+            defaultRule: configuration.routing.activeRule
         )
         let settings = configuration.operational.resilience
         var lastResponse: HTTPResponse?
@@ -1488,7 +1851,8 @@ final class AppModel: ObservableObject {
             providers: providers,
             health: healthIndex,
             usage: configuration.usage,
-            requiredCapabilities: requestCapabilities(from: request.body)
+            requiredCapabilities: requestCapabilities(from: request.body),
+            defaultRule: configuration.routing.activeRule
         )
         guard !candidates.isEmpty else {
             let quarantined = quarantinedTargets(for: envelope.model)
@@ -1692,7 +2056,8 @@ final class AppModel: ObservableObject {
             providers: providers,
             health: healthIndex,
             usage: configuration.usage,
-            requiredCapabilities: requestCapabilities(from: request.body)
+            requiredCapabilities: requestCapabilities(from: request.body),
+            defaultRule: configuration.routing.activeRule
         )
         guard !candidates.isEmpty else {
             let quarantined = quarantinedTargets(for: envelope.model)
@@ -1850,7 +2215,8 @@ final class AppModel: ObservableObject {
             routes: routes,
             providers: providers,
             health: healthIndex,
-            usage: configuration.usage
+            usage: configuration.usage,
+            defaultRule: configuration.routing.activeRule
         )
         if candidates.isEmpty {
             let quarantined = quarantinedTargets(for: requestedModel)
@@ -2644,7 +3010,8 @@ final class AppModel: ObservableObject {
             month: month,
             requests: usage.reduce(0) { $0 + $1.requests },
             successfulRequests: usage.reduce(0) { $0 + $1.successfulRequests },
-            estimatedCostUSD: usage.reduce(0) { $0 + $1.estimatedCostUSD }
+            estimatedCostUSD: usage.reduce(0) { $0 + $1.estimatedCostUSD },
+            taskContext: configuration.operational.agentProtocols.taskContext
         )
     }
 
@@ -2672,6 +3039,46 @@ final class AppModel: ObservableObject {
             headers: ["Content-Type": response.contentType + "; charset=utf-8"],
             body: response.body
         )
+    }
+
+    private func handleMCPAction(
+        _ invocation: MCPActionInvocation,
+        requestBody: Data
+    ) async -> HTTPResponse {
+        let gatewayRequest: MCPGatewayRequest
+        do {
+            gatewayRequest = try LocalAgentProtocols.gatewayRequest(for: invocation)
+        } catch {
+            return agentHTTPResponse(LocalAgentProtocols.mcpToolFailure(
+                requestBody: requestBody,
+                type: "invalid_tool_arguments",
+                message: error.localizedDescription
+            ))
+        }
+
+        let internalRequest = HTTPRequest(
+            method: gatewayRequest.method,
+            path: gatewayRequest.path,
+            queryItems: gatewayRequest.queryItems,
+            orderedQueryItems: gatewayRequest.queryItems.sorted { $0.key < $1.key }.map {
+                HTTPQueryItem(name: $0.key, value: $0.value)
+            },
+            headers: [
+                "authorization": "Bearer \(gatewayToken)",
+                "content-type": "application/json"
+            ],
+            body: gatewayRequest.body
+        )
+        let response = await handle(internalRequest)
+        let contentType = response.headers.first {
+            $0.key.caseInsensitiveCompare("Content-Type") == .orderedSame
+        }?.value ?? "application/octet-stream"
+        return agentHTTPResponse(LocalAgentProtocols.mcpRuntimeResult(
+            requestBody: requestBody,
+            statusCode: response.statusCode,
+            contentType: contentType,
+            responseBody: response.body
+        ))
     }
 
     private func record(
@@ -2730,6 +3137,7 @@ final class AppModel: ObservableObject {
         guard let data = try? Data(contentsOf: configurationURL),
               var decoded = try? JSONDecoder().decode(AppConfiguration.self, from: data)
         else { return }
+        let hadRoutingSettings = ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["routing"] != nil
         let normalizedHealth = ModelHealthMigration.normalize(
             records: decoded.modelHealth,
             providers: decoded.providers
@@ -2738,12 +3146,13 @@ final class AppModel: ObservableObject {
         decoded.modelHealth = normalizedHealth
         configuration = decoded
         rebuildHealthIndex()
-        if didMigrateHealth {
+        if didMigrateHealth || !hadRoutingSettings {
             persistConfiguration()
         }
     }
 
     private func scheduleConfigurationPersistence() {
+        guard !isReviewDemoMode else { return }
         pendingPersistenceTask?.cancel()
         pendingPersistenceTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(500))
@@ -2753,6 +3162,11 @@ final class AppModel: ObservableObject {
     }
 
     func flushPendingPersistence() {
+        guard !isReviewDemoMode else {
+            pendingPersistenceTask?.cancel()
+            pendingPersistenceTask = nil
+            return
+        }
         guard pendingPersistenceTask != nil else { return }
         pendingPersistenceTask?.cancel()
         pendingPersistenceTask = nil
@@ -2760,6 +3174,7 @@ final class AppModel: ObservableObject {
     }
 
     private func persistConfiguration() {
+        guard !isReviewDemoMode else { return }
         pendingPersistenceTask?.cancel()
         pendingPersistenceTask = nil
         do {

@@ -3,6 +3,79 @@ import XCTest
 @testable import ModelHubCore
 
 final class ModelHealthTests: XCTestCase {
+    func testModelCategoriesExposeReasoningTextImageMusicAndVideoLabels() {
+        XCTAssertEqual(
+            ModelCategory.allCases.map(\.displayName),
+            ["逻辑推理", "文字", "图片", "音乐", "视频"]
+        )
+        XCTAssertEqual(
+            ModelCategory.infer(model: "deepseek-r1", capabilities: [.reasoning]),
+            [.reasoning]
+        )
+        XCTAssertEqual(
+            ModelCategory.infer(model: "gpt-4.1", capabilities: [.chat]),
+            [.text]
+        )
+        XCTAssertEqual(
+            ModelCategory.infer(model: "gpt-image-1", capabilities: [.imageGeneration]),
+            [.image]
+        )
+        XCTAssertEqual(
+            ModelCategory.infer(model: "suno_music_open", capabilities: []),
+            [.music]
+        )
+        XCTAssertEqual(
+            ModelCategory.infer(model: "doubao-seedance-2.0", capabilities: [.videoGeneration]),
+            [.video]
+        )
+    }
+
+    func testProviderKindsIncludeCommonOpenAICompatibleVendors() {
+        XCTAssertEqual(ProviderKind.openRouter.defaultBaseURL, "https://openrouter.ai/api/v1")
+        XCTAssertEqual(ProviderKind.togetherAI.defaultBaseURL, "https://api.together.xyz/v1")
+        XCTAssertEqual(ProviderKind.fireworksAI.defaultBaseURL, "https://api.fireworks.ai/inference/v1")
+        XCTAssertEqual(ProviderKind.siliconFlow.defaultBaseURL, "https://api.siliconflow.cn/v1")
+        XCTAssertEqual(ProviderKind.volcengine.defaultBaseURL, "https://ark.cn-beijing.volces.com/api/v3")
+        XCTAssertEqual(ProviderKind.baiduQianfan.defaultBaseURL, "https://qianfan.baidubce.com/v2")
+        XCTAssertTrue(ProviderKind.openRouter.usesOpenAIProtocol)
+        XCTAssertTrue(ProviderKind.volcengine.needsAPIKey)
+    }
+
+    func testNativeManualProbeMapsVideoToGenerationOperationAndBody() throws {
+        XCTAssertEqual(
+            ModelProbePolicy.nativeOperation(for: .videoGeneration),
+            .videoGeneration
+        )
+        let body = try XCTUnwrap(
+            ModelProbePolicy.nativeProbeBody(
+                for: .videoGeneration,
+                model: "doubao-seedance-2.0"
+            )
+        )
+        let json = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: body) as? [String: Any]
+        )
+        XCTAssertEqual(json["prompt"] as? String, "ModelHub connection test")
+        XCTAssertEqual(json["duration"] as? Int, 4)
+    }
+
+    func testNativeManualProbeCanBypassQuarantineOnlyWhenExplicitlyAllowed() {
+        XCTAssertTrue(
+            ModelProbePolicy.shouldSkipNativeProbe(
+                status: .unavailable,
+                nativeProtocol: .videoGeneration,
+                allowNativeProbe: false
+            )
+        )
+        XCTAssertFalse(
+            ModelProbePolicy.shouldSkipNativeProbe(
+                status: .unavailable,
+                nativeProtocol: .videoGeneration,
+                allowNativeProbe: true
+            )
+        )
+    }
+
     func testAvailableCatalogIncludesOnlyAvailableDirectModelsAndUsableRoutes() {
         let provider = ProviderConfig(
             name: "示例",

@@ -11,7 +11,8 @@ public actor RoutingEngine {
         providers: [ProviderConfig],
         healthRecords: [ModelHealthRecord] = [],
         usage: [UsageAggregate] = [],
-        requiredCapabilities: Set<ModelCapability> = []
+        requiredCapabilities: Set<ModelCapability> = [],
+        defaultRule: DefaultRoutingRule = .sameModelLowestCost
     ) -> [RouteTarget] {
         candidates(
             for: requestedModel,
@@ -19,7 +20,8 @@ public actor RoutingEngine {
             providers: providers,
             health: ModelHealthIndex(records: healthRecords),
             usage: usage,
-            requiredCapabilities: requiredCapabilities
+            requiredCapabilities: requiredCapabilities,
+            defaultRule: defaultRule
         )
     }
 
@@ -29,7 +31,8 @@ public actor RoutingEngine {
         providers: [ProviderConfig],
         health: ModelHealthIndex,
         usage: [UsageAggregate] = [],
-        requiredCapabilities: Set<ModelCapability> = []
+        requiredCapabilities: Set<ModelCapability> = [],
+        defaultRule: DefaultRoutingRule = .sameModelLowestCost
     ) -> [RouteTarget] {
         let enabledProviders = Set(providers.filter(\.enabled).map(\.id))
 
@@ -53,7 +56,14 @@ public actor RoutingEngine {
                     ).isRoutable
                     && supports(requiredCapabilities, profile: $0.profile)
             }
-            return orderedTargets(targets, route: route, health: health, usage: usage)
+            return orderedTargets(
+                targets,
+                route: route,
+                providers: providers,
+                health: health,
+                usage: usage,
+                defaultRule: defaultRule
+            )
         }
 
         let directMatches = providers
@@ -77,12 +87,28 @@ public actor RoutingEngine {
                     )
                 }
             }
-        return health.order(targets: directMatches)
+        let healthOrdered = health.order(targets: directMatches)
+        let originalOrder = Dictionary(uniqueKeysWithValues: healthOrdered.enumerated().map { ($0.element.id, $0.offset) })
+        let ordered = healthOrdered
             .filter { supports(requiredCapabilities, profile: $0.profile) }
             .sorted {
-            capabilityRank($0.profile, required: requiredCapabilities)
-                < capabilityRank($1.profile, required: requiredCapabilities)
+                let leftCapability = capabilityRank($0.profile, required: requiredCapabilities)
+                let rightCapability = capabilityRank($1.profile, required: requiredCapabilities)
+                if leftCapability != rightCapability { return leftCapability < rightCapability }
+                let leftModel = $0.model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                let rightModel = $1.model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                guard leftModel == rightModel else {
+                    return (originalOrder[$0.id] ?? .max) < (originalOrder[$1.id] ?? .max)
+                }
+                return compare(
+                    $0,
+                    $1,
+                    providers: providers,
+                    health: health,
+                    defaultRule: defaultRule
+                )
             }
+        return ordered
     }
 
     private func supports(
@@ -105,8 +131,10 @@ public actor RoutingEngine {
     private func orderedTargets(
         _ targets: [RouteTarget],
         route: RouteConfig,
+        providers: [ProviderConfig],
         health: ModelHealthIndex,
-        usage: [UsageAggregate]
+        usage: [UsageAggregate],
+        defaultRule: DefaultRoutingRule
     ) -> [RouteTarget] {
         guard !targets.isEmpty else { return [] }
 
@@ -172,6 +200,35 @@ public actor RoutingEngine {
                 }
             }
         }
+    }
+
+    private func compare(
+        _ lhs: RouteTarget,
+        _ rhs: RouteTarget,
+        providers: [ProviderConfig],
+        health: ModelHealthIndex,
+        defaultRule: DefaultRoutingRule
+    ) -> Bool {
+        let leftModel = lhs.model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let rightModel = rhs.model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard leftModel == rightModel else { return lhs.id.uuidString < rhs.id.uuidString }
+        let leftProvider = providers.first { $0.id == lhs.providerID }
+        let rightProvider = providers.first { $0.id == rhs.providerID }
+        switch defaultRule {
+        case .sameModelLowestCost:
+            let left = estimatedUnitCost(for: lhs)
+            let right = estimatedUnitCost(for: rhs)
+            if left != right { return left < right }
+        case .sameModelLowestLatency:
+            let left = latency(for: lhs, health: health)
+            let right = latency(for: rhs, health: health)
+            if left != right { return left < right }
+        case .sameModelOfficial:
+            let left = leftProvider?.kind.isOfficialProvider(for: lhs.model) == true
+            let right = rightProvider?.kind.isOfficialProvider(for: rhs.model) == true
+            if left != right { return left && !right }
+        }
+        return lhs.id.uuidString < rhs.id.uuidString
     }
 
     private func latency(for target: RouteTarget, health: ModelHealthIndex) -> Int {

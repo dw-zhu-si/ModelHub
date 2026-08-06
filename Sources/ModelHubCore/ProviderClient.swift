@@ -139,7 +139,10 @@ public struct ProviderClient: Sendable {
             }
             return url
         default:
-            let suffix = base.hasSuffix("/v1") ? "/chat/completions" : "/v1/chat/completions"
+            let hasVersionedAPIPath = ["/v1", "/v2", "/v3"].contains {
+                base.hasSuffix($0)
+            }
+            let suffix = hasVersionedAPIPath ? "/chat/completions" : "/v1/chat/completions"
             guard let url = URL(string: base + suffix) else {
                 throw ProviderClientError.invalidBaseURL
             }

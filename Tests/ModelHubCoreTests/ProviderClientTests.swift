@@ -12,6 +12,28 @@ final class ProviderClientTests: XCTestCase {
         XCTAssertEqual(endpoint.absoluteString, "https://example.com/v1/chat/completions")
     }
 
+    func testVersionedVendorEndpointsAvoidDuplicateVersionSegment() throws {
+        let volcengine = ProviderConfig(
+            name: "火山引擎 / 豆包",
+            kind: .volcengine,
+            baseURL: "https://ark.cn-beijing.volces.com/api/v3"
+        )
+        let qianfan = ProviderConfig(
+            name: "百度千帆",
+            kind: .baiduQianfan,
+            baseURL: "https://qianfan.baidubce.com/v2"
+        )
+
+        XCTAssertEqual(
+            try ProviderClient().endpoint(for: volcengine, model: "doubao-seed-1-6").absoluteString,
+            "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+        )
+        XCTAssertEqual(
+            try ProviderClient().endpoint(for: qianfan, model: "ernie-4.5-turbo").absoluteString,
+            "https://qianfan.baidubce.com/v2/chat/completions"
+        )
+    }
+
     func testResponsesRequestPreservesToolsAndMultimodalInput() throws {
         let provider = ProviderConfig(
             name: "Compatible",
@@ -224,6 +246,29 @@ final class ProviderClientTests: XCTestCase {
         )
         XCTAssertEqual(json["model"] as? String, "doubao-seedance-2.0")
         XCTAssertEqual(json["prompt"] as? String, "cat")
+    }
+
+    func testGenericSeedanceVideoUsesNativeGenerationEndpoint() throws {
+        let provider = ProviderConfig(
+            name: "seedance",
+            kind: .openAICompatible,
+            baseURL: "https://gn.euno-ai.com"
+        )
+
+        let request = try ProviderClient().nativeRequest(
+            rawBody: Data(#"{"prompt":"ModelHub connection test","duration":4}"#.utf8),
+            targetModel: "doubao-seedance-2.0",
+            provider: provider,
+            apiKey: "test-key",
+            operation: .videoGeneration
+        )
+
+        XCTAssertEqual(
+            request.url?.absoluteString,
+            "https://gn.euno-ai.com/v1/videos/generations"
+        )
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
     }
 
     func testAgnesVideoUsesCreateAndTaskEndpoints() throws {

@@ -18,12 +18,66 @@ private enum ModelHubWindowController {
     }
 }
 
+@MainActor
 final class ModelHubApplicationDelegate: NSObject, NSApplicationDelegate {
+    private static let hasCompletedFirstLaunchKey = "hasCompletedFirstLaunch"
+    private var statusItem: NSStatusItem?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
-        DispatchQueue.main.async {
-            ModelHubWindowController.hideMainWindows()
+        installStatusItem()
+
+        let defaults = UserDefaults.standard
+        let isFirstLaunch = !defaults.bool(forKey: Self.hasCompletedFirstLaunchKey)
+        defaults.set(true, forKey: Self.hasCompletedFirstLaunchKey)
+        if isFirstLaunch {
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(600)) {
+                ModelHubWindowController.showMainWindow()
+            }
+        } else {
+            DispatchQueue.main.async {
+                ModelHubWindowController.hideMainWindows()
+            }
         }
+    }
+
+    private func installStatusItem() {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if let button = item.button {
+            button.image = NSImage(
+                systemSymbolName: "point.3.connected.trianglepath.dotted",
+                accessibilityDescription: "ModelHub"
+            )
+            button.image?.isTemplate = true
+            button.toolTip = "ModelHub"
+        }
+
+        let menu = NSMenu()
+        let openItem = NSMenuItem(
+            title: String(localized: "打开 ModelHub"),
+            action: #selector(openMainWindow),
+            keyEquivalent: ""
+        )
+        openItem.target = self
+        menu.addItem(openItem)
+        menu.addItem(.separator())
+        let quitItem = NSMenuItem(
+            title: String(localized: "退出 ModelHub"),
+            action: #selector(quitApplication),
+            keyEquivalent: "q"
+        )
+        quitItem.target = self
+        menu.addItem(quitItem)
+        item.menu = menu
+        statusItem = item
+    }
+
+    @objc private func openMainWindow() {
+        ModelHubWindowController.showMainWindow()
+    }
+
+    @objc private func quitApplication() {
+        NSApplication.shared.terminate(nil)
     }
 
     func applicationShouldHandleReopen(
@@ -79,20 +133,5 @@ struct ModelHubApp: App {
                 .frame(width: 680, height: 720)
         }
 
-        MenuBarExtra("ModelHub", systemImage: "point.3.connected.trianglepath.dotted") {
-            Button("打开 ModelHub") {
-                ModelHubWindowController.showMainWindow()
-            }
-            Divider()
-            Text(mhLocalized(model.isServerRunning ? "本地 API 已运行" : "本地 API 未运行"))
-            Button(mhLocalized(model.isServerRunning ? "停止本地 API" : "启动本地 API")) {
-                model.isServerRunning ? model.stopServer() : model.startServer()
-            }
-            Divider()
-            Button("退出 ModelHub") {
-                NSApplication.shared.terminate(nil)
-            }
-        }
-        .environment(\.locale, model.interfaceLocale)
     }
 }

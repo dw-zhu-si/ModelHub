@@ -1821,6 +1821,216 @@
         }
       }
     },
+    "MCP 任务上下文与安装" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سياق مهمة MCP وتثبيتها"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kontext und Installation der MCP-Aufgabe"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP task context and installation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contexto e instalación de la tarea MCP"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contexte et installation de la tâche MCP"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP タスクのコンテキストとインストール"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP 작업 컨텍스트 및 설치"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contexto e instalação da tarefa MCP"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Контекст задачи MCP и установка"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP 任务上下文与安装"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP 任務上下文與安裝"
+          }
+        }
+      }
+    },
+    "MCP 可读取本机状态、可用模型、聚合用量和你保存的任务文本，也可调用文字、图片、视频、语音、向量与重排模型；不会自动读取 Codex/Claude 的全部会话或返回密钥。" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يمكن لـ MCP قراءة الحالة المحلية والنماذج المتاحة والاستخدام الإجمالي ونص المهمة المحفوظة، ويمكنه أيضًا استدعاء النصوص والصور ومقاطع الفيديو والأصوات والمتجهات والنماذج المعاد ترتيبها؛ لن يقوم تلقائيًا بقراءة جميع جلسات Codex/Claude أو مفاتيح الإرجاع."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP kann den lokalen Status, verfügbare Modelle, die Gesamtnutzung und Ihren gespeicherten Aufgabentext lesen und außerdem Texte, Bilder, Videos, Stimmen, Vektoren und neu angeordnete Modelle aufrufen; Es werden nicht automatisch alle Sitzungen von Codex/Claude gelesen oder Schlüssel zurückgegeben."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP can read local status, available models, aggregate usage, and task text you saved, and can invoke text, image, video, speech, embedding, and reranking models. It does not automatically read entire Codex or Claude conversations or return secrets."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP puede leer el estado local, los modelos disponibles, el uso agregado y el texto de la tarea guardada, y también puede llamar texto, imágenes, videos, voces, vectores y modelos reorganizados; no leerá automáticamente todas las sesiones de Codex/Claude ni devolverá las claves."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP peut lire l'état local, les modèles disponibles, l'utilisation globale et le texte de votre tâche enregistrée, et peut également appeler du texte, des images, des vidéos, des voix, des vecteurs et des modèles réorganisés ; il ne lira pas automatiquement toutes les sessions du Codex/Claude ni ne renverra les clés."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP は、ローカル ステータス、利用可能なモデル、総使用量、保存されたタスク テキストを読み取ることができ、テキスト、画像、ビデオ、音声、ベクトル、再配置されたモデルを呼び出すこともできます。 Codex/Claude のすべてのセッションを自動的に読み取ったり、キーを返したりするわけではありません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP는 로컬 상태, 사용 가능한 모델, 집계 사용량 및 저장된 작업 텍스트를 읽을 수 있으며 텍스트, 사진, 비디오, 음성, 벡터 및 재배열된 모델을 호출할 수도 있습니다. Codex/Claude의 모든 세션을 자동으로 읽거나 키를 반환하지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O MCP pode ler o status local, modelos disponíveis, uso agregado e texto de tarefa salvo, e também pode chamar texto, imagens, vídeos, vozes, vetores e modelos reorganizados; ele não lerá automaticamente todas as sessões do Codex/Claude ou retornará chaves."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP может считывать локальный статус, доступные модели, совокупное использование и сохраненный текст задачи, а также вызывать текст, изображения, видео, голоса, векторы и переставленные модели; он не будет автоматически читать все сеансы Кодекса/Клода или возвращать ключи."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP 可读取本机状态、可用模型、聚合用量和你保存的任务文本，也可调用文字、图片、视频、语音、向量与重排模型；不会自动读取 Codex/Claude 的全部会话或返回密钥。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP 可讀取本機狀態、可用模型、聚合用量和你保存的任務文本，也可調用文字、圖片、視頻、語音、向量與重排模型；不會自動讀取 Codex/Claude 的全部會話或返回密鑰。"
+          }
+        }
+      }
+    },
+    "MCP 地址" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عنوان MCP"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP-Adresse"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP address"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dirección MCP"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adresse MCP"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCPアドレス"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP 주소"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Endereço MCP"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "адрес MCP"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP 地址"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP 地址"
+          }
+        }
+      }
+    },
     "ModelHub" : {
       "localizations" : {
         "ar" : {
@@ -2167,6 +2377,146 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Token"
+          }
+        }
+      }
+    },
+    "一键安装到 Claude" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التثبيت بنقرة واحدة لكلود"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One-Click-Installation für Claude"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One-click installation to Claude"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instalación con un clic en Claude"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installation en un clic chez Claude"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude へのワンクリックインストール"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude에 원클릭 설치"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instalação com um clique para Claude"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Установка в один клик на Клода"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一键安装到 Claude"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一鍵安裝到 Claude"
+          }
+        }
+      }
+    },
+    "一键安装到 Codex" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التثبيت بنقرة واحدة على Codex"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein-Klick-Installation in Codex"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One-click installation to Codex"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instalación con un clic en Codex"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installation en un clic sur Codex"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex へのワンクリックインストール"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex에 원클릭 설치"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instalação com um clique no Codex"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Установка в Кодекс в один клик"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一键安装到 Codex"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一鍵安裝到 Codex"
           }
         }
       }
@@ -2657,6 +3007,146 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不限"
+          }
+        }
+      }
+    },
+    "仅使用合成数据，不读取凭证、不访问模型供应商，也不会产生费用。" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يتم استخدام البيانات الاصطناعية فقط، ولا تتم قراءة بيانات الاعتماد، ولا يتم الوصول إلى بائعي النماذج، ولا يتم فرض أي رسوم."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es werden nur synthetische Daten verwendet, es werden keine Anmeldeinformationen gelesen, es wird nicht auf Modellanbieter zugegriffen und es fallen keine Gebühren an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only synthetic data is used, no credentials are read, no model vendors are accessed, and no fees are incurred."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo se utilizan datos sintéticos, no se leen credenciales, no se accede a proveedores de modelos y no se incurre en tarifas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seules des données synthétiques sont utilisées, aucune information d'identification n'est lue, aucun fournisseur de modèles n'est consulté et aucun frais n'est facturé."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合成データのみが使用され、資格情報は読み取られず、モデル ベンダーへのアクセスも行われず、料金は発生しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "합성 데이터만 사용되며 자격 증명은 읽혀지지 않으며 모델 공급업체에 액세스되지 않으며 수수료가 발생하지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Somente dados sintéticos são usados, nenhuma credencial é lida, nenhum fornecedor de modelo é acessado e nenhuma taxa é cobrada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Используются только синтетические данные, учетные данные не считываются, поставщики моделей не получают доступа и никакие сборы не взимаются."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅使用合成数据，不读取凭证、不访问模型供应商，也不会产生费用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "僅使用合成數據，不讀取憑證、不訪問模型供應商，也不會產生費用。"
+          }
+        }
+      }
+    },
+    "仅监听 127.0.0.1 并校验本机 Origin；生成工具需确认可能计费，所有调用仍经过隔离、限流、预算与日志。" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "استمع فقط إلى 127.0.0.1 وتحقق من المصدر المحلي؛ تحتاج أداة الإنشاء إلى تأكيد الفواتير المحتملة، وستظل جميع المكالمات تمر بمرحلة العزل والحد الحالي وإعداد الميزانية والتسجيل."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hören Sie nur 127.0.0.1 und überprüfen Sie den lokalen Ursprung. Das Generierungstool muss eine mögliche Abrechnung bestätigen und alle Anrufe durchlaufen weiterhin Isolierung, Strombegrenzung, Budgetierung und Protokollierung."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listens only on 127.0.0.1 and validates local origins. Generation tools require billable-call confirmation, and every request still passes through quarantine, rate limits, budgets, and logging."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo escuche 127.0.0.1 y verifique el origen local; la herramienta de generación necesita confirmar una posible facturación, y todas las llamadas aún pasan por aislamiento, limitación de corriente, presupuesto y registro."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Écoutez uniquement 127.0.0.1 et vérifiez l'origine locale ; l'outil de génération doit confirmer une éventuelle facturation, et tous les appels passent toujours par l'isolement, la limitation de courant, la budgétisation et la journalisation."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "127.0.0.1 のみをリッスンし、ローカルの発信元を確認します。生成ツールは請求の可能性を確認する必要があり、すべての通話は依然として分離、電流制限、予算設定、およびログ記録を通過します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "127.0.0.1만 듣고 로컬 출처를 확인하세요. 생성 도구는 가능한 청구를 확인해야 하며 모든 통화는 여전히 격리, 전류 제한, 예산 책정 및 로깅을 거칩니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouça apenas 127.0.0.1 e verifique a origem local; a ferramenta de geração precisa confirmar possível faturamento, e todas as ligações ainda passam por isolamento, limitação de corrente, orçamentação e registro."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Слушайте только 127.0.0.1 и проверяйте локальное происхождение; инструменту генерации необходимо подтвердить возможное выставление счетов, и все вызовы по-прежнему проходят изоляцию, текущее ограничение, бюджетирование и журналирование."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅监听 127.0.0.1 并校验本机 Origin；生成工具需确认可能计费，所有调用仍经过隔离、限流、预算与日志。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "僅監聽 127.0.0.1 並校驗本機 Origin；生成工具需確認可能計費，所有調用仍經過隔離、限流、預算與日誌。"
           }
         }
       }
@@ -3571,6 +4061,76 @@
         }
       }
     },
+    "保存后 MCP 才会读取" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لن يقرأه MCP حتى يتم حفظه."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP liest es erst, wenn es gespeichert wird."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP will not read it until it is saved."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP no lo leerá hasta que se guarde."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP ne le lira pas tant qu'il ne sera pas enregistré."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP は保存されるまで読み取りません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP는 저장될 때까지 읽지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O MCP não o lerá até que seja salvo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MCP не будет читать его, пока он не будет сохранен."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存后 MCP 才会读取"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存後 MCP 才會讀取"
+          }
+        }
+      }
+    },
     "保存设置" : {
       "localizations" : {
         "ar" : {
@@ -4267,6 +4827,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "關閉"
+          }
+        }
+      }
+    },
+    "内置 · 不可删除" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مدمج · لا يمكن حذفه"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eingebaut · kann nicht gelöscht werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Built-in · cannot be deleted"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incorporado · no se puede eliminar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intégré · ne peut pas être supprimé"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "内蔵・削除不可"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "내장 · 삭제 불가"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Integrado · não pode ser excluído"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Встроенный · невозможно удалить"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "内置 · 不可删除"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "內置 · 不可刪除"
           }
         }
       }
@@ -5741,6 +6371,76 @@
         }
       }
     },
+    "同名模型跨供应商时仅启用一项；三项规则均为内置规则，不可删除。" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عندما يتقاطع نموذج يحمل نفس الاسم مع الموردين، يتم تمكين نموذج واحد فقط؛ القواعد الثلاث كلها قواعد مضمنة ولا يمكن حذفها."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn ein Modell mit demselben Namen von verschiedenen Anbietern verwendet wird, ist nur einer aktiviert. Die drei Regeln sind alle integrierte Regeln und können nicht gelöscht werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When a model with the same name crosses suppliers, only one is enabled; the three rules are all built-in rules and cannot be deleted."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuando un modelo con el mismo nombre cruza proveedores, solo se habilita uno; las tres reglas son reglas integradas y no se pueden eliminar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lorsqu'un modèle du même nom croise les fournisseurs, un seul est activé ; les trois règles sont toutes des règles intégrées et ne peuvent pas être supprimées."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同じ名前のモデルがサプライヤー間で存在する場合、有効になるのは 1 つだけです。 3 つのルールはすべて組み込みルールであり、削除できません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "동일한 이름의 모델이 공급업체와 교차하는 경우 하나만 활성화됩니다. 세 가지 규칙은 모두 기본 제공 규칙이므로 삭제할 수 없습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quando um modelo com o mesmo nome cruza fornecedores, apenas um fica habilitado; as três regras são todas regras integradas e não podem ser excluídas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Когда модель с таким же именем пересекает поставщиков, активируется только один; все три правила являются встроенными и не могут быть удалены."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同名模型跨供应商时仅启用一项；三项规则均为内置规则，不可删除。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同名模型跨供應商時僅啓用一項；三項規則均為內置規則，不可刪除。"
+          }
+        }
+      }
+    },
     "名称" : {
       "localizations" : {
         "ar" : {
@@ -7141,6 +7841,76 @@
         }
       }
     },
+    "复制手动安装配置" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انسخ تكوين التثبيت اليدوي"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manuelle Installationskonfiguration kopieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy manual installation configuration"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar la configuración de instalación manual"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copier la configuration de l'installation manuelle"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手動インストール構成をコピーする"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "수동 설치 구성 복사"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar configuração de instalação manual"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Копирование конфигурации установки вручную"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制手动安装配置"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "複製手動安裝配置"
+          }
+        }
+      }
+    },
     "复制无密钥配置预览" : {
       "localizations" : {
         "ar" : {
@@ -7277,6 +8047,426 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "好"
+          }
+        }
+      }
+    },
+    "安装 ModelHub MCP？" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "هل تريد تثبيت ModelHub MCP؟"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ModelHub MCP installieren?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install ModelHub MCP?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Instalar ModelHub MCP?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installer ModelHub MCP ?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ModelHub MCP をインストールしますか?"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ModelHub MCP를 설치하시겠습니까?"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instalar o ModelHub MCP?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Установить ModelHub MCP?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安装 ModelHub MCP？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安裝 ModelHub MCP？"
+          }
+        }
+      }
+    },
+    "安装到 %arg" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التثبيت على %1$arg"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf %1$arg installieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install to %1$arg"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instalar en %1$arg"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installer sur %1$arg"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$arg にインストール"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$arg에 설치"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instalar em %1$arg"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Установить в %1$arg"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安装到 %1$arg"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安裝到 %1$arg"
+          }
+        }
+      }
+    },
+    "审核演示模式" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مراجعة الوضع التجريبي"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sehen Sie sich den Demo-Modus an"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review demo mode"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revisar el modo de demostración"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revoir le mode démo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "デモモードをレビューする"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "데모 모드 검토"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revise o modo de demonstração"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обзор демо-режима"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "审核演示模式"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "審核演示模式"
+          }
+        }
+      }
+    },
+    "审核演示模式不会保存供应商或凭证。退出演示模式后可正常配置。" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا يقوم الوضع التجريبي للتدقيق بحفظ البائعين أو بيانات الاعتماد. يمكن إجراء التكوين العادي بعد الخروج من وضع العرض التوضيحي."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im Audit-Demomodus werden weder Anbieter noch Anmeldeinformationen gespeichert. Nach dem Verlassen des Demonstrationsmodus kann die normale Konfiguration durchgeführt werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audit demo mode does not save vendors or credentials. Normal configuration can be performed after exiting demonstration mode."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El modo de demostración de auditoría no guarda proveedores ni credenciales. La configuración normal se puede realizar después de salir del modo de demostración."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le mode démo d’audit n’enregistre pas les fournisseurs ni les informations d’identification. La configuration normale peut être effectuée après avoir quitté le mode démonstration."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "監査デモ モードでは、ベンダーや認証情報は保存されません。通常の設定は、デモンストレーション モードを終了した後に実行できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "감사 데모 모드는 공급업체나 자격 증명을 저장하지 않습니다. 데모 모드를 종료한 후 일반 구성을 수행할 수 있습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O modo de demonstração de auditoria não salva fornecedores ou credenciais. A configuração normal pode ser realizada após sair do modo de demonstração."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Демонстрационный режим аудита не сохраняет поставщиков или учетные данные. Обычную настройку можно выполнить после выхода из демонстрационного режима."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "审核演示模式不会保存供应商或凭证。退出演示模式后可正常配置。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "審核演示模式不會保存供應商或憑證。退出演示模式後可正常配置。"
+          }
+        }
+      }
+    },
+    "审核演示模式不会发起模型测试；当前健康状态均为合成演示数据。" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لن يبدأ وضع العرض التوضيحي للتدقيق في اختبار النموذج؛ الحالة الصحية الحالية هي بيانات توضيحية اصطناعية."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im Audit-Demonstrationsmodus werden keine Modelltests eingeleitet. Beim aktuellen Gesundheitszustand handelt es sich um synthetische Demonstrationsdaten."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audit demonstration mode will not initiate model testing; the current health status is synthetic demonstration data."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El modo de demostración de auditoría no iniciará la prueba del modelo; El estado de salud actual son datos de demostración sintéticos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le mode de démonstration d’audit ne lancera pas les tests du modèle ; l'état de santé actuel est constitué de données de démonstration synthétiques."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "監査デモンストレーション モードではモデルのテストは開始されません。現在の健康状態は合成実証データです。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "감사 데모 모드는 모델 테스트를 시작하지 않습니다. 현재 건강 상태는 합성된 데모 데이터입니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O modo de demonstração de auditoria não iniciará o teste do modelo; o estado de saúde atual consiste em dados de demonstração sintéticos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Режим демонстрации аудита не инициирует тестирование модели; текущее состояние здоровья представляет собой синтетические демонстрационные данные."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "审核演示模式不会发起模型测试；当前健康状态均为合成演示数据。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "審核演示模式不會發起模型測試；當前健康狀態均為合成演示數據。"
+          }
+        }
+      }
+    },
+    "审核演示模式只使用合成数据，不会连接模型供应商或产生费用。" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يستخدم الوضع التجريبي للتدقيق البيانات الاصطناعية فقط ولا يتحمل اتصالات أو رسوم البائع النموذجي."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Audit-Demo-Modus verwendet nur synthetische Daten und es fallen keine Modellanbieterverbindungen oder Gebühren an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The audit demo mode uses only synthetic data and does not incur model vendor connections or fees."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El modo de demostración de auditoría utiliza únicamente datos sintéticos y no genera conexiones ni tarifas de proveedores de modelos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le mode démo d’audit utilise uniquement des données synthétiques et n’entraîne pas de connexions ni de frais avec les fournisseurs de modèles."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "監査デモ モードでは合成データのみが使用され、モデル ベンダーへの接続や料金は発生しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "감사 데모 모드에서는 합성 데이터만 사용하며 모델 공급업체 연결이나 수수료가 발생하지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O modo de demonstração de auditoria usa apenas dados sintéticos e não incorre em conexões ou taxas de fornecedores de modelos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В демонстрационном режиме аудита используются только синтетические данные и не требуется подключение к поставщику модели или оплата."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "审核演示模式只使用合成数据，不会连接模型供应商或产生费用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "審核演示模式只使用合成數據，不會連接模型供應商或產生費用。"
           }
         }
       }
@@ -7491,6 +8681,76 @@
         }
       }
     },
+    "导入任务文本文件" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "استيراد ملف نصي للمهمة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufgabentextdatei importieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import task text file"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importar archivo de texto de tarea"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer un fichier texte de tâche"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "タスクのテキスト ファイルをインポートする"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "작업 텍스트 파일 가져오기"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importar arquivo de texto de tarefa"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Импортировать текстовый файл задачи"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入任务文本文件"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "導入任務文本文件"
+          }
+        }
+      }
+    },
     "导出 ModelHub 本地备份" : {
       "localizations" : {
         "ar" : {
@@ -7627,6 +8887,146 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "導出備份"
+          }
+        }
+      }
+    },
+    "将向 %arg 的 %arg 原生接口发送一次最小真实请求。视频、图像或语音供应商可能按请求计费。" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سيتم إرسال الحد الأدنى من الطلب الحقيقي إلى الواجهة الأصلية %2$arg لـ %1$arg. قد يتقاضى موفرو الفيديو أو الصور أو الصوت رسومًا مقابل كل طلب."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine minimale echte Anfrage wird an die native Schnittstelle %2$arg von %1$arg gesendet. Video-, Bild- oder Sprachanbieter können pro Anfrage Gebühren erheben."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A minimum real request will be sent to the %2$arg native interface of %1$arg. Video, image or voice providers may charge per request."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se enviará una solicitud real mínima a la interfaz nativa de %2$arg de %1$arg. Los proveedores de video, imagen o voz pueden cobrar por solicitud."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une requête réelle minimale sera envoyée à l'interface native %2$arg de %1$arg. Les fournisseurs de vidéo, d’images ou de voix peuvent facturer par demande."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最小限の実際のリクエストは、%1$arg の %2$arg ネイティブ インターフェイスに送信されます。ビデオ、画像、音声プロバイダーはリクエストごとに料金を請求する場合があります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "최소 실제 요청은 %1$arg의 %2$arg 기본 인터페이스로 전송됩니다. 비디오, 이미지 또는 음성 제공업체는 요청별로 요금을 청구할 수 있습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uma solicitação real mínima será enviada para a interface nativa %2$arg de %1$arg. Provedores de vídeo, imagem ou voz podem cobrar por solicitação."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Минимальный реальный запрос будет отправлен на собственный интерфейс %2$arg %1$arg. Поставщики видео, изображений или голоса могут взимать плату за каждый запрос."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将向 %1$arg 的 %2$arg 原生接口发送一次最小真实请求。视频、图像或语音供应商可能按请求计费。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "將向 %1$arg 的 %2$arg 原生接口發送一次最小真實請求。視頻、圖像或語音供應商可能按請求計費。"
+          }
+        }
+      }
+    },
+    "将更新用户主目录中的配置文件，并替换同名 modelhub MCP 条目；其他 MCP 条目会保留。" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سيتم تحديث ملف التكوين الموجود في الدليل الرئيسي للمستخدم، واستبدال إدخال modelhub MCP بنفس الاسم؛ ستبقى إدخالات MCP الأخرى."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Konfigurationsdatei im Home-Verzeichnis des Benutzers wird aktualisiert und ersetzt den Modelhub-MCP-Eintrag mit demselben Namen. andere MCP-Einträge bleiben erhalten."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The configuration file in the user's home directory will be updated, replacing the modelhub MCP entry with the same name; other MCP entries will remain."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El archivo de configuración en el directorio de inicio del usuario se actualizará, reemplazando la entrada MCP de modelhub con el mismo nombre; otras entradas de MCP permanecerán."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le fichier de configuration dans le répertoire personnel de l'utilisateur sera mis à jour, en remplaçant l'entrée modelhub MCP par le même nom ; les autres entrées MCP resteront."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ユーザーのホーム ディレクトリ内の構成ファイルが更新され、modelhub MCP エントリが同じ名前に置き換えられます。他の MCP エントリは残ります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "사용자 홈 디렉터리의 구성 파일이 업데이트되어 modelhub MCP 항목이 동일한 이름으로 대체됩니다. 다른 MCP 항목은 그대로 유지됩니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O arquivo de configuração no diretório inicial do usuário será atualizado, substituindo a entrada modelhub MCP pelo mesmo nome; outras entradas do MCP permanecerão."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файл конфигурации в домашнем каталоге пользователя будет обновлен, заменяя запись MCP modelhub с тем же именем; другие записи MCP останутся."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将更新用户主目录中的配置文件，并替换同名 modelhub MCP 条目；其他 MCP 条目会保留。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "將更新用戶主目錄中的配置文件，並替換同名 modelhub MCP 條目；其他 MCP 條目會保留。"
           }
         }
       }
@@ -8611,6 +10011,76 @@
         }
       }
     },
+    "当前任务文本（可选，最多 12,000 字符）" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نص المهمة الحالية (اختياري، ما يصل إلى 12000 حرف)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktueller Aufgabentext (optional, bis zu 12.000 Zeichen)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current task text (optional, up to 12,000 characters)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto de la tarea actual (opcional, hasta 12.000 caracteres)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texte de la tâche actuelle (facultatif, jusqu'à 12 000 caractères)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "現在のタスクのテキスト (オプション、最大 12,000 文字)"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "현재 작업 텍스트(선택 사항, 최대 12,000자)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto da tarefa atual (opcional, até 12.000 caracteres)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Текст текущей задачи (необязательно, до 12 000 символов)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前任务文本（可选，最多 12,000 字符）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "當前任務文本（可選，最多 12,000 字符）"
+          }
+        }
+      }
+    },
     "当前应用包不支持登录启动，请使用已安装的签名版本" : {
       "localizations" : {
         "ar" : {
@@ -8817,6 +10287,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "待適配 · 已隔離"
+          }
+        }
+      }
+    },
+    "待验证 · 已隔离" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بانتظار التحقق · معزول"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verifizierung ausstehend · isoliert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pending verification · quarantined"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pendiente de verificación · aislado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En attente de vérification · isolé"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "検証待ち · 隔離済み"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "검증 대기 · 격리됨"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aguardando verificação · isolado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ожидает проверки · изолировано"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "待验证 · 已隔离"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "待驗證 · 已隔離"
           }
         }
       }
@@ -9451,6 +10991,76 @@
         }
       }
     },
+    "无需账号即可完整体验" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا يوجد حساب مطلوب للخبرة الكاملة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für die volle Erfahrung ist kein Konto erforderlich"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No account required for full experience"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se requiere cuenta para una experiencia completa"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun compte requis pour une expérience complète"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完全な体験をするにはアカウントは必要ありません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "전체 경험을 위해서는 계정이 필요하지 않습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nenhuma conta é necessária para experiência completa"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для полноценного опыта не требуется учетная запись"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无需账号即可完整体验"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無需賬號即可完整體驗"
+          }
+        }
+      }
+    },
     "时间" : {
       "localizations" : {
         "ar" : {
@@ -9867,76 +11477,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "服務設置"
-          }
-        }
-      }
-    },
-    "待验证 · 已隔离" : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "بانتظار التحقق · معزول"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Verifizierung ausstehend · isoliert"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pending verification · quarantined"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pendiente de verificación · aislado"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "En attente de vérification · isolé"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "検証待ち · 隔離済み"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "검증 대기 · 격리됨"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aguardando verificação · isolado"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ожидает проверки · изолировано"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "待验证 · 已隔离"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "待驗證 · 已隔離"
           }
         }
       }
@@ -11901,6 +13441,76 @@
         }
       }
     },
+    "测试原生协议？" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اختبار البروتوكولات الأصلية؟"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Native Protokolle testen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testing native protocols?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Probando protocolos nativos?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tester des protocoles natifs ?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ネイティブ プロトコルをテストしていますか?"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기본 프로토콜을 테스트하시나요?"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testando protocolos nativos?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тестируете собственные протоколы?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "测试原生协议？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "測試原生協議？"
+          }
+        }
+      }
+    },
     "测试模型 %arg" : {
       "localizations" : {
         "ar" : {
@@ -12247,6 +13857,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "清空"
+          }
+        }
+      }
+    },
+    "演示模式已就绪。选择任一演示模型并发送请求，可查看本机生成的示例响应。" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الوضع التجريبي جاهز. حدد أيًا من النماذج التجريبية وأرسل طلبًا لرؤية نموذج الاستجابة التي تم إنشاؤها محليًا."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Demomodus ist bereit. Wählen Sie eines der Demomodelle aus und senden Sie eine Anfrage, um eine nativ generierte Beispielantwort anzuzeigen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo mode is ready. Select any of the demo models and send a request to see a sample natively generated response."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El modo de demostración está listo. Seleccione cualquiera de los modelos de demostración y envíe una solicitud para ver una respuesta de muestra generada de forma nativa."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le mode démo est prêt. Sélectionnez l’un des modèles de démonstration et envoyez une demande pour voir un exemple de réponse générée de manière native."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "デモモードの準備が完了しました。デモ モデルのいずれかを選択してリクエストを送信すると、ネイティブに生成されたサンプルの応答が表示されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "데모 모드가 준비되었습니다. 데모 모델 중 하나를 선택하고 요청을 보내 기본적으로 생성된 샘플 응답을 확인하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O modo de demonstração está pronto. Selecione qualquer um dos modelos de demonstração e envie uma solicitação para ver um exemplo de resposta gerada nativamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Демо-режим готов. Выберите любую из демонстрационных моделей и отправьте запрос, чтобы просмотреть образец ответа, сгенерированного в исходном коде."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示模式已就绪。选择任一演示模型并发送请求，可查看本机生成的示例响应。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示模式已就緒。選擇任一演示模型併發送請求，可查看本機生成的示例響應。"
           }
         }
       }
@@ -13297,6 +14977,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "結果"
+          }
+        }
+      }
+    },
+    "继续测试（可能产生费用）" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مواصلة الاختبار (قد يتم فرض رسوم)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testen Sie weiter (es können Gebühren anfallen)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue testing (fees may apply)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuar con la prueba (pueden aplicarse cargos)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Poursuivre les tests (des frais peuvent s'appliquer)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "テストを続行します (料金が適用される場合があります)"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "테스트 계속(요금이 부과될 수 있음)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue testando (taxas podem ser aplicadas)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Продолжить тестирование (может взиматься плата)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "继续测试（可能产生费用）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "繼續測試（可能產生費用）"
           }
         }
       }
@@ -14491,6 +16241,76 @@
         }
       }
     },
+    "请只粘贴或导入你授权共享的任务内容；ModelHub 不会自动扫描其他客户端的聊天记录。" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يرجى لصق أو استيراد محتوى المهمة الذي يُسمح لك بمشاركته فقط؛ لن يقوم ModelHub بفحص سجل الدردشة للعملاء الآخرين تلقائيًا."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bitte fügen Sie nur Aufgabeninhalte ein oder importieren Sie sie, zu deren Freigabe Sie berechtigt sind. ModelHub scannt den Chatverlauf anderer Kunden nicht automatisch."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please only paste or import task content that you are authorized to share; ModelHub will not automatically scan the chat history of other clients."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pegue o importe únicamente el contenido de la tarea que esté autorizado a compartir; ModelHub no escaneará automáticamente el historial de chat de otros clientes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veuillez coller ou importer uniquement le contenu des tâches que vous êtes autorisé à partager ; ModelHub n'analysera pas automatiquement l'historique des discussions des autres clients."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "共有する権限のあるタスクのコンテンツのみを貼り付けたりインポートしたりしてください。 ModelHub は、他のクライアントのチャット履歴を自動的にスキャンしません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "공유 권한이 있는 작업 콘텐츠만 붙여넣거나 가져오세요. ModelHub는 다른 클라이언트의 채팅 기록을 자동으로 스캔하지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cole ou importe apenas o conteúdo da tarefa que você está autorizado a compartilhar; O ModelHub não verificará automaticamente o histórico de bate-papo de outros clientes."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пожалуйста, вставляйте или импортируйте только тот контент задач, которым вы имеете право делиться; ModelHub не будет автоматически сканировать историю чатов других клиентов."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请只粘贴或导入你授权共享的任务内容；ModelHub 不会自动扫描其他客户端的聊天记录。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請只粘貼或導入你授權共享的任務內容；ModelHub 不會自動掃描其他客戶端的聊天記錄。"
+          }
+        }
+      }
+    },
     "请求日志" : {
       "localizations" : {
         "ar" : {
@@ -15191,6 +17011,216 @@
         }
       }
     },
+    "这是由 ModelHub 在本机生成的审核演示响应；没有访问任何模型供应商，也不会产生费用。" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "هذه استجابة تجريبية للمراجعة تم إنشاؤها أصلاً بواسطة ModelHub؛ لا تتم زيارة أي بائعين نموذجيين ولا يتم فرض أي رسوم."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dies ist eine von ModelHub nativ generierte Test-Demo-Antwort. Es werden keine Modellverkäufer besucht und es fallen keine Gebühren an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is a review demo response generated natively by ModelHub; no model vendors are visited and no charges are incurred."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta es una respuesta de demostración de revisión generada de forma nativa por ModelHub; no se visita a ningún proveedor de modelos y no se incurre en cargos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il s'agit d'une réponse de démonstration d'examen générée nativement par ModelHub ; aucun vendeur de modèles n'est visité et aucun frais n'est engagé."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "これは、ModelHub によってネイティブに生成されたレビュー デモ応答です。モデルベンダーを訪問することはなく、料金も発生しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이것은 ModelHub에서 기본적으로 생성된 리뷰 데모 응답입니다. 모델 공급업체를 방문하지 않으며 비용도 발생하지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta é uma resposta de demonstração de revisão gerada nativamente pelo ModelHub; nenhum fornecedor modelo é visitado e nenhuma cobrança é incorrida."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это демонстрационный ответ на обзор, созданный ModelHub; продавцы моделей не посещаются и никакие расходы не взимаются."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这是由 ModelHub 在本机生成的审核演示响应；没有访问任何模型供应商，也不会产生费用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這是由 ModelHub 在本機生成的審核演示響應；沒有訪問任何模型供應商，也不會產生費用。"
+          }
+        }
+      }
+    },
+    "进入审核演示" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أدخل العرض التوضيحي للمراجعة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nehmen Sie an der Rezensionsdemo teil"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter review demo"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingrese a la demostración de revisión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entrez la démo d'évaluation"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "レビューデモを入力してください"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "리뷰 데모 입력"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insira a demonstração de avaliação"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введите демо-версию обзора"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "进入审核演示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "進入審核演示"
+          }
+        }
+      }
+    },
+    "进入审核演示模式，查看多供应商、模型分类、三种默认路由规则、故障转移、用量分析、请求日志和本机 API 调试。所有内容均为合成数据。" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أدخل إلى الوضع التجريبي للتدقيق لعرض الموردين المتعددين، وتصنيف النماذج، وثلاث قواعد توجيه افتراضية، وتجاوز الفشل، وتحليل الاستخدام، وسجلات الطلبات، وتصحيح أخطاء واجهة برمجة التطبيقات الأصلية. كل المحتوى عبارة عن بيانات اصطناعية."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wechseln Sie in den Audit-Demomodus, um Multi-Vendor, Modellklassifizierung, drei Standard-Routing-Regeln, Failover, Nutzungsanalyse, Anforderungsprotokolle und natives API-Debugging anzuzeigen. Bei allen Inhalten handelt es sich um synthetische Daten."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter audit demo mode to view multi-vendor, model classification, three default routing rules, failover, usage analysis, request logs, and native API debugging. All content is synthetic data."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingrese al modo de demostración de auditoría para ver múltiples proveedores, clasificación de modelos, tres reglas de enrutamiento predeterminadas, conmutación por error, análisis de uso, registros de solicitudes y depuración de API nativa. Todo el contenido son datos sintéticos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accédez au mode démo d'audit pour afficher les différents fournisseurs, la classification des modèles, les trois règles de routage par défaut, le basculement, l'analyse de l'utilisation, les journaux de requêtes et le débogage de l'API native. Tout le contenu est constitué de données synthétiques."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "監査デモ モードに入り、マルチベンダー、モデル分類、3 つのデフォルト ルーティング ルール、フェイルオーバー、使用状況分析、リクエスト ログ、およびネイティブ API デバッグを表示します。すべてのコンテンツは合成データです。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다중 공급업체, 모델 분류, 세 가지 기본 라우팅 규칙, 장애 조치, 사용 분석, 요청 로그 및 기본 API 디버깅을 보려면 감사 데모 모드로 전환하세요. 모든 콘텐츠는 합성 데이터입니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entre no modo de demonstração de auditoria para visualizar vários fornecedores, classificação de modelo, três regras de roteamento padrão, failover, análise de uso, logs de solicitação e depuração de API nativa. Todo o conteúdo são dados sintéticos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Войдите в демонстрационный режим аудита, чтобы просмотреть информацию о нескольких поставщиках, классификацию моделей, три правила маршрутизации по умолчанию, аварийное переключение, анализ использования, журналы запросов и отладку встроенного API. Весь контент представляет собой синтетические данные."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "进入审核演示模式，查看多供应商、模型分类、三种默认路由规则、故障转移、用量分析、请求日志和本机 API 调试。所有内容均为合成数据。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "進入審核演示模式，查看多供應商、模型分類、三種默認路由規則、故障轉移、用量分析、請求日誌和本機 API 調試。所有內容均為合成數據。"
+          }
+        }
+      }
+    },
     "连接测试" : {
       "localizations" : {
         "ar" : {
@@ -15397,6 +17427,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "退出 ModelHub"
+          }
+        }
+      }
+    },
+    "退出演示" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الخروج من العرض التوضيحي"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo beenden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exit demo"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salir de la demostración"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitter la démo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "デモを終了する"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "데모 종료"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sair da demonstração"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выйти из демо-версии"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出演示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出演示"
           }
         }
       }
@@ -16027,6 +18127,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重新測試已隔離模型 %1$arg"
+          }
+        }
+      }
+    },
+    "重新测试模型 %arg" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إعادة اختبار النموذج %1$arg"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modell %1$arg erneut testen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retest model %1$arg"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver a probar el modelo %1$arg"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retester le modèle %1$arg"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "モデル %1$arg を再テストします"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모델 %1$arg 다시 테스트"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testar novamente o modelo %1$arg"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Повторно протестировать модель %1$arg"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新测试模型 %1$arg"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新測試模型 %1$arg"
           }
         }
       }
@@ -16867,6 +19037,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "預覽並導入 ModelHub 本地備份"
+          }
+        }
+      }
+    },
+    "默认路由规则" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قواعد التوجيه الافتراضية"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standard-Routing-Regeln"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default routing rules"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reglas de enrutamiento predeterminadas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Règles de routage par défaut"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "デフォルトのルーティング ルール"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기본 라우팅 규칙"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Regras de roteamento padrão"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Правила маршрутизации по умолчанию"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认路由规则"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默認路由規則"
           }
         }
       }

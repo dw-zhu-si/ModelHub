@@ -29,6 +29,52 @@ public enum ModelProbeDisposition: Equatable, Sendable {
 }
 
 public enum ModelProbePolicy {
+    public static func nativeOperation(for nativeProtocol: ModelNativeProtocol) -> NativeAPIOperation? {
+        switch nativeProtocol {
+        case .imageGeneration: .imageGeneration
+        case .videoGeneration: .videoGeneration
+        case .speech: .speech
+        case .transcription: .transcription
+        case .embeddings: .embeddings
+        case .reranking: .reranking
+        case .providerNative: nil
+        }
+    }
+
+    public static func shouldSkipNativeProbe(
+        status: ModelAvailability?,
+        nativeProtocol: ModelNativeProtocol,
+        allowNativeProbe: Bool
+    ) -> Bool {
+        status?.isQuarantined == true && !allowNativeProbe
+    }
+
+    public static func nativeProbeBody(
+        for nativeProtocol: ModelNativeProtocol,
+        model _: String
+    ) -> Data? {
+        let object: [String: Any]
+        switch nativeProtocol {
+        case .imageGeneration:
+            object = ["prompt": "ModelHub connection test", "n": 1]
+        case .videoGeneration:
+            // Seedance-compatible gateways commonly enforce a 4-second minimum.
+            object = ["prompt": "ModelHub connection test", "duration": 4]
+        case .speech:
+            object = ["input": "ModelHub connection test", "voice": "alloy"]
+        case .embeddings:
+            object = ["input": "ModelHub connection test"]
+        case .reranking:
+            object = [
+                "query": "ModelHub connection test",
+                "documents": ["ModelHub connection test"]
+            ]
+        case .transcription, .providerNative:
+            return nil
+        }
+        return try? JSONSerialization.data(withJSONObject: object)
+    }
+
     public static func disposition(
         provider: ProviderConfig,
         model: String,

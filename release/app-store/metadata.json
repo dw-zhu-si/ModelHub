@@ -1,15 +1,15 @@
 {
   "version": "1.9.0",
-  "build": "19",
+  "build": "21",
   "price": "FREE",
   "availability": "ALL_AVAILABLE_STOREFRONTS",
-  "releaseMode": "MANUAL_AFTER_APPROVAL",
+  "releaseMode": "AUTOMATIC_AFTER_APPROVAL",
   "primaryCategory": "DEVELOPER_TOOLS",
   "secondaryCategory": "PRODUCTIVITY",
   "privacyPolicyURL": "https://pm.jcm99.com/apple/modelhub/privacy.html",
   "supportURL": "https://pm.jcm99.com/apple/modelhub/support.html",
   "marketingURL": "https://pm.jcm99.com/apple/modelhub/",
-  "appReviewNotes": "ModelHub 是本机 API 网关。主应用使用 NWListener 严格绑定 127.0.0.1:11435，为本机 OpenAI 兼容 SDK、开发工具和自动化接收请求；它不是公网 Web/FTP 服务，不监听外部网卡。App Sandbox 的 com.apple.security.network.server 用于此本机入站监听，com.apple.security.network.client 仅用于向用户配置的模型供应商发起出站请求。无需登录即可检查或测试本机网关。",
+  "appReviewNotes": "No account or third-party API credentials are required for review. On a clean installation, ModelHub opens its main window once and always installs a visible ModelHub menu bar extra. To inspect the complete product, click ‘Enter Review Demo’ on the Overview screen. Demo mode displays synthetic providers, model categories, routing/failover rules, usage analytics, request logs, MCP controls, and a local API console. In API Console, choose any demo model and click Send Request; the app returns a clearly labeled local synthetic response. Demo mode never reads provider credentials, contacts a model provider, or incurs charges, and Exit Demo restores the original in-memory state. ModelHub otherwise runs as a background menu-bar app without a Dock icon. Its NWListener binds strictly to 127.0.0.1:11435 for local SDKs, developer tools, and automations; it is not a public web/FTP server and does not listen on external interfaces. com.apple.security.network.server is required only for this loopback listener, while com.apple.security.network.client is used for outbound requests to providers explicitly configured by the user.",
   "localizations": {
     "zh-Hans": {
       "name": "ModelHub",

@@ -2,6 +2,57 @@ import XCTest
 @testable import ModelHubCore
 
 final class RoutingEngineTests: XCTestCase {
+    func testBuiltInDefaultRulesAreExclusiveAndOrderSameModelCandidates() async {
+        XCTAssertEqual(DefaultRoutingRule.allCases.count, 3)
+        XCTAssertEqual(AppConfiguration().routing.activeRule, .sameModelLowestCost)
+
+        let official = ProviderConfig(
+            name: "OpenAI 官方",
+            kind: .openAI,
+            baseURL: "https://api.openai.com",
+            models: ["gpt-4o"],
+            modelProfiles: ["gpt-4o": TargetProfile(inputCostPerMillionTokens: 10, outputCostPerMillionTokens: 10)]
+        )
+        let compatible = ProviderConfig(
+            name: "兼容代理",
+            kind: .openAICompatible,
+            baseURL: "https://proxy.example.com",
+            models: ["gpt-4o"],
+            modelProfiles: ["gpt-4o": TargetProfile(inputCostPerMillionTokens: 1, outputCostPerMillionTokens: 1)]
+        )
+        let health = [
+            ModelHealthRecord(providerID: official.id, model: "gpt-4o", status: .available, latencyMilliseconds: 40),
+            ModelHealthRecord(providerID: compatible.id, model: "gpt-4o", status: .available, latencyMilliseconds: 200)
+        ]
+        let engine = RoutingEngine()
+
+        let cost = await engine.candidates(
+            for: "gpt-4o", routes: [], providers: [official, compatible], healthRecords: health,
+            defaultRule: .sameModelLowestCost
+        )
+        let speed = await engine.candidates(
+            for: "gpt-4o", routes: [], providers: [official, compatible], healthRecords: health,
+            defaultRule: .sameModelLowestLatency
+        )
+        let officialFirst = await engine.candidates(
+            for: "gpt-4o", routes: [], providers: [compatible, official], healthRecords: health,
+            defaultRule: .sameModelOfficial
+        )
+
+        XCTAssertEqual(cost.first?.providerID, compatible.id)
+        XCTAssertEqual(speed.first?.providerID, official.id)
+        XCTAssertEqual(officialFirst.first?.providerID, official.id)
+    }
+
+    func testLegacyConfigurationGetsNonDeletableDefaultRoutingRule() throws {
+        let legacy = Data(#"{"providers":[],"routes":[],"server":{"port":11435,"requireAuthentication":true,"startAutomatically":true}}"#.utf8)
+        let decoded = try JSONDecoder().decode(AppConfiguration.self, from: legacy)
+        XCTAssertEqual(decoded.routing.activeRule, .sameModelLowestCost)
+        let encoded = try JSONEncoder().encode(decoded)
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        XCTAssertNotNil(root["routing"])
+    }
+
     func testCapabilityRequirementsExcludeExplicitlyIncompatibleTargets() async {
         let provider = ProviderConfig(name: "P", kind: .openAICompatible, baseURL: "https://example.com")
         let route = RouteConfig(

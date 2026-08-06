@@ -49,7 +49,7 @@ Normal external calls do not refresh provider catalogs or re-test models. A user
 
 ### Native macOS workflow
 
-ModelHub runs as a menu-bar background app by default, without a Dock icon or a startup window. It supports launch at login and a credential-free WidgetKit status widget. Background Keychain reads are non-interactive; macOS authorization is only requested when a user chooses to reveal, copy, or edit a credential.
+ModelHub uses a native menu-bar extra and never shows a Dock icon. A clean installation opens the main window once so users can configure the app or enter the credential-free review demo; later launches stay in the menu bar by default. It supports launch at login and a credential-free WidgetKit status widget. Background Keychain reads are non-interactive; macOS authorization is only requested when a user chooses to reveal, copy, or edit a credential.
 
 ## Features
 
@@ -61,6 +61,7 @@ ModelHub runs as a menu-bar background app by default, without a Dock icon or a 
 - native image, video, task, speech, transcription, embedding, and reranking endpoints;
 - restricted provider actions through `POST /v1/native`;
 - read-only local MCP, A2A, and ACP stdio surfaces with a separate Agent token.
+- MCP can read task context explicitly saved by the user and invoke text, image, video, speech, embedding, and reranking models; install it into Codex or Claude Desktop with one click, or copy a manual configuration.
 
 See the complete [OpenAPI contract](openapi/modelhub-openapi.yaml).
 
@@ -68,6 +69,7 @@ See the complete [OpenAPI contract](openapi/modelhub-openapi.yaml).
 
 - priority failover, round-robin, and weighted random;
 - lowest latency, highest stability, lowest cost, largest context, and balanced scoring;
+- three non-removable, mutually exclusive same-model defaults: lowest cost, lowest latency, or official provider first;
 - capability filters for tools, vision, audio, and other incompatible targets;
 - per-minute rate limits, per-target concurrency caps, circuit breakers, cooldowns, exponential backoff, and bounded fallback;
 - no unconditional replay of a request that may already have been billed;
@@ -102,6 +104,10 @@ Every model health record includes its last check time, latency, HTTP status, an
 
 “Supported provider” means that the protocol and configuration entry exist. It does not mean that your account has access, balance, regional permission, or a successful live check.
 
+### Credential-free review demo
+
+On a clean installation with no configured providers, the Overview screen offers Review Demo Mode. It supplies synthetic providers, text/reasoning/image/music/video categories, routes, health, usage, and logs, and the API Console returns a clearly labeled local sample response. Demo mode never reads provider credentials, contacts an upstream service, incurs charges, or persists demo configuration; exiting restores the previous in-memory state.
+
 ## Security and privacy boundaries
 
 - the service binds only to `127.0.0.1:11435` by default;
@@ -115,7 +121,7 @@ Every model health record includes its last check time, latency, HTTP status, an
 
 ## Install
 
-Download the notarized [v1.9.0 build 19 release](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.0-build19), open `ModelHub-1.9.0-macos-universal.dmg`, and drag `ModelHub.app` to Applications. The DMG and the app are Developer ID signed and passed Apple notarization, ticket stapling, image integrity, and Gatekeeper checks. A Universal ZIP is also available in the same release.
+Download the notarized [v1.9.0 build 21 release](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.0-build21), open `ModelHub-1.9.0-macos-universal.dmg`, and drag `ModelHub.app` to Applications. The DMG and the app are Developer ID signed and passed Apple notarization, ticket stapling, image integrity, and Gatekeeper checks. A Universal ZIP is also available in the same release.
 
 ### Requirements
 
@@ -126,8 +132,8 @@ Download the notarized [v1.9.0 build 19 release](https://github.com/dw-zhu-si/Mo
 ### Verify the release
 
 ```text
-d5d668c36ecdf01a5d881345bcda03e39bc90a60e76742c7af49b1ebca3a7219  ModelHub-1.9.0-macos-universal.zip
-4b98f39716186e88a66f1867f07f292444c6450ac89214046cfad5786c201813  ModelHub-1.9.0-macos-universal.dmg
+a11699b04203fef08de54d18dbdef866136a8181781ba1507a042713ffc57b12  ModelHub-1.9.0-macos-universal.zip
+a49c4a69f6a2fdd394a4c8ae12fdad3ad4f5e93dd98bec4fbc6c52f39dd66735  ModelHub-1.9.0-macos-universal.dmg
 ```
 
 ```bash

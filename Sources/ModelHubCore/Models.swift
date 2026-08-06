@@ -13,6 +13,18 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
     case groq
     case mistral
     case ollama
+    case openRouter
+    case togetherAI
+    case fireworksAI
+    case perplexity
+    case cohere
+    case siliconFlow
+    case volcengine
+    case baiduQianfan
+    case minimax
+    case apimart
+    case agnes
+    case yunwu
     case openAICompatible
 
     public var id: String { rawValue }
@@ -31,6 +43,18 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .groq: "Groq"
         case .mistral: "Mistral AI"
         case .ollama: "Ollama（本地）"
+        case .openRouter: "OpenRouter"
+        case .togetherAI: "Together AI"
+        case .fireworksAI: "Fireworks AI"
+        case .perplexity: "Perplexity"
+        case .cohere: "Cohere"
+        case .siliconFlow: "SiliconFlow"
+        case .volcengine: "火山引擎 / 豆包"
+        case .baiduQianfan: "百度千帆"
+        case .minimax: "MiniMax"
+        case .apimart: "APIMart"
+        case .agnes: "Agnes AI"
+        case .yunwu: "云雾 API"
         case .openAICompatible: "通用 OpenAI 兼容"
         }
     }
@@ -49,6 +73,18 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .groq: "https://api.groq.com/openai"
         case .mistral: "https://api.mistral.ai"
         case .ollama: "http://127.0.0.1:11434"
+        case .openRouter: "https://openrouter.ai/api/v1"
+        case .togetherAI: "https://api.together.xyz/v1"
+        case .fireworksAI: "https://api.fireworks.ai/inference/v1"
+        case .perplexity: "https://api.perplexity.ai/v1"
+        case .cohere: "https://api.cohere.ai/compatibility/v1"
+        case .siliconFlow: "https://api.siliconflow.cn/v1"
+        case .volcengine: "https://ark.cn-beijing.volces.com/api/v3"
+        case .baiduQianfan: "https://qianfan.baidubce.com/v2"
+        case .minimax: "https://api.minimax.chat/v1"
+        case .apimart: "https://api.apimart.ai"
+        case .agnes: "https://apihub.agnes-ai.com"
+        case .yunwu: "https://yunwu.ai"
         case .openAICompatible: "https://"
         }
     }
@@ -62,6 +98,28 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
 
     public var needsAPIKey: Bool {
         self != .ollama
+    }
+
+    /// 对模型名称做保守的官方归属判断，用于“同模型官方优先”。
+    /// 无法确认时返回 false，避免把兼容平台代理误判为官方供应商。
+    public func isOfficialProvider(for model: String) -> Bool {
+        let name = model.lowercased()
+        switch self {
+        case .openAI: return name.hasPrefix("gpt-") || name.hasPrefix("o1") || name.hasPrefix("o3") || name.hasPrefix("o4")
+        case .anthropic: return name.hasPrefix("claude")
+        case .gemini: return name.hasPrefix("gemini")
+        case .deepSeek: return name.hasPrefix("deepseek")
+        case .qwen: return name.hasPrefix("qwen")
+        case .moonshot: return name.hasPrefix("moonshot") || name.hasPrefix("kimi")
+        case .zhipu: return name.hasPrefix("glm")
+        case .xAI: return name.hasPrefix("grok")
+        case .mistral: return name.hasPrefix("mistral") || name.hasPrefix("codestral")
+        case .cohere: return name.hasPrefix("command") || name.hasPrefix("embed-")
+        case .perplexity: return name.hasPrefix("sonar")
+        case .volcengine: return name.contains("doubao") || name.contains("seed")
+        case .minimax: return name.hasPrefix("minimax")
+        default: return false
+        }
     }
 }
 
@@ -211,6 +269,7 @@ public struct ServerSettings: Codable, Hashable, Sendable {
 public struct AppConfiguration: Codable, Sendable {
     public var providers: [ProviderConfig]
     public var routes: [RouteConfig]
+    public var routing: RoutingRuleSettings
     public var server: ServerSettings
     public var modelHealth: [ModelHealthRecord]
     public var operational: OperationalSettings
@@ -219,6 +278,7 @@ public struct AppConfiguration: Codable, Sendable {
     public init(
         providers: [ProviderConfig] = [],
         routes: [RouteConfig] = [],
+        routing: RoutingRuleSettings = .init(),
         server: ServerSettings = .init(),
         modelHealth: [ModelHealthRecord] = [],
         operational: OperationalSettings = .init(),
@@ -226,6 +286,7 @@ public struct AppConfiguration: Codable, Sendable {
     ) {
         self.providers = providers
         self.routes = routes
+        self.routing = routing
         self.server = server
         self.modelHealth = modelHealth
         self.operational = operational
@@ -233,13 +294,14 @@ public struct AppConfiguration: Codable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case providers, routes, server, modelHealth, operational, usage
+        case providers, routes, routing, server, modelHealth, operational, usage
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         providers = try container.decodeIfPresent([ProviderConfig].self, forKey: .providers) ?? []
         routes = try container.decodeIfPresent([RouteConfig].self, forKey: .routes) ?? []
+        routing = try container.decodeIfPresent(RoutingRuleSettings.self, forKey: .routing) ?? .init()
         server = try container.decodeIfPresent(ServerSettings.self, forKey: .server) ?? .init()
         modelHealth = try container.decodeIfPresent([ModelHealthRecord].self, forKey: .modelHealth) ?? []
         operational = try container.decodeIfPresent(
@@ -253,6 +315,7 @@ public struct AppConfiguration: Codable, Sendable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(providers, forKey: .providers)
         try container.encode(routes, forKey: .routes)
+        try container.encode(routing, forKey: .routing)
         try container.encode(server, forKey: .server)
         try container.encode(modelHealth, forKey: .modelHealth)
         try container.encode(operational, forKey: .operational)

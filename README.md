@@ -49,7 +49,7 @@ ModelHub 本机网关（127.0.0.1:11435）
 
 ### 原生 macOS 体验
 
-应用默认以菜单栏后台模式运行，不显示程序坞图标、不弹出主窗口；支持登录时自动启动和 WidgetKit 桌面小组件。后台读取 Keychain 不要求反复授权，只有用户主动显示、复制或修改密钥时才会触发系统授权交互。
+应用使用原生菜单栏入口并始终不显示程序坞图标。首次安装会显示一次主窗口，便于完成配置或进入无需账号的安全演示；之后默认在菜单栏后台启动。它支持登录时自动启动和 WidgetKit 桌面小组件。后台读取 Keychain 不要求反复授权，只有用户主动显示、复制或修改密钥时才会触发系统授权交互。
 
 ## 功能总览
 
@@ -61,6 +61,7 @@ ModelHub 本机网关（127.0.0.1:11435）
 - 图像、视频、任务、语音、转录、向量和重排：`/v1/images/*`、`/v1/videos/*`、`/v1/tasks/*`、`/v1/audio/*`、`/v1/embeddings`、`/v1/rerank`；
 - 供应商动作协议：`POST /v1/native`，仅允许访问已配置供应商的固定主机；
 - 本机 Agent 管理面：使用独立 Agent Token 的只读 MCP、A2A 和 ACP stdio 入口。
+- MCP 可读取用户主动保存的任务上下文，并调用文字、图像、视频、语音、向量与重排模型；支持一键安装到 Codex、Claude Desktop，或复制手动安装配置。
 
 完整请求/响应合同见 [OpenAPI 规范](openapi/modelhub-openapi.yaml)。
 
@@ -68,6 +69,7 @@ ModelHub 本机网关（127.0.0.1:11435）
 
 - 优先级故障转移、轮询、权重随机；
 - 最低延迟、最高稳定性、最低成本、最大上下文和综合评分；
+- 三个不可删除且互斥的同模型默认规则：价格优先、速度优先、官方优先；
 - 按工具调用、视觉、音频等能力标签筛选目标；
 - 每分钟限流、单目标并发上限、连续失败熔断、冷却、指数退避和最大回退次数；
 - 不会无条件重放一次可能已计费的请求；
@@ -102,6 +104,10 @@ ModelHub 本机网关（127.0.0.1:11435）
 
 “支持供应商”只表示协议和配置入口已实现，不代表用户账户拥有对应权限、余额或地区资格；真实可用性仍以用户自己的 Key 和供应商返回为准。
 
+### 无需账号的安全演示
+
+在全新安装且尚未配置供应商时，可从概览页进入“审核演示模式”。它提供合成的供应商、文字/推理/图片/音乐/视频模型分类、路由、健康状态、用量和请求日志，并能在 API 调试台生成明确标记的本机示例响应。演示模式不读取供应商凭证、不访问任何上游、不产生费用，也不会把演示数据写入用户配置；退出后会恢复进入前的内存状态。
+
 ## 安全与隐私边界
 
 - 服务只绑定 `127.0.0.1:11435`，默认不接受局域网或公网连接；
@@ -117,7 +123,7 @@ ModelHub 本机网关（127.0.0.1:11435）
 
 ### 普通用户：下载已公证 DMG
 
-从 [GitHub Releases](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.0-build19) 下载 `ModelHub-1.9.0-macos-universal.dmg`，打开后把 `ModelHub.app` 拖到“应用程序”文件夹。该 DMG 与其中的 App 均使用 Developer ID 签名，并已通过 Apple 公证、票据装订、镜像完整性和 Gatekeeper 验证。
+从 [GitHub Releases](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.0-build21) 下载 `ModelHub-1.9.0-macos-universal.dmg`，打开后把 `ModelHub.app` 拖到“应用程序”文件夹。该 DMG 与其中的 App 均使用 Developer ID 签名，并已通过 Apple 公证、票据装订、镜像完整性和 Gatekeeper 验证。
 
 也可以下载同一 Release 中的 Universal ZIP，解压后手动移动到“应用程序”。
 
@@ -130,8 +136,8 @@ ModelHub 本机网关（127.0.0.1:11435）
 ### 校验安装包
 
 ```text
-d5d668c36ecdf01a5d881345bcda03e39bc90a60e76742c7af49b1ebca3a7219  ModelHub-1.9.0-macos-universal.zip
-4b98f39716186e88a66f1867f07f292444c6450ac89214046cfad5786c201813  ModelHub-1.9.0-macos-universal.dmg
+a11699b04203fef08de54d18dbdef866136a8181781ba1507a042713ffc57b12  ModelHub-1.9.0-macos-universal.zip
+a49c4a69f6a2fdd394a4c8ae12fdad3ad4f5e93dd98bec4fbc6c52f39dd66735  ModelHub-1.9.0-macos-universal.dmg
 ```
 
 下载 Release 中的 `ModelHub-1.9.0-SHA256.txt` 后，可执行：
