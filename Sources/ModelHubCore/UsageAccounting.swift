@@ -40,12 +40,16 @@ public enum UsageAccounting {
         profile: TargetProfile?
     ) -> Double? {
         guard let profile else { return nil }
-        if tokens.input > 0 && profile.inputCostPerMillionTokens == nil { return nil }
-        if tokens.output > 0 && profile.outputCostPerMillionTokens == nil { return nil }
+        if tokens.input > 0 && profile.inputCostPerMillionTokens == nil {
+            return nil
+        }
+        if tokens.output > 0 && profile.outputCostPerMillionTokens == nil {
+            return nil
+        }
         guard profile.hasKnownPrice else { return nil }
         let input = Double(tokens.input) * (profile.inputCostPerMillionTokens ?? 0) / 1_000_000
         let output = Double(tokens.output) * (profile.outputCostPerMillionTokens ?? 0) / 1_000_000
-        return input + output
+        return input + output + (profile.requestCostUSD ?? 0)
     }
 
     public static func monthKey(for date: Date = .now) -> String {
@@ -90,6 +94,10 @@ public enum UsageAccounting {
             }
             result[index].contextCharactersSaved += max(0, contextCharactersSaved)
             result[index].lastUsedAt = date
+            var samples = result[index].recentLatencyMilliseconds ?? []
+            samples.append(max(0, latencyMilliseconds))
+            if samples.count > 100 { samples.removeFirst(samples.count - 100) }
+            result[index].recentLatencyMilliseconds = samples
         } else {
             result.append(UsageAggregate(
                 month: month,
@@ -105,7 +113,8 @@ public enum UsageAccounting {
                 pricedRequests: estimatedCostUSD == nil ? 0 : 1,
                 estimatedCostUSD: max(0, estimatedCostUSD ?? 0),
                 contextCharactersSaved: max(0, contextCharactersSaved),
-                lastUsedAt: date
+                lastUsedAt: date,
+                recentLatencyMilliseconds: [max(0, latencyMilliseconds)]
             ))
         }
 

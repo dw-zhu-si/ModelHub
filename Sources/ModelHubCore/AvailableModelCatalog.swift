@@ -4,11 +4,21 @@ public struct AvailableModelEntry: Equatable, Sendable {
     public let id: String
     public let owner: String
     public let isRoute: Bool
+    public let providerID: UUID?
+    public let targetModel: String?
 
-    public init(id: String, owner: String, isRoute: Bool) {
+    public init(
+        id: String,
+        owner: String,
+        isRoute: Bool,
+        providerID: UUID? = nil,
+        targetModel: String? = nil
+    ) {
         self.id = id
         self.owner = owner
         self.isRoute = isRoute
+        self.providerID = providerID
+        self.targetModel = targetModel
     }
 }
 
@@ -54,7 +64,9 @@ public enum AvailableModelCatalog {
                     AvailableModelEntry(
                         id: route.alias,
                         owner: "modelhub-route",
-                        isRoute: true
+                        isRoute: true,
+                        providerID: nil,
+                        targetModel: nil
                     )
                 )
             }
@@ -71,7 +83,9 @@ public enum AvailableModelCatalog {
                         AvailableModelEntry(
                             id: qualified,
                             owner: provider.name,
-                            isRoute: false
+                            isRoute: false,
+                            providerID: provider.id,
+                            targetModel: model
                         )
                     )
                 }

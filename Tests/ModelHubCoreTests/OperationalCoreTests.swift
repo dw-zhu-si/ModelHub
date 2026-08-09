@@ -3,6 +3,138 @@ import XCTest
 @testable import ModelHubCore
 
 final class OperationalCoreTests: XCTestCase {
+    func testFixedPerRequestPriceAccountsForMediaWithoutTokenUsage() {
+        let profile = TargetProfile(requestCostUSD: 0.08, pricingSource: "official")
+
+        XCTAssertEqual(
+            UsageAccounting.estimatedCostUSD(tokens: .init(), profile: profile),
+            0.08
+        )
+    }
+
+    func testFixedPerRequestPriceDoesNotHideMissingTokenRate() {
+        let profile = TargetProfile(
+            inputCostPerMillionTokens: 1,
+            requestCostUSD: 0.08,
+            pricingSource: "official"
+        )
+
+        XCTAssertNil(UsageAccounting.estimatedCostUSD(
+            tokens: UsageTokenCounts(input: 100, output: 50),
+            profile: profile
+        ))
+    }
+
+    func testPricingScheduleDefaultsToLocalMidnightAndSupportsConfiguredTime() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(
+            year: 2026, month: 8, day: 8, hour: 10, minute: 15
+        )))
+
+        let defaults = PricingUpdateSettings()
+        let mostRecent = try XCTUnwrap(defaults.mostRecentScheduledDate(
+            before: now,
+            calendar: calendar
+        ))
+        XCTAssertEqual(calendar.component(.hour, from: mostRecent), 0)
+        XCTAssertEqual(calendar.component(.day, from: mostRecent), 8)
+
+        let configured = PricingUpdateSettings(localHour: 6, localMinute: 30)
+        let next = try XCTUnwrap(configured.nextScheduledDate(after: now, calendar: calendar))
+        XCTAssertEqual(calendar.component(.day, from: next), 9)
+        XCTAssertEqual(calendar.component(.hour, from: next), 6)
+        XCTAssertEqual(calendar.component(.minute, from: next), 30)
+
+        let sanitized = PricingUpdateSettings(localHour: 99, localMinute: -3).sanitized
+        XCTAssertEqual(sanitized.localHour, 23)
+        XCTAssertEqual(sanitized.localMinute, 0)
+    }
+
+    func testPricingScheduleDoesNotRunCatchUpOnFirstLaunch() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(
+            year: 2026, month: 8, day: 8, hour: 10, minute: 15
+        )))
+        let beforeMidnight = try XCTUnwrap(calendar.date(from: DateComponents(
+            year: 2026, month: 8, day: 7, hour: 23, minute: 50
+        )))
+        let afterMidnight = try XCTUnwrap(calendar.date(from: DateComponents(
+            year: 2026, month: 8, day: 8, hour: 0, minute: 5
+        )))
+
+        XCTAssertFalse(PricingUpdateSettings().shouldCatchUp(at: now, calendar: calendar))
+        XCTAssertTrue(
+            PricingUpdateSettings(lastAttemptAt: beforeMidnight)
+                .shouldCatchUp(at: now, calendar: calendar)
+        )
+        XCTAssertFalse(
+            PricingUpdateSettings(lastAttemptAt: afterMidnight)
+                .shouldCatchUp(at: now, calendar: calendar)
+        )
+    }
+
+    func testLegacyOperationalSettingsDecodeWithDefaultPricingSchedule() throws {
+        let encoded = try JSONEncoder().encode(OperationalSettings())
+        var root = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        root.removeValue(forKey: "pricingUpdate")
+        let legacy = try JSONSerialization.data(withJSONObject: root)
+        let decoded = try JSONDecoder().decode(OperationalSettings.self, from: legacy)
+        XCTAssertNil(decoded.pricingUpdate)
+        XCTAssertEqual((decoded.pricingUpdate ?? .init()).localHour, 0)
+    }
+
+    func testLegacyOperationalSettingsDecodeWithDefaultDisplayCurrency() throws {
+        let encoded = try JSONEncoder().encode(OperationalSettings())
+        var root = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        root.removeValue(forKey: "currencyDisplay")
+        let legacy = try JSONSerialization.data(withJSONObject: root)
+        let decoded = try JSONDecoder().decode(OperationalSettings.self, from: legacy)
+
+        XCTAssertNil(decoded.currencyDisplay)
+        XCTAssertEqual((decoded.currencyDisplay ?? .init()).currency, .usd)
+    }
+
+    func testCurrencyDisplayConvertsAndFormatsWithoutChangingStoredUSD() throws {
+        let settings = CurrencyDisplaySettings(
+            currency: .cny,
+            unitsPerUSD: ["USD": 1, "CNY": 7.2]
+        )
+        XCTAssertEqual(settings.convertedFromUSD(2), 14.4, accuracy: 0.000_001)
+        XCTAssertTrue(settings.formattedUSD(2).contains("14.4000"))
+    }
+
+    func testParsesOfficialEURReferenceRatesIntoUSDConversions() throws {
+        let xml = Data(#"""
+        <gesmes:Envelope xmlns:gesmes="http://www.gesmes.org/xml/2002-08-01"
+          xmlns="http://www.ecb.int/vocabulary/2002-08-01/eurofxref">
+          <Cube><Cube time="2026-08-08">
+            <Cube currency="USD" rate="1.2000"/>
+            <Cube currency="CNY" rate="8.4000"/>
+            <Cube currency="JPY" rate="180.0000"/>
+          </Cube></Cube>
+        </gesmes:Envelope>
+        """#.utf8)
+        let snapshot = try CurrencyRateClient.parse(xml)
+
+        XCTAssertEqual(snapshot.unitsPerUSD["USD"], 1)
+        XCTAssertEqual(try XCTUnwrap(snapshot.unitsPerUSD["EUR"]), 1 / 1.2, accuracy: 0.000_001)
+        XCTAssertEqual(try XCTUnwrap(snapshot.unitsPerUSD["CNY"]), 7, accuracy: 0.000_001)
+        XCTAssertEqual(try XCTUnwrap(snapshot.unitsPerUSD["JPY"]), 150, accuracy: 0.000_001)
+        XCTAssertEqual(snapshot.effectiveDate, "2026-08-08")
+    }
+
+    func testCurrencyDisplaySanitizesInvalidOrUnsupportedRates() {
+        let settings = CurrencyDisplaySettings(
+            currency: .cny,
+            unitsPerUSD: ["CNY": -.infinity, "FAKE": 99]
+        ).sanitized
+
+        XCTAssertEqual(settings.currency, .usd)
+        XCTAssertEqual(settings.unitsPerUSD, ["USD": 1])
+    }
+
     func testRateLimitConcurrencyCircuitAndCooldown() async {
         let controller = ResilienceController()
         let providerID = UUID()

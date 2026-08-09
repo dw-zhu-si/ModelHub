@@ -3,6 +3,24 @@ import XCTest
 @testable import ModelHubCore
 
 final class ModelTestingTests: XCTestCase {
+    func testModelPriceRefreshProgressIsBoundedAndReportsCompletion() {
+        var progress = ModelPriceRefreshProgress(
+            total: 4,
+            completed: 1
+        )
+        XCTAssertEqual(progress.fractionCompleted, 0.25)
+
+        progress.completed = 4
+        XCTAssertEqual(progress.fractionCompleted, 1)
+        XCTAssertEqual(
+            ModelPriceRefreshProgress(
+                total: 0,
+                completed: 0
+            ).fractionCompleted,
+            0
+        )
+    }
+
     func testManualTestPlanIncludesQuarantinedChatAndNativeModels() {
         let provider = ProviderConfig(
             name: "测试供应商",

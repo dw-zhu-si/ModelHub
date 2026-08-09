@@ -30,7 +30,20 @@ final class ModelHubApplicationDelegate: NSObject, NSApplicationDelegate {
         let defaults = UserDefaults.standard
         let isFirstLaunch = !defaults.bool(forKey: Self.hasCompletedFirstLaunchKey)
         defaults.set(true, forKey: Self.hasCompletedFirstLaunchKey)
-        if isFirstLaunch {
+        #if DEBUG
+        let environment = ProcessInfo.processInfo.environment
+        let visualInspection = environment[
+            "MODELHUB_VISUAL_INSPECTION"
+        ] == "1"
+        if environment["MODELHUB_VISUAL_APPEARANCE"] == "dark" {
+            NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
+        } else if environment["MODELHUB_VISUAL_APPEARANCE"] == "light" {
+            NSApplication.shared.appearance = NSAppearance(named: .aqua)
+        }
+        #else
+        let visualInspection = false
+        #endif
+        if isFirstLaunch || visualInspection {
             DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(600)) {
                 ModelHubWindowController.showMainWindow()
             }
@@ -97,7 +110,25 @@ struct ModelHubApp: App {
     init() {
         let model = AppModel()
         _model = StateObject(wrappedValue: model)
+        #if DEBUG
+        let environment = ProcessInfo.processInfo.environment
+        let visualDemo = environment["MODELHUB_VISUAL_DEMO"] == "1"
+        if visualDemo {
+            // Visual-review fixtures must stay independent from the user's
+            // saved configuration and Keychain. This also makes screenshot
+            // capture deterministic and prevents authorization prompts.
+            model.enterReviewDemoMode()
+        } else {
+            model.bootstrap(initializeSecrets: false)
+        }
+        if let page = environment["MODELHUB_VISUAL_PAGE"],
+           let selection = SidebarItem(rawValue: page)
+        {
+            model.selection = selection
+        }
+        #else
         model.bootstrap(initializeSecrets: false)
+        #endif
     }
 
     var body: some Scene {
@@ -114,7 +145,7 @@ struct ModelHubApp: App {
                 }
                 .frame(minWidth: 980, minHeight: 680)
         }
-        .defaultSize(width: 1_180, height: 760)
+        .defaultSize(width: 1_240, height: 820)
         .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(after: .appInfo) {

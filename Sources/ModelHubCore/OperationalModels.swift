@@ -127,6 +127,7 @@ public struct TargetProfile: Codable, Hashable, Sendable {
     public var contextWindow: Int?
     public var inputCostPerMillionTokens: Double?
     public var outputCostPerMillionTokens: Double?
+    public var requestCostUSD: Double?
     public var capabilities: Set<ModelCapability>
     public var pricingSource: String
     public var pricingUpdatedAt: Date?
@@ -136,6 +137,7 @@ public struct TargetProfile: Codable, Hashable, Sendable {
         contextWindow: Int? = nil,
         inputCostPerMillionTokens: Double? = nil,
         outputCostPerMillionTokens: Double? = nil,
+        requestCostUSD: Double? = nil,
         capabilities: Set<ModelCapability> = [],
         pricingSource: String = "",
         pricingUpdatedAt: Date? = nil,
@@ -144,6 +146,7 @@ public struct TargetProfile: Codable, Hashable, Sendable {
         self.contextWindow = contextWindow
         self.inputCostPerMillionTokens = inputCostPerMillionTokens
         self.outputCostPerMillionTokens = outputCostPerMillionTokens
+        self.requestCostUSD = requestCostUSD
         self.capabilities = capabilities
         self.pricingSource = pricingSource
         self.pricingUpdatedAt = pricingUpdatedAt
@@ -151,7 +154,15 @@ public struct TargetProfile: Codable, Hashable, Sendable {
     }
 
     public var hasKnownPrice: Bool {
-        inputCostPerMillionTokens != nil || outputCostPerMillionTokens != nil
+        inputCostPerMillionTokens != nil
+            || outputCostPerMillionTokens != nil
+            || requestCostUSD != nil
+    }
+
+    public var configuredUnitCostUSD: Double {
+        (inputCostPerMillionTokens ?? 0)
+            + (outputCostPerMillionTokens ?? 0)
+            + (requestCostUSD ?? 0)
     }
 }
 
@@ -238,11 +249,124 @@ public struct AgentProtocolSettings: Codable, Hashable, Sendable {
     }
 }
 
+public struct ResponseCacheSettings: Codable, Hashable, Sendable {
+    public var enabled: Bool
+    public var timeToLiveSeconds: Int
+    public var staleFallbackSeconds: Int
+    public var maximumEntries: Int
+    public var maximumBytes: Int
+
+    public init(
+        enabled: Bool = false,
+        timeToLiveSeconds: Int = 300,
+        staleFallbackSeconds: Int = 3_600,
+        maximumEntries: Int = 128,
+        maximumBytes: Int = 16 * 1_048_576
+    ) {
+        self.enabled = enabled
+        self.timeToLiveSeconds = timeToLiveSeconds
+        self.staleFallbackSeconds = staleFallbackSeconds
+        self.maximumEntries = maximumEntries
+        self.maximumBytes = maximumBytes
+    }
+
+    public var sanitized: ResponseCacheSettings {
+        let ttl = min(max(timeToLiveSeconds, 10), 86_400)
+        return ResponseCacheSettings(
+            enabled: enabled,
+            timeToLiveSeconds: ttl,
+            staleFallbackSeconds: min(max(staleFallbackSeconds, ttl), 604_800),
+            maximumEntries: min(max(maximumEntries, 1), 2_000),
+            maximumBytes: min(max(maximumBytes, 1_048_576), 256 * 1_048_576)
+        )
+    }
+}
+
+public struct PricingUpdateSettings: Codable, Hashable, Sendable {
+    public var enabled: Bool
+    public var localHour: Int
+    public var localMinute: Int
+    public var lastAttemptAt: Date?
+    public var lastSuccessAt: Date?
+    public var lastMessage: String
+
+    public init(
+        enabled: Bool = true,
+        localHour: Int = 0,
+        localMinute: Int = 0,
+        lastAttemptAt: Date? = nil,
+        lastSuccessAt: Date? = nil,
+        lastMessage: String = ""
+    ) {
+        self.enabled = enabled
+        self.localHour = localHour
+        self.localMinute = localMinute
+        self.lastAttemptAt = lastAttemptAt
+        self.lastSuccessAt = lastSuccessAt
+        self.lastMessage = lastMessage
+    }
+
+    public var sanitized: PricingUpdateSettings {
+        PricingUpdateSettings(
+            enabled: enabled,
+            localHour: min(max(localHour, 0), 23),
+            localMinute: min(max(localMinute, 0), 59),
+            lastAttemptAt: lastAttemptAt,
+            lastSuccessAt: lastSuccessAt,
+            lastMessage: String(lastMessage.prefix(1_000))
+        )
+    }
+
+    public func mostRecentScheduledDate(
+        before date: Date,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> Date? {
+        calendar.nextDate(
+            after: date.addingTimeInterval(-86_400),
+            matching: DateComponents(hour: localHour, minute: localMinute),
+            matchingPolicy: .nextTime,
+            repeatedTimePolicy: .first,
+            direction: .forward
+        ).flatMap { $0 <= date ? $0 : nil }
+    }
+
+    /// Returns whether a previously established schedule was missed.
+    ///
+    /// A configuration that has never attempted an update waits for its next
+    /// scheduled time instead of issuing provider requests immediately after
+    /// installation or migration.
+    public func shouldCatchUp(
+        at date: Date,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> Bool {
+        guard let lastAttemptAt,
+              let scheduled = mostRecentScheduledDate(before: date, calendar: calendar)
+        else { return false }
+        return lastAttemptAt < scheduled
+    }
+
+    public func nextScheduledDate(
+        after date: Date,
+        calendar: Calendar = .autoupdatingCurrent
+    ) -> Date? {
+        calendar.nextDate(
+            after: date,
+            matching: DateComponents(hour: localHour, minute: localMinute),
+            matchingPolicy: .nextTime,
+            repeatedTimePolicy: .first,
+            direction: .forward
+        )
+    }
+}
+
 public struct OperationalSettings: Codable, Hashable, Sendable {
     public var resilience: ResilienceSettings
     public var budget: BudgetSettings
     public var contextOptimization: ContextOptimizationSettings
     public var agentProtocols: AgentProtocolSettings
+    public var responseCache: ResponseCacheSettings?
+    public var pricingUpdate: PricingUpdateSettings?
+    public var currencyDisplay: CurrencyDisplaySettings?
     public var analyticsRetentionMonths: Int
 
     public init(
@@ -250,12 +374,18 @@ public struct OperationalSettings: Codable, Hashable, Sendable {
         budget: BudgetSettings = .init(),
         contextOptimization: ContextOptimizationSettings = .init(),
         agentProtocols: AgentProtocolSettings = .init(),
+        responseCache: ResponseCacheSettings? = .init(),
+        pricingUpdate: PricingUpdateSettings? = .init(),
+        currencyDisplay: CurrencyDisplaySettings? = .init(),
         analyticsRetentionMonths: Int = 12
     ) {
         self.resilience = resilience
         self.budget = budget
         self.contextOptimization = contextOptimization
         self.agentProtocols = agentProtocols
+        self.responseCache = responseCache
+        self.pricingUpdate = pricingUpdate
+        self.currencyDisplay = currencyDisplay
         self.analyticsRetentionMonths = analyticsRetentionMonths
     }
 }
@@ -276,6 +406,7 @@ public struct UsageAggregate: Codable, Hashable, Identifiable, Sendable {
     public var estimatedCostUSD: Double
     public var contextCharactersSaved: Int
     public var lastUsedAt: Date
+    public var recentLatencyMilliseconds: [Int]?
 
     public init(
         id: UUID = UUID(),
@@ -292,7 +423,8 @@ public struct UsageAggregate: Codable, Hashable, Identifiable, Sendable {
         pricedRequests: Int = 0,
         estimatedCostUSD: Double = 0,
         contextCharactersSaved: Int = 0,
-        lastUsedAt: Date = .now
+        lastUsedAt: Date = .now,
+        recentLatencyMilliseconds: [Int]? = nil
     ) {
         self.id = id
         self.month = month
@@ -309,10 +441,20 @@ public struct UsageAggregate: Codable, Hashable, Identifiable, Sendable {
         self.estimatedCostUSD = estimatedCostUSD
         self.contextCharactersSaved = contextCharactersSaved
         self.lastUsedAt = lastUsedAt
+        self.recentLatencyMilliseconds = recentLatencyMilliseconds
     }
 
     public var averageLatencyMilliseconds: Int {
         requests > 0 ? totalLatencyMilliseconds / requests : 0
+    }
+
+    public var p90LatencyMilliseconds: Int? {
+        guard let samples = recentLatencyMilliseconds, !samples.isEmpty else {
+            return requests > 0 ? averageLatencyMilliseconds : nil
+        }
+        let ordered = samples.sorted()
+        let index = min(ordered.count - 1, Int(ceil(Double(ordered.count) * 0.9)) - 1)
+        return ordered[max(0, index)]
     }
 }
 

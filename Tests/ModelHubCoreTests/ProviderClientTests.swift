@@ -2,17 +2,17 @@ import XCTest
 @testable import ModelHubCore
 
 final class ProviderClientTests: XCTestCase {
-    func testCompatibleEndpointAvoidsDuplicateV1() throws {
+    func testCompatibleEndpointUsesConfiguredBaseURLWithoutCompletion() throws {
         let provider = ProviderConfig(
             name: "Compatible",
             kind: .unifiedCompatible,
             baseURL: "https://example.com/v1"
         )
         let endpoint = try ProviderClient().endpoint(for: provider, model: "model")
-        XCTAssertEqual(endpoint.absoluteString, "https://example.com/v1/chat/completions")
+        XCTAssertEqual(endpoint.absoluteString, "https://example.com/v1")
     }
 
-    func testVersionedVendorEndpointsAvoidDuplicateVersionSegment() throws {
+    func testVersionedVendorEndpointsUseConfiguredBaseURLWithoutCompletion() throws {
         let volcengine = ProviderConfig(
             name: "火山引擎 / 豆包",
             kind: .volcengine,
@@ -26,11 +26,11 @@ final class ProviderClientTests: XCTestCase {
 
         XCTAssertEqual(
             try ProviderClient().endpoint(for: volcengine, model: "doubao-seed-1-6").absoluteString,
-            "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+            "https://ark.cn-beijing.volces.com/api/v3"
         )
         XCTAssertEqual(
             try ProviderClient().endpoint(for: qianfan, model: "ernie-4.5-turbo").absoluteString,
-            "https://qianfan.baidubce.com/v2/chat/completions"
+            "https://qianfan.baidubce.com/v2"
         )
     }
 
@@ -47,7 +47,7 @@ final class ProviderClientTests: XCTestCase {
             provider: provider,
             apiKey: "key"
         )
-        XCTAssertEqual(request.url?.absoluteString, "https://example.com/v1/responses")
+        XCTAssertEqual(request.url?.absoluteString, "https://example.com/v1")
         let object = try XCTUnwrap(
             JSONSerialization.jsonObject(with: try XCTUnwrap(request.httpBody)) as? [String: Any]
         )
@@ -82,7 +82,7 @@ final class ProviderClientTests: XCTestCase {
         let provider = ProviderConfig(
             name: "Claude",
             kind: .anthropic,
-            baseURL: "https://api.anthropic.com"
+            baseURL: "https://api.anthropic.com/custom/messages"
         )
         let body = Data(#"{"model":"route","messages":[{"role":"system","content":"safe"},{"role":"user","content":[{"type":"text","text":"look"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AA=="}}]},{"role":"assistant","content":"","tool_calls":[{"id":"call_1","type":"function","function":{"name":"weather","arguments":"{\"city\":\"Paris\"}"}}]},{"role":"tool","tool_call_id":"call_1","content":"15 C"}],"tools":[{"type":"function","function":{"name":"weather","description":"Weather","parameters":{"type":"object"}}}],"stream":true}"#.utf8)
 
@@ -92,7 +92,7 @@ final class ProviderClientTests: XCTestCase {
             provider: provider,
             apiKey: "secret"
         )
-        XCTAssertEqual(request.url?.absoluteString, "https://api.anthropic.com/v1/messages")
+        XCTAssertEqual(request.url?.absoluteString, "https://api.anthropic.com/custom/messages")
         XCTAssertEqual(request.value(forHTTPHeaderField: "x-api-key"), "secret")
         let object = try XCTUnwrap(
             JSONSerialization.jsonObject(with: try XCTUnwrap(request.httpBody)) as? [String: Any]
@@ -113,7 +113,7 @@ final class ProviderClientTests: XCTestCase {
         let provider = ProviderConfig(
             name: "Gemini",
             kind: .gemini,
-            baseURL: "https://generativelanguage.googleapis.com"
+            baseURL: "https://generativelanguage.googleapis.com/v1beta/models/gemini-test:streamGenerateContent"
         )
         let body = Data(#"{"model":"route","messages":[{"role":"user","content":[{"type":"text","text":"look"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AA=="}}]},{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"weather","arguments":"{\"city\":\"Paris\"}"}}]},{"role":"tool","tool_call_id":"call_1","content":"{\"temperature\":15}"}],"tools":[{"type":"function","function":{"name":"weather","parameters":{"type":"object"}}}],"stream":true}"#.utf8)
 
@@ -212,7 +212,7 @@ final class ProviderClientTests: XCTestCase {
         XCTAssertTrue(text.hasSuffix("data: [DONE]\n\n"))
     }
 
-    func testAPIMartVideoUsesNativeGenerationEndpoint() throws {
+    func testAPIMartVideoDoesNotCompleteRootBaseURL() throws {
         let provider = ProviderConfig(
             name: "APIMart Seedance",
             kind: .unifiedCompatible,
@@ -227,7 +227,7 @@ final class ProviderClientTests: XCTestCase {
             operation: .videoGeneration
         )
 
-        XCTAssertEqual(request.url?.absoluteString, "https://api.apimart.ai/v1/videos/generations")
+        XCTAssertEqual(request.url?.absoluteString, "https://api.apimart.ai")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
         let json = try XCTUnwrap(
             JSONSerialization.jsonObject(with: try XCTUnwrap(request.httpBody)) as? [String: Any]
@@ -236,7 +236,48 @@ final class ProviderClientTests: XCTestCase {
         XCTAssertEqual(json["prompt"] as? String, "cat")
     }
 
-    func testGenericSeedanceVideoUsesNativeGenerationEndpoint() throws {
+    func testAPIMartFullVideoEndpointIsNotAppendedAgain() throws {
+        let provider = ProviderConfig(
+            name: "seedance",
+            kind: .unifiedCompatible,
+            baseURL: "https://api.apimart.ai/v1/videos/generations"
+        )
+
+        let request = try ProviderClient().nativeRequest(
+            rawBody: Data(#"{"prompt":"cat"}"#.utf8),
+            targetModel: "doubao-seedance-2.0-fast",
+            provider: provider,
+            apiKey: "test-key",
+            operation: .videoGeneration
+        )
+
+        XCTAssertEqual(
+            request.url?.absoluteString,
+            "https://api.apimart.ai/v1/videos/generations"
+        )
+    }
+
+    func testAPIMartVideoTaskDoesNotReplaceConfiguredEndpoint() throws {
+        let provider = ProviderConfig(
+            name: "seedance",
+            kind: .unifiedCompatible,
+            baseURL: "https://api.apimart.ai/v1/videos/generations"
+        )
+
+        let endpoint = try ProviderClient().nativeEndpoint(
+            for: provider,
+            model: "doubao-seedance-2.0-fast",
+            operation: .videoTask,
+            taskID: "task 123"
+        )
+
+        XCTAssertEqual(
+            endpoint.absoluteString,
+            "https://api.apimart.ai/v1/videos/generations"
+        )
+    }
+
+    func testGenericSeedanceVideoDoesNotCompleteRootBaseURL() throws {
         let provider = ProviderConfig(
             name: "seedance",
             kind: .unifiedCompatible,
@@ -253,13 +294,13 @@ final class ProviderClientTests: XCTestCase {
 
         XCTAssertEqual(
             request.url?.absoluteString,
-            "https://gn.euno-ai.com/v1/videos/generations"
+            "https://gn.euno-ai.com"
         )
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
     }
 
-    func testAgnesVideoUsesCreateAndTaskEndpoints() throws {
+    func testAgnesVideoUsesConfiguredBaseURLForCreateAndTask() throws {
         let provider = ProviderConfig(
             name: "Agnes AI",
             kind: .unifiedCompatible,
@@ -279,11 +320,11 @@ final class ProviderClientTests: XCTestCase {
             taskID: "task 123"
         )
 
-        XCTAssertEqual(create.absoluteString, "https://apihub.agnes-ai.com/v1/videos")
-        XCTAssertEqual(task.absoluteString, "https://apihub.agnes-ai.com/v1/videos/task%20123")
+        XCTAssertEqual(create.absoluteString, "https://apihub.agnes-ai.com/v1")
+        XCTAssertEqual(task.absoluteString, "https://apihub.agnes-ai.com/v1")
     }
 
-    func testBailianSpeechEndpointsFollowModelFamily() throws {
+    func testBailianSpeechDoesNotCompleteBaseURLForModelFamily() throws {
         let provider = ProviderConfig(
             name: "阿里云百炼 TTS",
             kind: .qwen,
@@ -304,15 +345,62 @@ final class ProviderClientTests: XCTestCase {
 
         XCTAssertEqual(
             cosyVoice.absoluteString,
-            "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer"
+            "https://dashscope.aliyuncs.com/compatible-mode"
         )
         XCTAssertEqual(
             qwen3.absoluteString,
-            "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+            "https://dashscope.aliyuncs.com/compatible-mode"
         )
     }
 
-    func testGenericNativeEndpointsAvoidDuplicateV1() throws {
+    func testRecordedModelEndpointOverridesBaseURLWithoutRuntimeCompletion() throws {
+        let model = "qwen3-tts-flash"
+        let endpoint = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+        let provider = ProviderConfig(
+            name: "阿里云百炼 TTS",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode",
+            models: [model],
+            endpointURLs: [
+                ProviderEndpointRecord.key(for: .speech, model: model): endpoint
+            ]
+        )
+
+        XCTAssertEqual(
+            try ProviderClient().nativeEndpoint(
+                for: provider,
+                model: model,
+                operation: .speech
+            ).absoluteString,
+            endpoint
+        )
+    }
+
+    func testRecordedVideoTaskTemplateOnlyExpandsTaskID() throws {
+        let model = "doubao-seedance-2.0-fast"
+        let provider = ProviderConfig(
+            name: "seedance",
+            kind: .unifiedCompatible,
+            baseURL: "https://api.apimart.ai/v1/videos/generations",
+            models: [model],
+            endpointURLs: [
+                ProviderEndpointRecord.key(for: .videoTask, model: model):
+                    "https://api.apimart.ai/v1/tasks/{task_id}"
+            ]
+        )
+
+        XCTAssertEqual(
+            try ProviderClient().nativeEndpoint(
+                for: provider,
+                model: model,
+                operation: .videoTask,
+                taskID: "task 123"
+            ).absoluteString,
+            "https://api.apimart.ai/v1/tasks/task%20123"
+        )
+    }
+
+    func testGenericNativeEndpointsUseConfiguredBaseURLWithoutCompletion() throws {
         let provider = ProviderConfig(
             name: "云雾 API",
             kind: .unifiedCompatible,
@@ -322,19 +410,19 @@ final class ProviderClientTests: XCTestCase {
 
         XCTAssertEqual(
             try client.nativeEndpoint(for: provider, model: "gpt-image-1", operation: .imageGeneration).absoluteString,
-            "https://yunwu.ai/v1/images/generations"
+            "https://yunwu.ai/v1"
         )
         XCTAssertEqual(
             try client.nativeEndpoint(for: provider, model: "text-embedding-3-small", operation: .embeddings).absoluteString,
-            "https://yunwu.ai/v1/embeddings"
+            "https://yunwu.ai/v1"
         )
         XCTAssertEqual(
             try client.nativeEndpoint(for: provider, model: "qwen3-rerank", operation: .reranking).absoluteString,
-            "https://yunwu.ai/v1/rerank"
+            "https://yunwu.ai/v1"
         )
         XCTAssertEqual(
             try client.nativeEndpoint(for: provider, model: "tts-1", operation: .speech).absoluteString,
-            "https://yunwu.ai/v1/audio/speech"
+            "https://yunwu.ai/v1"
         )
     }
 
@@ -368,6 +456,50 @@ final class ProviderClientTests: XCTestCase {
 
         XCTAssertTrue(rewritten.contains("\r\nwhisper-1\r\n"))
         XCTAssertFalse(rewritten.contains("\r\nroute-alias\r\n"))
+    }
+
+    func testProviderErrorDiagnosticsExtractsSafeFieldsAndRedactsSecrets() {
+        let response = ProviderResponse(
+            statusCode: 400,
+            headers: ["x-request-id": "req-123"],
+            body: Data(
+                #"{"error":{"code":"InvalidParameter","message":"bad Bearer secret-token and api_key=abcdefghijklmnopqrstuvwxyz"}}"#.utf8
+            )
+        )
+        let summary = ProviderErrorDiagnostics.summary(for: response)
+
+        XCTAssertTrue(summary.contains("HTTP 400"))
+        XCTAssertTrue(summary.contains("InvalidParameter"))
+        XCTAssertTrue(summary.contains("req-123"))
+        XCTAssertTrue(summary.contains("已脱敏"))
+        XCTAssertFalse(summary.contains("secret-token"))
+        XCTAssertFalse(summary.contains("api_key=abcdefghijklmnopqrstuvwxyz"))
+        XCTAssertLessThanOrEqual(summary.count, ProviderErrorDiagnostics.maximumSummaryCharacters)
+    }
+
+    func testBailianWanxUsesOfficialNativeEndpointAndShape() throws {
+        let provider = ProviderConfig(
+            name: "阿里云百炼",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+        let request = try ProviderClient().nativeRequest(
+            rawBody: Data(#"{"prompt":"ModelHub connection test","n":1}"#.utf8),
+            targetModel: "wanx-v1",
+            provider: provider,
+            apiKey: "test-key",
+            operation: .imageGeneration
+        )
+        XCTAssertEqual(
+            request.url?.absoluteString,
+            "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
+        )
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-DashScope-Async"), "enable")
+        let json = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try XCTUnwrap(request.httpBody)) as? [String: Any]
+        )
+        XCTAssertEqual(json["model"] as? String, "wanx-v1")
+        XCTAssertEqual((json["input"] as? [String: Any])?["prompt"] as? String, "ModelHub connection test")
     }
 
     func testBailianSpeechNormalizesCompatibleStyleInput() throws {

@@ -12,13 +12,28 @@ struct ContentView: View {
                 ReviewDemoBanner()
             }
             NavigationSplitView {
-                List(SidebarItem.allCases, selection: $model.selection) { item in
-                    Label(item.title, systemImage: item.icon)
-                        .tag(item)
-                        .accessibilityLabel(item.title)
+                VStack(spacing: 0) {
+                    SidebarBrandHeader()
+
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 18) {
+                            SidebarSection("工作台", items: [.overview, .providers, .routes, .analytics])
+                            SidebarSection("开发与治理", items: [.operations, .governance, .console, .logs])
+                            SidebarSection("系统", items: [.settings])
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.bottom, 12)
+                    }
+
+                    SidebarServiceSummary()
                 }
-                .navigationTitle("模型枢纽")
-                .navigationSplitViewColumnWidth(min: 180, ideal: 210)
+                .background(MHDesign.sidebarSurface)
+                .safeAreaPadding(.top, 28)
+                .navigationSplitViewColumnWidth(
+                    min: 208,
+                    ideal: MHDesign.sidebarWidth,
+                    max: 268
+                )
             } detail: {
                 Group {
                     switch model.selection ?? .overview {
@@ -27,13 +42,16 @@ struct ContentView: View {
                     case .routes: RoutesView()
                     case .analytics: AnalyticsView()
                     case .operations: OperationsView()
+                    case .governance: GovernanceView()
                     case .console: ConsoleView()
                     case .logs: LogsView()
                     case .settings: SettingsView()
                     }
                 }
-                .safeAreaPadding(.top, 24)
+                .safeAreaPadding(.top, 18)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .mhPageBackground()
+                .groupBoxStyle(MHGroupBoxStyle())
                 .toolbar {
                     ToolbarItem {
                         ServerStatusButton()
@@ -51,6 +69,127 @@ struct ContentView: View {
             Button("好") { model.notice = nil }
         } message: {
             Text(model.notice ?? "")
+        }
+        .tint(MHDesign.accent)
+    }
+}
+
+private struct SidebarSection: View {
+    @EnvironmentObject private var model: AppModel
+    let title: String
+    let items: [SidebarItem]
+
+    init(_ title: String, items: [SidebarItem]) {
+        self.title = title
+        self.items = items
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(mhLocalized(title))
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .textCase(.uppercase)
+                .padding(.leading, 9)
+
+            ForEach(items) { item in
+                Button {
+                    model.selection = item
+                } label: {
+                    HStack(spacing: 11) {
+                        Image(systemName: item.icon)
+                            .font(.system(size: 14, weight: .medium))
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(
+                                model.selection == item ? Color.white : Color.primary.opacity(0.78)
+                            )
+                            .frame(width: 20, height: 20)
+                        Text(item.title)
+                            .font(.system(size: 13.5, weight: model.selection == item ? .semibold : .medium))
+                        Spacer(minLength: 0)
+                    }
+                    .foregroundStyle(model.selection == item ? Color.white : Color.primary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .contentShape(Rectangle())
+                    .background {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(model.selection == item ? MHDesign.accent : Color.clear)
+                            .shadow(
+                                color: model.selection == item ? MHDesign.accent.opacity(0.22) : .clear,
+                                radius: 6,
+                                y: 3
+                            )
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(item.title)
+                .accessibilityAddTraits(model.selection == item ? .isSelected : [])
+            }
+        }
+    }
+}
+
+private struct SidebarBrandHeader: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            MHIconTile(
+                symbol: "point.3.connected.trianglepath.dotted",
+                size: 40,
+                emphasized: true
+            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text("ModelHub")
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                Text("本机 AI 路由中枢")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 14)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct SidebarServiceSummary: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(model.isServerRunning ? Color.green : Color.secondary)
+                    .frame(width: 7, height: 7)
+                    .overlay {
+                        if model.isServerRunning {
+                            Circle().stroke(Color.green.opacity(0.24), lineWidth: 5)
+                        }
+                    }
+                Text(model.isServerRunning ? "API 服务运行中" : "API 服务已停止")
+                    .font(.caption.weight(.semibold))
+                Spacer(minLength: 0)
+            }
+            Text("\(model.providers.filter(\.enabled).count) 个供应商 · \(availableModelCount) 个可用模型")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .padding(12)
+        .background(MHDesign.elevatedSurface.opacity(0.72), in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(MHDesign.border)
+        }
+        .padding(12)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var availableModelCount: Int {
+        model.providers.reduce(0) { total, provider in
+            total + model.healthSummary(for: provider).available
         }
     }
 }
@@ -73,7 +212,7 @@ private struct ReviewDemoBanner: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 10)
-        .background(Color.blue.opacity(0.08))
+        .background(MHDesign.accent.opacity(0.09))
         .overlay(alignment: .bottom) { Divider() }
         .accessibilityElement(children: .contain)
     }
@@ -92,7 +231,13 @@ private struct ServerStatusButton: View {
                     .foregroundStyle(model.isServerRunning ? .green : .secondary)
                 Text(model.isServerRunning ? "API 运行中" : "启动 API")
             }
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(MHDesign.elevatedSurface.opacity(0.86), in: Capsule())
+            .overlay { Capsule().stroke(MHDesign.border) }
         }
+        .buttonStyle(.plain)
         .help(model.isServerRunning ? "停止本地 API 服务" : "启动本地 API 服务")
         .accessibilityLabel(model.isServerRunning ? "API 服务正在运行，点击停止" : "API 服务已停止，点击启动")
     }
@@ -102,14 +247,12 @@ struct OverviewView: View {
     @EnvironmentObject private var model: AppModel
 
     private let columns = [
-        GridItem(.flexible(), spacing: 16),
-        GridItem(.flexible(), spacing: 16),
-        GridItem(.flexible(), spacing: 16)
+        GridItem(.adaptive(minimum: 220, maximum: 420), spacing: 16)
     ]
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: MHDesign.sectionSpacing) {
                 PageHeader(
                     title: "概览",
                     subtitle: "把不同模型供应商统一成一个本机兼容接口。"
@@ -142,11 +285,15 @@ struct OverviewView: View {
                     )
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("开始使用")
-                        .font(.title3.weight(.semibold))
+                VStack(alignment: .leading, spacing: 16) {
+                    MHSectionHeading(
+                        title: "三步开始使用",
+                        detail: "凭证留在本机，客户端只需记住一个统一入口。"
+                    )
                     InstructionRow(number: 1, text: "在“模型供应商”中添加 API Key 和模型名称。")
+                    Divider().opacity(0.55)
                     InstructionRow(number: 2, text: "在“模型路由”中创建别名，例如 smart 或 fast。")
+                    Divider().opacity(0.55)
                     InstructionRow(number: 3, text: "把兼容客户端的 Base URL 改为上方带 /v1 的地址。")
                 }
                 .cardStyle()
@@ -162,9 +309,10 @@ struct OverviewView: View {
                     }
                 }
             }
-            .padding(24)
+            .padding(MHDesign.pagePadding)
+            .frame(maxWidth: 1280, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .navigationTitle("概览")
     }
 }
 
@@ -173,10 +321,7 @@ private struct ReviewDemoEntryCard: View {
 
     var body: some View {
         HStack(spacing: 18) {
-            Image(systemName: "play.rectangle.on.rectangle.fill")
-                .font(.system(size: 34))
-                .foregroundStyle(.blue)
-                .accessibilityHidden(true)
+            MHIconTile(symbol: "play.rectangle.on.rectangle.fill", size: 52)
             VStack(alignment: .leading, spacing: 6) {
                 Text("无需账号即可完整体验")
                     .font(.headline)
@@ -189,7 +334,7 @@ private struct ReviewDemoEntryCard: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
         }
-        .cardStyle()
+        .mhSurface(.secondary, padding: 20)
         .accessibilityElement(children: .contain)
     }
 }
@@ -198,40 +343,77 @@ private struct EndpointCard: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill((model.isServerRunning ? Color.green : Color.orange).opacity(0.12))
-                Image(systemName: model.isServerRunning ? "bolt.horizontal.circle.fill" : "pause.circle.fill")
-                    .font(.system(size: 30))
-                    .foregroundStyle(model.isServerRunning ? .green : .orange)
-            }
-            .frame(width: 56, height: 56)
-            .accessibilityHidden(true)
+        HStack(spacing: 22) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(model.isServerRunning ? Color.green : Color.orange)
+                        .frame(width: 8, height: 8)
+                    Text(model.isServerRunning ? "LOCAL GATEWAY ONLINE" : "LOCAL GATEWAY PAUSED")
+                        .font(.caption2.weight(.bold))
+                        .tracking(0.9)
+                        .foregroundStyle(.white.opacity(0.72))
+                }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(model.isServerRunning ? "本地 API 已运行" : "本地 API 已停止")
-                    .font(.headline)
-                Text(model.endpointURL)
-                    .font(.system(.body, design: .monospaced))
-                    .textSelection(.enabled)
+                Text(mhLocalized(model.isServerRunning ? "本地 API 已运行" : "本地 API 已停止"))
+                    .font(.system(size: 23, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+
+                HStack(spacing: 10) {
+                    Image(systemName: "link")
+                        .foregroundStyle(.white.opacity(0.65))
+                    Text(model.endpointURL)
+                        .font(.system(.body, design: .monospaced).weight(.medium))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .textSelection(.enabled)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .background(.white.opacity(0.09), in: RoundedRectangle(cornerRadius: 9))
+
                 if let error = model.serverError {
                     Label(error, systemImage: "exclamationmark.triangle")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.orange)
                 }
             }
 
             Spacer()
 
-            Button("复制地址") { model.copyEndpoint() }
-                .buttonStyle(.bordered)
-            Button(model.isServerRunning ? "停止服务" : "启动服务") {
-                model.isServerRunning ? model.stopServer() : model.startServer()
+            VStack(alignment: .trailing, spacing: 10) {
+                Button {
+                    model.copyEndpoint()
+                } label: {
+                    Label("复制地址", systemImage: "doc.on.doc")
+                        .frame(minWidth: 94)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.white.opacity(0.20))
+
+                Button(mhLocalized(model.isServerRunning ? "停止服务" : "启动服务")) {
+                    model.isServerRunning ? model.stopServer() : model.startServer()
+                }
+                .buttonStyle(.plain)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.72))
             }
-            .buttonStyle(.borderedProminent)
         }
-        .cardStyle()
+        .padding(26)
+        .background {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [MHDesign.heroStart, MHDesign.heroEnd],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(color: MHDesign.accent.opacity(0.16), radius: 22, y: 10)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.white.opacity(0.12))
+        }
     }
 }
 
@@ -244,13 +426,20 @@ private struct MetricCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Label(title, systemImage: icon)
+                Image(systemName: icon)
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(MHDesign.accent)
+                    .frame(width: 32, height: 32)
+                    .background(MHDesign.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 9))
+                Text(mhLocalized(title))
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
                 Spacer()
             }
             Text(value)
                 .font(.system(size: 30, weight: .semibold, design: .rounded))
-                .foregroundStyle(color)
+                .foregroundStyle(.primary)
+                .monospacedDigit()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle()
@@ -265,9 +454,10 @@ private struct InstructionRow: View {
         HStack(spacing: 12) {
             Text("\(number)")
                 .font(.caption.weight(.bold))
-                .frame(width: 24, height: 24)
-                .background(.tint.opacity(0.14), in: Circle())
-            Text(text)
+                .foregroundStyle(MHDesign.accent)
+                .frame(width: 28, height: 28)
+                .background(MHDesign.accent.opacity(0.11), in: Circle())
+            Text(mhLocalized(text))
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
@@ -306,13 +496,13 @@ struct ProvidersView: View {
                     }
                 )
             )
-            .padding(24)
+            .padding(MHDesign.pagePadding)
 
             if model.isTestingModels, let progress = model.modelTestProgress {
                 ModelTestProgressBanner(progress: progress) {
                     model.cancelModelTesting()
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, MHDesign.pagePadding)
                 .padding(.bottom, 16)
             }
 
@@ -334,9 +524,15 @@ struct ProvidersView: View {
                             ProviderRow(
                                 provider: provider,
                                 summary: model.healthSummary(for: provider),
-                                hasAPIKey: model.hasAPIKey(for: provider)
+                                hasAPIKey: model.hasAPIKey(for: provider),
+                                isSelected: selectedProviderID == provider.id,
+                                isHotRefreshing: model.isHotRefreshingProviderCatalog(provider.id)
                             ) {
                                 editingProvider = provider
+                            } refresh: {
+                                Task {
+                                    await model.hotRefreshProviderCatalog(providerID: provider.id)
+                                }
                             } test: {
                                 pendingTestScope = .provider(provider)
                             } delete: {
@@ -346,7 +542,9 @@ struct ProvidersView: View {
                         }
                     }
                     .listStyle(.sidebar)
-                    .frame(minWidth: 300, idealWidth: 340, maxWidth: 420)
+                    .scrollContentBackground(.hidden)
+                    .background(MHDesign.surface.opacity(0.72))
+                    .frame(minWidth: 310, idealWidth: 352, maxWidth: 430)
 
                     if let provider = selectedProvider {
                         ProviderModelBrowser(
@@ -365,9 +563,18 @@ struct ProvidersView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
+                .background(MHDesign.elevatedSurface.opacity(0.96))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(MHDesign.border)
+                        .allowsHitTesting(false)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: .black.opacity(0.065), radius: 18, y: 7)
+                .padding(.horizontal, MHDesign.pagePadding)
+                .padding(.bottom, MHDesign.pagePadding)
             }
         }
-        .navigationTitle("模型供应商")
         .onAppear {
             if selectedProviderID == nil {
                 selectedProviderID = model.providers.first?.id
@@ -413,7 +620,12 @@ struct ProvidersView: View {
             ),
             presenting: pendingTestScope
         ) { scope in
-            Button("测试 \(scope.modelCount(in: model.providers)) 个模型") {
+            Button(
+                L10n.format(
+                    "零费用检测 %lld 个模型",
+                    Int64(scope.modelCount(in: model.providers))
+                )
+            ) {
                 switch scope {
                 case .all:
                     model.startTestingAllModels()
@@ -422,11 +634,36 @@ struct ProvidersView: View {
                 }
                 pendingTestScope = nil
             }
+            if scope.nativeModelCount(in: model.providers) > 0 {
+                Button(
+                    L10n.format(
+                        "包含 %lld 个原生验证（可能计费）",
+                        Int64(scope.nativeModelCount(in: model.providers))
+                    )
+                ) {
+                    switch scope {
+                    case .all:
+                        model.startTestingAllModels(allowNativeProbe: true)
+                    case .provider(let provider):
+                        model.startTestingAllModels(
+                            providerID: provider.id,
+                            allowNativeProbe: true
+                        )
+                    }
+                    pendingTestScope = nil
+                }
+            }
             Button("取消", role: .cancel) {
                 pendingTestScope = nil
             }
         } message: { scope in
-            Text("将检查 \(scope.modelCount(in: model.providers)) 个模型。已隔离的聊天模型也会重新请求上游，成功后自动恢复，失败则继续隔离。图像、视频、语音、转录、向量和重排模型只验证本地原生适配，不自动发起可能计费的生成。最多并发 3 个，单次超时 30 秒。")
+            Text(
+                L10n.format(
+                    "将检查 %lld 个模型。零费用检测不会创建生成任务；选择包含原生验证后，会对 %lld 个生成类模型各发送一次最小真实请求，可能逐模型计费。成功且响应包含有效任务标识后自动解封。最多并发 3 个。",
+                    Int64(scope.modelCount(in: model.providers)),
+                    Int64(scope.nativeModelCount(in: model.providers))
+                )
+            )
         }
     }
 
@@ -459,32 +696,57 @@ private enum ModelTestScope: Identifiable {
             provider.models.count
         }
     }
+
+    func nativeModelCount(in providers: [ProviderConfig]) -> Int {
+        let selected: [ProviderConfig] = switch self {
+        case .all: providers.filter(\.enabled)
+        case .provider(let provider): [provider]
+        }
+        return selected.reduce(0) { count, provider in
+            count + provider.models.filter {
+                guard let nativeProtocol = ModelProbePolicy.nativeProtocol(
+                    provider: provider,
+                    model: $0
+                ) else { return false }
+                return nativeProtocol != .providerNative
+            }.count
+        }
+    }
 }
 
 private struct ProviderRow: View {
     let provider: ProviderConfig
     let summary: ModelHealthSummary
     let hasAPIKey: Bool
+    let isSelected: Bool
+    let isHotRefreshing: Bool
     let edit: () -> Void
+    let refresh: () -> Void
     let test: () -> Void
     let delete: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: provider.kind == .ollama ? "desktopcomputer" : "cloud")
-                .font(.title3)
-                .foregroundStyle(provider.enabled ? Color.accentColor : Color.secondary)
-                .frame(width: 28)
+        HStack(alignment: .top, spacing: 13) {
+            MHIconTile(
+                symbol: provider.kind == .ollama ? "desktopcomputer" : "cloud",
+                size: 38
+            )
+            .opacity(provider.enabled ? 1 : 0.56)
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Text(provider.name)
-                        .font(.headline)
-                    StatusBadge(text: mhLocalized(provider.enabled ? "已启用" : "已停用"), active: provider.enabled)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    StatusBadge(
+                        text: mhLocalized(provider.enabled ? "已启用" : "已停用"),
+                        active: provider.enabled,
+                        onAccent: isSelected
+                    )
                 }
                 Text(mhLocalized(provider.kind.displayName))
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(isSelected ? Color.white.opacity(0.76) : Color.secondary)
                 Label(
                     provider.kind.needsAPIKey
                         ? (hasAPIKey ? "密钥已保存" : "缺少密钥")
@@ -493,24 +755,31 @@ private struct ProviderRow: View {
                         ? "key.fill"
                         : "key.slash"
                 )
-                .font(.caption)
-                .foregroundStyle(hasAPIKey || !provider.kind.needsAPIKey ? .green : .orange)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(
+                    isSelected
+                        ? Color.white.opacity(0.84)
+                        : (hasAPIKey || !provider.kind.needsAPIKey ? Color.green : Color.orange)
+                )
                 HStack(spacing: 6) {
                     AvailabilityCountBadge(
                         value: summary.available,
                         label: "可用",
-                        status: .available
+                        status: .available,
+                        onAccent: isSelected
                     )
                     AvailabilityCountBadge(
                         value: summary.unavailable,
                         label: "已隔离",
-                        status: .unavailable
+                        status: .unavailable,
+                        onAccent: isSelected
                     )
                     if summary.unknown > 0 {
                         AvailabilityCountBadge(
                             value: summary.unknown,
                             label: "待验证 · 已隔离",
-                            status: .unknown
+                            status: .unknown,
+                            onAccent: isSelected
                         )
                     }
                 }
@@ -519,12 +788,14 @@ private struct ProviderRow: View {
                         AvailabilityCountBadge(
                             value: summary.configurationRequired,
                             label: "需密钥",
-                            status: .configurationRequired
+                            status: .configurationRequired,
+                            onAccent: isSelected
                         )
                         AvailabilityCountBadge(
                             value: summary.unsupported,
                             label: "待适配",
-                            status: .unsupported
+                            status: .unsupported,
+                            onAccent: isSelected
                         )
                     }
                 }
@@ -534,6 +805,10 @@ private struct ProviderRow: View {
 
             Menu {
                 Button("编辑供应商与密钥", action: edit)
+                Button(action: refresh) {
+                    Label("热更新模型", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .disabled(isHotRefreshing)
                 Button("测试全部模型", action: test)
                 Button("删除", role: .destructive, action: delete)
             } label: {
@@ -543,7 +818,8 @@ private struct ProviderRow: View {
             .menuStyle(.borderlessButton)
             .accessibilityLabel("\(provider.name) 操作")
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
     }
 }
 
@@ -567,7 +843,11 @@ private struct ModelTestProgressBanner: View {
                 .buttonStyle(.bordered)
         }
         .padding(16)
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
+        .background(MHDesign.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(MHDesign.accent.opacity(0.16))
+        }
         .accessibilityElement(children: .combine)
     }
 }
@@ -632,13 +912,32 @@ private struct ProviderModelBrowser: View {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(provider.name)
-                            .font(.title2.weight(.semibold))
+                            .font(.system(size: 22, weight: .semibold, design: .rounded))
                         Text("\(summary.total) 个模型 · 聊天模型在线检测；生成模型未通过原生验证时保持隔离")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
+                    Button {
+                        Task {
+                            await model.hotRefreshProviderCatalog(providerID: provider.id)
+                        }
+                    } label: {
+                        if model.isHotRefreshingProviderCatalog(provider.id) {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Label("热更新模型", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(
+                        model.isHotRefreshingProviderCatalog(provider.id)
+                            || model.isTestingModels
+                    )
+                    .help("从已保存的精确模型目录增量合并，不重启服务；新增模型保持隔离，现有状态不变。")
                     Button("编辑与密钥", action: edit)
+                        .buttonStyle(.bordered)
                     Button {
                         testAll()
                     } label: {
@@ -691,7 +990,14 @@ private struct ProviderModelBrowser: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding(20)
+            .padding(22)
+            .background {
+                LinearGradient(
+                    colors: [MHDesign.accent.opacity(0.055), .clear],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
 
             Divider()
 
@@ -841,6 +1147,18 @@ private struct ModelHealthRow: View {
                 }
                 HStack(spacing: 8) {
                     Text(isTesting ? "测试中" : status.title)
+                    if status == .available {
+                        Label(
+                            record?.statusCode.map { (200..<300).contains($0) } == true
+                                ? "在线验真" : "本地信任",
+                            systemImage: record?.statusCode.map { (200..<300).contains($0) } == true
+                                ? "checkmark.seal.fill" : "hand.raised.fill"
+                        )
+                        .foregroundStyle(
+                            record?.statusCode.map { (200..<300).contains($0) } == true
+                                ? .green : .orange
+                        )
+                    }
                     if let record {
                         if let latency = record.latencyMilliseconds {
                             Text("\(latency) ms")
@@ -850,17 +1168,25 @@ private struct ModelHealthRow: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+                if status.isQuarantined, let reason = quarantineReason {
+                    Label(reason, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(status == .unavailable ? Color.red : Color.orange)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .help(quarantineHelpText(reason: reason))
+                        .accessibilityLabel(L10n.format("隔离原因：%@", reason))
+                } else if let detail = record?.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .help(detail)
+                }
             }
 
             Spacer()
-
-            if let detail = record?.detail, !detail.isEmpty {
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .frame(maxWidth: 180, alignment: .trailing)
-            }
 
             if status.isQuarantined {
                 Button(action: test) {
@@ -895,7 +1221,54 @@ private struct ModelHealthRow: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(modelName)，\(isTesting ? "测试中" : status.title)")
+        .accessibilityLabel(accessibilityDescription)
+    }
+
+    private var quarantineReason: String? {
+        guard let cause = record?.quarantineCause else {
+            return status.isQuarantined ? mhLocalized("尚未完成真实可用性验证") : nil
+        }
+        switch cause {
+        case .notVerified:
+            return mhLocalized("尚未完成真实可用性验证")
+        case .missingCredential:
+            return mhLocalized("缺少 API Key，未向供应商发起请求")
+        case .invalidCredential:
+            return mhLocalized("API Key 无效或已过期")
+        case .insufficientPermission:
+            return mhLocalized("当前凭证无权访问此模型")
+        case .invalidRequest:
+            return mhLocalized("请求格式、参数或模型能力不匹配")
+        case .endpointOrModelNotFound:
+            return mhLocalized("上游未找到该模型，或精确调用端点不匹配")
+        case .requestTimedOut:
+            return mhLocalized("上游请求超时，请检查网络或稍后重试")
+        case .rateLimitedOrOutOfQuota:
+            return mhLocalized("请求受限或账户配额不足")
+        case .upstreamFailure:
+            return mhLocalized("供应商服务暂时异常")
+        case .networkFailure:
+            return mhLocalized("网络连接失败，未能完成上游验证")
+        case .nativeVerificationRequired:
+            return mhLocalized("原生生成协议尚未完成真实验证")
+        case .unsupportedProtocol:
+            return mhLocalized("当前版本尚未适配此模型协议")
+        case .unknownFailure:
+            return mhLocalized("最近一次验证失败，请查看技术详情并重新测试")
+        }
+    }
+
+    private func quarantineHelpText(reason: String) -> String {
+        guard let detail = record?.detail.trimmingCharacters(in: .whitespacesAndNewlines),
+              !detail.isEmpty
+        else { return reason }
+        return L10n.format("隔离原因：%@\n技术详情：%@", reason, detail)
+    }
+
+    private var accessibilityDescription: String {
+        let summary = "\(modelName)，\(isTesting ? mhLocalized("测试中") : status.title)"
+        guard let quarantineReason else { return summary }
+        return L10n.format("%@，隔离原因：%@", summary, quarantineReason)
     }
 }
 
@@ -903,14 +1276,18 @@ private struct AvailabilityCountBadge: View {
     let value: Int
     let label: String
     let status: ModelAvailability
+    var onAccent = false
 
     var body: some View {
         Label("\(value) \(label)", systemImage: status.icon)
             .font(.caption2)
-            .foregroundStyle(status.color)
+            .foregroundStyle(onAccent ? Color.white : status.color)
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background(status.color.opacity(0.1), in: Capsule())
+            .background(
+                onAccent ? Color.white.opacity(0.14) : status.color.opacity(0.1),
+                in: Capsule()
+            )
             .accessibilityLabel("\(label) \(value) 个")
     }
 }
@@ -983,14 +1360,97 @@ private extension ModelCategory {
     }
 }
 
+private struct ProviderModelImportPreview: Identifiable {
+    let id = UUID()
+    let models: [String]
+    let prices: [String: ProviderModelPrice]
+    let endpointURLs: [String: String]
+    let description: String
+    var preselectAll = true
+}
+
+private struct ProviderEditorBadge: View {
+    let icon: String
+    let text: String
+    let color: Color
+
+    var body: some View {
+        Label(text, systemImage: icon)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(color)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(color.opacity(0.10), in: Capsule())
+            .overlay { Capsule().stroke(color.opacity(0.18)) }
+            .accessibilityElement(children: .combine)
+    }
+}
+
+private struct ProviderEditorSectionHeader: View {
+    let icon: String
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: icon)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(MHDesign.accent)
+                .frame(width: 26, height: 26)
+                .background(MHDesign.accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 7))
+                .accessibilityHidden(true)
+            Text(mhLocalized(title))
+                .font(.headline)
+        }
+        .padding(.top, 4)
+    }
+}
+
+private struct ProviderEditorNotice: View {
+    let message: String
+    let isError: Bool
+
+    var body: some View {
+        Label(
+            message,
+            systemImage: isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"
+        )
+        .font(.caption)
+        .foregroundStyle(isError ? Color.orange : Color.green)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            (isError ? Color.orange : Color.green).opacity(0.08),
+            in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .stroke((isError ? Color.orange : Color.green).opacity(0.18))
+        }
+        .textSelection(.enabled)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 struct ProviderEditorView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var provider: ProviderConfig
     @State private var apiKey: String
     @State private var modelsText: String
+    @State private var endpointsText: String
+    @State private var modelCatalogURL: String
+    @State private var endpointValidationMessage = ""
     @State private var testResult = ""
     @State private var isTesting = false
+    @State private var isFetchingCatalog = false
+    @State private var catalogResultText = ""
+    @State private var catalogResultIsError = false
+    @State private var pricingQuery = ""
+    @State private var pricingResultText = ""
+    @State private var pricingResultIsError = false
+    @State private var isRefreshingProviderPrices = false
+    @State private var pendingImport: ProviderModelImportPreview?
     @State private var showingDeleteKeyConfirmation = false
     @State private var pendingNativeProtocol: ModelNativeProtocol?
 
@@ -998,36 +1458,80 @@ struct ProviderEditorView: View {
         let initial = provider ?? ProviderConfig(
             name: "通用兼容供应商",
             kind: .unifiedCompatible,
-            baseURL: ProviderKind.unifiedCompatible.defaultBaseURL
+            baseURL: ""
         )
         _provider = State(initialValue: initial)
         _apiKey = State(initialValue: "")
         _modelsText = State(initialValue: initial.models.joined(separator: "\n"))
+        _modelCatalogURL = State(initialValue: initial.endpointURLs[
+            ProviderEndpointRecord.key(for: .modelCatalog)
+        ] ?? "")
+        let operationEndpoints = initial.endpointURLs.filter {
+            $0.key != ProviderEndpointRecord.key(for: .modelCatalog)
+        }
+        _endpointsText = State(
+            initialValue: ProviderEndpointEditorCodec.text(from: operationEndpoints)
+        )
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(provider.name.isEmpty ? "添加供应商" : provider.name)
-                    .font(.title2.weight(.semibold))
+            HStack(spacing: 16) {
+                MHIconTile(
+                    symbol: provider.kind == .ollama ? "desktopcomputer" : "server.rack",
+                    size: 50,
+                    emphasized: true
+                )
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(provider.name.isEmpty ? "添加供应商" : provider.name)
+                        .font(.title2.weight(.semibold))
+                    Text("配置精确端点、钥匙串凭证并拉取模型名录")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 7) {
+                        ProviderEditorBadge(
+                            icon: provider.enabled ? "checkmark.circle.fill" : "pause.circle.fill",
+                            text: mhLocalized(provider.enabled ? "已启用" : "已停用"),
+                            color: provider.enabled ? .green : .secondary
+                        )
+                        ProviderEditorBadge(
+                            icon: hasStoredAPIKey ? "key.fill" : "key.slash",
+                            text: credentialStatusText,
+                            color: hasStoredAPIKey ? .green : .orange
+                        )
+                        ProviderEditorBadge(
+                            icon: "square.stack.3d.up.fill",
+                            text: "\(parsedModels.count)",
+                            color: MHDesign.accent
+                        )
+                    }
+                }
                 Spacer()
                 Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
                 Button("保存") {
                     provider.models = parsedModels
+                    guard applyExplicitEndpoints() else { return }
                     if model.saveProvider(provider, apiKey: apiKey) {
                         apiKey = ""
                         dismiss()
                     }
                 }
                 .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .keyboardShortcut(.defaultAction)
                 .disabled(!isValid)
             }
-            .padding(20)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 20)
+            .background(MHDesign.elevatedSurface.opacity(0.94))
 
-            Divider()
+            Rectangle()
+                .fill(MHDesign.border)
+                .frame(height: 1)
 
             Form {
-                Section("基本信息") {
+                Section {
                     TextField("名称", text: $provider.name)
                     Picker("供应商类型", selection: $provider.kind) {
                         ForEach(ProviderKind.allCases) { kind in
@@ -1035,19 +1539,21 @@ struct ProviderEditorView: View {
                         }
                     }
                     .onChange(of: provider.kind) { oldValue, newValue in
-                        if provider.baseURL == oldValue.defaultBaseURL || provider.baseURL.isEmpty {
-                            provider.baseURL = newValue.defaultBaseURL
-                        }
                         if provider.name == oldValue.displayName || provider.name.isEmpty {
                             provider.name = newValue.displayName
                         }
                     }
                     TextField("Base URL", text: $provider.baseURL)
                         .font(.system(.body, design: .monospaced))
+                    Text("Base URL 始终按原样保存；切换供应商类型不会自动填写、补版本或追加路径。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     Toggle("启用此供应商", isOn: $provider.enabled)
+                } header: {
+                    ProviderEditorSectionHeader(icon: "slider.horizontal.3", title: "基本信息")
                 }
 
-                Section("凭证") {
+                Section {
                     HStack {
                         Label(
                             credentialStatusText,
@@ -1076,18 +1582,243 @@ struct ProviderEditorView: View {
                     if provider.kind == .anthropic {
                         TextField("API 版本（可选）", text: $provider.apiVersion)
                     }
+                } header: {
+                    ProviderEditorSectionHeader(icon: "key.fill", title: "凭证")
                 }
 
-                Section("模型名称") {
+                Section {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("模型名录拉取")
+                            .font(.headline)
+                        TextField(
+                            "精确模型名录 URL（不会使用 Base URL）",
+                            text: $modelCatalogURL
+                        )
+                        .font(.system(.body, design: .monospaced))
+                        if modelCatalogURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                           let suggestion = ProviderModelCatalogSuggestions.suggestion(for: provider)
+                        {
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                Button("填入已核验官方模型目录") {
+                                    modelCatalogURL = suggestion.exactURL.absoluteString
+                                    catalogResultText = ""
+                                }
+                                .buttonStyle(.bordered)
+                                Text(
+                                    mhLocalized(suggestion.scope)
+                                        + mhLocalized(
+                                            suggestion.canReturnTokenPrices
+                                                ? "；目录同时提供可自动同步的 Token 价格。"
+                                                : "；该目录未公开可直接同步的 Token 价格。"
+                                        )
+                                )
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else if modelCatalogURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text("该供应商暂无已核验的公开模型目录地址，请从供应商官方文档复制完整 URL；ModelHub 不会猜测路径。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        HStack(spacing: 10) {
+                            Button {
+                                fetchModelCatalog()
+                            } label: {
+                                if isFetchingCatalog {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Label("拉取模型名录", systemImage: "arrow.down.circle")
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(
+                                isFetchingCatalog
+                                    || modelCatalogURL.trimmingCharacters(
+                                        in: .whitespacesAndNewlines
+                                    ).isEmpty
+                            )
+                            Button {
+                                selectCSVFile()
+                            } label: {
+                                Label("导入 CSV", systemImage: "doc.badge.plus")
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(isFetchingCatalog)
+                        }
+                        if !catalogResultText.isEmpty {
+                            ProviderEditorNotice(
+                                message: catalogResultText,
+                                    isError: catalogResultIsError
+                                )
+                            }
+                        Text("必须填写供应商明确提供的完整名录地址；不会使用 Base URL，也不会自动补全 /v1/models 等路径。凭证通过请求头发送，拉取结果需预览确认后才会合并。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("CSV 支持 UTF-8、UTF-16 与 Excel 分隔符声明。必填列：model（也支持 model_id、模型名称）；可选列：endpoint、各协议端点、input_price、output_price、request_price、price_source。Token 价格单位为美元/百万 Token，request_price 为美元/次。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Divider()
+
                     TextEditor(text: $modelsText)
                         .font(.system(.body, design: .monospaced))
                         .frame(minHeight: 100)
+                        .padding(8)
+                        .background(MHDesign.insetSurface, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay { RoundedRectangle(cornerRadius: 10).stroke(MHDesign.border) }
                     Text("共 \(parsedModels.count) 个模型；每行一个名称。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                } header: {
+                    ProviderEditorSectionHeader(icon: "square.stack.3d.up.fill", title: "模型名称")
                 }
 
-                Section("连接测试") {
+                Section {
+                    HStack(spacing: 10) {
+                        TextField("搜索模型", text: $pricingQuery)
+                            .textFieldStyle(.roundedBorder)
+                        Button {
+                            refreshProviderPrices()
+                        } label: {
+                            if isRefreshingProviderPrices {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Label("一键同步官方价格", systemImage: "arrow.triangle.2.circlepath")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(
+                            isRefreshingProviderPrices
+                                || modelCatalogURL.trimmingCharacters(
+                                    in: .whitespacesAndNewlines
+                                ).isEmpty
+                                || parsedModels.isEmpty
+                        )
+                    }
+                    if !pricingResultText.isEmpty {
+                        ProviderEditorNotice(
+                            message: pricingResultText,
+                            isError: pricingResultIsError
+                        )
+                    }
+                    Text("自动价格只读取供应商自身模型目录明确返回的机器可读金额与单位；不会抓取第三方价格、不会猜价。所有模型都可以在下方手动配置。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    LazyVStack(spacing: 8) {
+                        ForEach(filteredPricingModels, id: \.self) { modelName in
+                            ModelPricingEditorRow(
+                                modelName: modelName,
+                                profile: pricingProfileBinding(for: modelName)
+                            )
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    if matchingPricingModelCount > filteredPricingModels.count {
+                        Text(
+                            L10n.format(
+                                "为保持界面流畅，当前显示前 %lld 个匹配模型；输入更精确的名称可配置其余模型。",
+                                Int64(filteredPricingModels.count)
+                            )
+                        )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    ProviderEditorSectionHeader(icon: "dollarsign.circle.fill", title: "费用管理")
+                }
+
+                Section {
+                    TextEditor(text: $endpointsText)
+                        .font(.system(.caption, design: .monospaced))
+                        .frame(minHeight: 100)
+                        .padding(8)
+                        .background(MHDesign.insetSurface, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay { RoundedRectangle(cornerRadius: 10).stroke(MHDesign.border) }
+                    Text("每行格式：端点类型|模型名称 = 完整 URL。运行时只使用这里或 Base URL 保存的完整地址，不补全任何路径；视频任务端点可使用 {task_id}。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if !endpointValidationMessage.isEmpty {
+                        Label(endpointValidationMessage, systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                } header: {
+                    ProviderEditorSectionHeader(icon: "point.3.connected.trianglepath.dotted", title: "显式请求端点")
+                }
+
+                Section {
+                    Toggle(
+                        "维护已核实的隐私元数据",
+                        isOn: Binding(
+                            get: { provider.privacyProfile != nil },
+                            set: { provider.privacyProfile = $0 ? (provider.privacyProfile ?? .init()) : nil }
+                        )
+                    )
+                    if provider.privacyProfile != nil {
+                        Picker(
+                            "数据处理地区",
+                            selection: Binding(
+                                get: { provider.privacyProfile?.dataRegion ?? .unknown },
+                                set: { provider.privacyProfile?.dataRegion = $0 }
+                            )
+                        ) {
+                            ForEach(ProviderDataRegion.allCases) { region in
+                                Text(region.displayName).tag(region)
+                            }
+                        }
+                        Toggle(
+                            "供应商明确承诺零数据留存",
+                            isOn: Binding(
+                                get: { provider.privacyProfile?.zeroDataRetention ?? false },
+                                set: { provider.privacyProfile?.zeroDataRetention = $0 }
+                            )
+                        )
+                        Picker(
+                            "是否可能用于训练",
+                            selection: Binding<Int>(
+                                get: {
+                                    guard let value = provider.privacyProfile?.mayUseForTraining else { return -1 }
+                                    return value ? 1 : 0
+                                },
+                                set: {
+                                    provider.privacyProfile?.mayUseForTraining = $0 < 0 ? nil : $0 == 1
+                                }
+                            )
+                        ) {
+                            Text("未核实").tag(-1)
+                            Text("明确不会").tag(0)
+                            Text("可能会").tag(1)
+                        }
+                        TextField(
+                            "最长留存天数（未知留空）",
+                            value: Binding(
+                                get: { provider.privacyProfile?.retentionDays ?? 0 },
+                                set: { provider.privacyProfile?.retentionDays = $0 >= 0 ? $0 : nil }
+                            ),
+                            format: .number
+                        )
+                        TextField(
+                            "政策来源 URL 或核实说明",
+                            text: Binding(
+                                get: { provider.privacyProfile?.policySource ?? "" },
+                                set: {
+                                    provider.privacyProfile?.policySource = String($0.prefix(1_000))
+                                    provider.privacyProfile?.verifiedAt = .now
+                                }
+                            )
+                        )
+                        Text("未填写或未核实的数据不会被推测；严格工作区策略会按失败关闭排除此供应商。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    ProviderEditorSectionHeader(icon: "hand.raised.fill", title: "供应商隐私与数据边界")
+                }
+
+                Section {
                     HStack {
                         Button {
                             requestProviderTest()
@@ -1105,11 +1836,16 @@ struct ProviderEditorView: View {
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
                     }
+                } header: {
+                    ProviderEditorSectionHeader(icon: "waveform.path.ecg", title: "连接测试")
                 }
             }
             .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .background(Color.clear)
         }
-        .frame(width: 620, height: 680)
+        .mhPageBackground()
+        .frame(width: 880, height: 900)
         .confirmationDialog(
             "删除已保存的 API Key？",
             isPresented: $showingDeleteKeyConfirmation
@@ -1122,6 +1858,17 @@ struct ProviderEditorView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("删除后无法恢复，需要重新输入才能调用此供应商。")
+        }
+        .sheet(item: $pendingImport) { preview in
+            ModelCatalogImportSheet(
+                models: preview.models,
+                description: preview.description,
+                priceCount: preview.prices.count,
+                endpointCount: preview.endpointURLs.count,
+                preselectAll: preview.preselectAll
+            ) { selected in
+                mergeImportedSelection(selected, preview: preview)
+            }
         }
         .confirmationDialog(
             "测试原生协议？",
@@ -1154,10 +1901,296 @@ struct ProviderEditorView: View {
         pendingNativeProtocol = nativeProtocol
     }
 
+    private func fetchModelCatalog() {
+        guard !modelCatalogURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            catalogResultText = "请先填写精确的模型名录 URL。"
+            catalogResultIsError = true
+            return
+        }
+        guard applyExplicitEndpoints() else { return }
+        provider.models = parsedModels
+        Task {
+            isFetchingCatalog = true
+            catalogResultText = "正在请求模型名录…"
+            catalogResultIsError = false
+            defer { isFetchingCatalog = false }
+            do {
+                let result = try await model.fetchProviderModelCatalog(
+                    for: provider,
+                    enteredAPIKey: apiKey
+                )
+                let directlyCallable = ProviderModelCatalogMergePolicy.shouldAutomaticallyMerge(
+                    provider: provider,
+                    endpoint: result.endpoint
+                )
+                catalogResultText = "拉取到 \(result.models.count) 个模型、\(result.prices.count) 个价格 · \(result.durationMilliseconds) ms"
+                catalogResultIsError = false
+                pendingImport = ProviderModelImportPreview(
+                    models: result.models,
+                    prices: result.prices,
+                    endpointURLs: [:],
+                    description: directlyCallable
+                        ? "拉取只代表供应商列出了这些模型，不代表已经通过真实调用验证。"
+                        : "这是可部署参考目录，不代表模型名可直接调用。已默认不勾选；只应导入你已部署并拿到调用代码的项目。",
+                    preselectAll: directlyCallable
+                )
+            } catch {
+                pendingImport = nil
+                catalogResultText = error.localizedDescription
+                catalogResultIsError = true
+            }
+        }
+    }
+
+    private func selectCSVFile() {
+        let panel = NSOpenPanel()
+        panel.title = mhLocalized("导入 CSV")
+        panel.prompt = mhLocalized("导入")
+        panel.message = mhLocalized("请选择一个 CSV 文件。导入前会先显示模型预览。")
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.begin { response in
+            guard response == .OK, let fileURL = panel.url else { return }
+            Task { @MainActor in
+                importCSV(fileURL)
+            }
+        }
+    }
+
+    private func importCSV(_ fileURL: URL) {
+        do {
+            guard fileURL.pathExtension.lowercased() == "csv" else {
+                catalogResultText = "只允许导入 .csv 格式的文件。"
+                catalogResultIsError = true
+                return
+            }
+            let accessing = fileURL.startAccessingSecurityScopedResource()
+            defer { if accessing { fileURL.stopAccessingSecurityScopedResource() } }
+            let data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
+            let imported = try ProviderModelCSVImporter.parse(
+                data,
+                source: fileURL.lastPathComponent
+            )
+            catalogResultText = "CSV 读取到 \(imported.models.count) 个模型、\(imported.prices.count) 个价格、\(imported.endpointURLs.count) 个精确端点；忽略 \(imported.duplicateCount) 个重复项"
+            catalogResultIsError = false
+            pendingImport = ProviderModelImportPreview(
+                models: imported.models,
+                prices: imported.prices,
+                endpointURLs: imported.endpointURLs,
+                description: "CSV 导入只会在确认后合并所选模型、价格和精确端点；不会修改 Base URL，也不会把模型标记为可用。"
+            )
+        } catch {
+            pendingImport = nil
+            catalogResultText = localizedCSVError(error)
+            catalogResultIsError = true
+        }
+    }
+
+    private func localizedCSVError(_ error: Error) -> String {
+        guard let csvError = error as? ProviderModelCSVError else {
+            return error.localizedDescription
+        }
+        switch csvError {
+        case .fileTooLarge(let maximumBytes):
+            return L10n.format(
+                "CSV 文件超过安全上限（%lld MiB）",
+                Int64(maximumBytes / 1_048_576)
+            )
+        case .invalidEncoding:
+            return mhLocalized("CSV 文件必须使用 UTF-8 或 UTF-16 编码")
+        case .malformedCSV(let row):
+            return L10n.format("CSV 第 %lld 行的引号格式不完整", Int64(row))
+        case .missingHeader:
+            return mhLocalized("CSV 文件缺少表头")
+        case .missingModelColumn:
+            return mhLocalized("CSV 表头必须包含 model 或 模型名称 列")
+        case .missingModels:
+            return mhLocalized("CSV 文件中没有可导入的模型")
+        case .tooManyRows(let maximum):
+            return L10n.format("CSV 模型数量超过安全上限（%lld）", Int64(maximum))
+        case .invalidModel(let row):
+            return L10n.format(
+                "CSV 第 %lld 行的模型名称为空、过长或包含控制字符",
+                Int64(row)
+            )
+        case .invalidPrice(let row, let column):
+            return L10n.format(
+                "CSV 第 %lld 行的 %@ 必须是大于或等于 0 的数字",
+                Int64(row),
+                column
+            )
+        case .invalidEndpoint(let row, let column):
+            return L10n.format(
+                "CSV 第 %lld 行的 %@ 必须是无凭证的完整 HTTP(S) URL",
+                Int64(row),
+                column
+            )
+        }
+    }
+
+    private func mergeImportedSelection(
+        _ selected: [String],
+        preview: ProviderModelImportPreview
+    ) -> Bool {
+        let selectedIdentities = Set(selected.map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        })
+        do {
+            var endpointRecords = try ProviderEndpointEditorCodec.records(from: endpointsText)
+            let selectedEndpoints = preview.endpointURLs.filter { key, _ in
+                guard let separator = key.firstIndex(of: "|") else { return false }
+                return selectedIdentities.contains(
+                    String(key[key.index(after: separator)...])
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .lowercased()
+                )
+            }
+            endpointRecords.merge(selectedEndpoints) { _, imported in imported }
+            endpointsText = ProviderEndpointEditorCodec.text(from: endpointRecords)
+
+            let merged = ProviderModelCatalogImporter.merging(
+                existing: parsedModels,
+                imported: selected
+            )
+            modelsText = merged.joined(separator: "\n")
+            provider.models = merged
+            let selectedPrices = preview.prices.filter {
+                selectedIdentities.contains(
+                    $0.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                )
+            }
+            var noRoutes: [RouteConfig] = []
+            let priceCount = ProviderModelPricingUpdater.apply(
+                prices: selectedPrices,
+                to: &provider,
+                routes: &noRoutes
+            )
+            endpointValidationMessage = ""
+            catalogResultText = "已合并 \(selected.count) 个选择项、\(priceCount) 个价格、\(selectedEndpoints.count) 个精确端点，共 \(merged.count) 个模型；保存后生效"
+            catalogResultIsError = false
+            return true
+        } catch {
+            endpointValidationMessage = error.localizedDescription
+            catalogResultText = error.localizedDescription
+            catalogResultIsError = true
+            return false
+        }
+    }
+
+    private var filteredPricingModels: [String] {
+        Array(matchingPricingModels.prefix(250))
+    }
+
+    private var matchingPricingModels: [String] {
+        let query = pricingQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return parsedModels }
+        return parsedModels.filter { $0.localizedCaseInsensitiveContains(query) }
+    }
+
+    private var matchingPricingModelCount: Int {
+        matchingPricingModels.count
+    }
+
+    private func pricingProfileBinding(for modelName: String) -> Binding<TargetProfile> {
+        Binding(
+            get: {
+                provider.modelProfiles?.first(where: {
+                    $0.key.caseInsensitiveCompare(modelName) == .orderedSame
+                })?.value ?? TargetProfile()
+            },
+            set: { proposed in
+                var updated = proposed
+                updated.inputCostPerMillionTokens = validPrice(updated.inputCostPerMillionTokens)
+                updated.outputCostPerMillionTokens = validPrice(updated.outputCostPerMillionTokens)
+                updated.requestCostUSD = validPrice(updated.requestCostUSD)
+                if updated.hasKnownPrice {
+                    if updated.pricingSource.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        updated.pricingSource = "手动配置"
+                    }
+                    updated.pricingUpdatedAt = .now
+                }
+
+                var profiles = provider.modelProfiles ?? [:]
+                if let existing = profiles.keys.first(where: {
+                    $0.caseInsensitiveCompare(modelName) == .orderedSame
+                        && $0 != modelName
+                }) {
+                    profiles.removeValue(forKey: existing)
+                }
+                if updated.hasKnownPrice
+                    || !updated.pricingSource.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                {
+                    profiles[modelName] = updated
+                } else {
+                    profiles.removeValue(forKey: modelName)
+                }
+                provider.modelProfiles = profiles.isEmpty ? nil : profiles
+            }
+        )
+    }
+
+    private func validPrice(_ value: Double?) -> Double? {
+        guard let value, value.isFinite, value >= 0, value <= 1_000_000 else { return nil }
+        return value
+    }
+
+    private func refreshProviderPrices() {
+        guard !modelCatalogURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            pricingResultText = "请先填写供应商自身提供的精确模型名录 URL。"
+            pricingResultIsError = true
+            return
+        }
+        guard applyExplicitEndpoints() else {
+            pricingResultText = endpointValidationMessage
+            pricingResultIsError = true
+            return
+        }
+        provider.models = parsedModels
+        Task {
+            isRefreshingProviderPrices = true
+            pricingResultText = "正在从供应商模型目录读取价格…"
+            pricingResultIsError = false
+            defer { isRefreshingProviderPrices = false }
+            do {
+                let result = try await model.fetchProviderModelCatalog(
+                    for: provider,
+                    enteredAPIKey: apiKey
+                )
+                guard !result.prices.isEmpty else {
+                    pricingResultText = "供应商模型目录没有返回带明确单位的机器可读价格；现有费用未被修改。"
+                    pricingResultIsError = true
+                    return
+                }
+                var noRoutes: [RouteConfig] = []
+                let updated = ProviderModelPricingUpdater.apply(
+                    prices: result.prices,
+                    to: &provider,
+                    routes: &noRoutes
+                )
+                if updated > 0 {
+                    pricingResultText = "已从供应商模型目录同步 \(updated) 个模型的价格；点击保存后生效。"
+                    pricingResultIsError = false
+                } else {
+                    pricingResultText = "供应商返回了价格，但没有与当前模型名称匹配；现有费用未被修改。"
+                    pricingResultIsError = true
+                }
+            } catch {
+                pricingResultText = error.localizedDescription
+                pricingResultIsError = true
+            }
+        }
+    }
+
     private func runProviderTest(allowNativeProbe: Bool = false) {
         Task {
             isTesting = true
             provider.models = parsedModels
+            guard applyExplicitEndpoints() else {
+                isTesting = false
+                return
+            }
             if model.saveProvider(provider, apiKey: apiKey) {
                 apiKey = ""
                 testResult = await model.testProvider(
@@ -1191,6 +2224,270 @@ struct ProviderEditorView: View {
         !provider.name.trimmingCharacters(in: .whitespaces).isEmpty
             && URL(string: provider.baseURL)?.scheme != nil
             && !parsedModels.isEmpty
+            && (try? ProviderEndpointEditorCodec.records(from: endpointsText)) != nil
+    }
+
+    @discardableResult
+    private func applyExplicitEndpoints() -> Bool {
+        do {
+            provider.endpointURLs = try ProviderEndpointEditorCodec.records(from: endpointsText)
+            let catalog = modelCatalogURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !catalog.isEmpty {
+                let catalogRecord = "\(ProviderEndpointKind.modelCatalog.rawValue) = \(catalog)"
+                let validated = try ProviderEndpointEditorCodec.records(from: catalogRecord)
+                provider.endpointURLs.merge(validated) { _, new in new }
+            }
+            endpointValidationMessage = ""
+            return true
+        } catch {
+            endpointValidationMessage = error.localizedDescription
+            return false
+        }
+    }
+}
+
+private struct ModelPricingEditorRow: View {
+    let modelName: String
+    @Binding var profile: TargetProfile
+    @State private var isExpanded = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            VStack(alignment: .leading, spacing: 12) {
+                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+                    GridRow {
+                        Text("输入价格")
+                        TextField(
+                            "美元/百万 Token",
+                            value: $profile.inputCostPerMillionTokens,
+                            format: .number.precision(.fractionLength(0...8))
+                        )
+                        Text("输出价格")
+                        TextField(
+                            "美元/百万 Token",
+                            value: $profile.outputCostPerMillionTokens,
+                            format: .number.precision(.fractionLength(0...8))
+                        )
+                    }
+                    GridRow {
+                        Text("单次调用价格")
+                        TextField(
+                            "美元/次",
+                            value: $profile.requestCostUSD,
+                            format: .number.precision(.fractionLength(0...8))
+                        )
+                        Text("价格来源")
+                        TextField("供应商目录或手动配置", text: $profile.pricingSource)
+                    }
+                }
+                .textFieldStyle(.roundedBorder)
+
+                HStack(spacing: 12) {
+                    if let date = profile.pricingUpdatedAt {
+                        Label(
+                            "更新于 \(date.formatted(date: .abbreviated, time: .shortened))",
+                            systemImage: "clock"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("清除费用", role: .destructive) {
+                        profile.inputCostPerMillionTokens = nil
+                        profile.outputCostPerMillionTokens = nil
+                        profile.requestCostUSD = nil
+                        profile.pricingSource = ""
+                        profile.pricingUpdatedAt = nil
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(!profile.hasKnownPrice && profile.pricingSource.isEmpty)
+                }
+            }
+            .padding(.top, 12)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: profile.hasKnownPrice ? "dollarsign.circle.fill" : "dollarsign.circle")
+                    .foregroundStyle(profile.hasKnownPrice ? Color.green : Color.secondary)
+                Text(modelName)
+                    .font(.system(.body, design: .monospaced, weight: .medium))
+                    .lineLimit(1)
+                    .help(modelName)
+                Spacer()
+                Text(priceSummary)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(profile.hasKnownPrice ? Color.primary : Color.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .padding(13)
+        .background(MHDesign.elevatedSurface, in: RoundedRectangle(cornerRadius: 11))
+        .overlay {
+            RoundedRectangle(cornerRadius: 11)
+                .stroke(Color.primary.opacity(0.07))
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var priceSummary: String {
+        var parts: [String] = []
+        if let input = profile.inputCostPerMillionTokens {
+            parts.append("输入 $\(formatted(input))/M")
+        }
+        if let output = profile.outputCostPerMillionTokens {
+            parts.append("输出 $\(formatted(output))/M")
+        }
+        if let request = profile.requestCostUSD {
+            parts.append("$\(formatted(request))/次")
+        }
+        return parts.isEmpty ? mhLocalized("未配置费用") : parts.joined(separator: " · ")
+    }
+
+    private func formatted(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(0...6)))
+    }
+}
+
+private struct ModelCatalogImportSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let models: [String]
+    let description: String
+    let priceCount: Int
+    let endpointCount: Int
+    let importSelection: ([String]) -> Bool
+    @State private var query = ""
+    @State private var selection: Set<String>
+
+    init(
+        models: [String],
+        description: String,
+        priceCount: Int,
+        endpointCount: Int,
+        preselectAll: Bool = true,
+        importSelection: @escaping ([String]) -> Bool
+    ) {
+        self.models = models
+        self.description = description
+        self.priceCount = priceCount
+        self.endpointCount = endpointCount
+        self.importSelection = importSelection
+        _selection = State(initialValue: preselectAll ? Set(models) : [])
+    }
+
+    private var filteredModels: [String] {
+        guard !query.isEmpty else { return models }
+        return models.filter { $0.localizedCaseInsensitiveContains(query) }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 16) {
+                MHIconTile(
+                    symbol: "square.and.arrow.down.on.square.fill",
+                    size: 48,
+                    emphasized: true
+                )
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("导入模型名录")
+                        .font(.title2.weight(.semibold))
+                    Text(description)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("取消") { dismiss() }
+                Button("合并所选（\(selection.count)）") {
+                    let selected = models.filter(selection.contains)
+                    if importSelection(selected) { dismiss() }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(selection.isEmpty)
+            }
+            .padding(22)
+            .background(MHDesign.elevatedSurface.opacity(0.94))
+
+            Divider()
+
+            HStack(spacing: 10) {
+                CatalogImportMetric(
+                    icon: "square.stack.3d.up.fill",
+                    value: models.count,
+                    label: "模型"
+                )
+                CatalogImportMetric(
+                    icon: "dollarsign.circle.fill",
+                    value: priceCount,
+                    label: "价格"
+                )
+                CatalogImportMetric(
+                    icon: "point.3.connected.trianglepath.dotted",
+                    value: endpointCount,
+                    label: "精确端点"
+                )
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 16)
+
+            HStack(spacing: 12) {
+                TextField("搜索模型", text: $query)
+                    .textFieldStyle(.roundedBorder)
+                Button("全选") { selection.formUnion(filteredModels) }
+                Button("清除") { selection.subtract(filteredModels) }
+                Text("显示 \(filteredModels.count) / \(models.count)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+
+            List(filteredModels, id: \.self) { modelName in
+                Toggle(
+                    isOn: Binding(
+                        get: { selection.contains(modelName) },
+                        set: { selected in
+                            if selected { selection.insert(modelName) }
+                            else { selection.remove(modelName) }
+                        }
+                    )
+                ) {
+                    Text(modelName)
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+                .toggleStyle(.checkbox)
+            }
+            .scrollContentBackground(.hidden)
+        }
+        .mhPageBackground()
+        .frame(width: 700, height: 620)
+    }
+}
+
+private struct CatalogImportMetric: View {
+    let icon: String
+    let value: Int
+    let label: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(MHDesign.accent)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(value.formatted())
+                    .font(.headline.monospacedDigit())
+                Text(mhLocalized(label))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity)
+        .background(MHDesign.elevatedSurface, in: RoundedRectangle(cornerRadius: 11))
+        .overlay {
+            RoundedRectangle(cornerRadius: 11)
+                .stroke(Color.primary.opacity(0.06))
+        }
     }
 }
 
@@ -1215,11 +2512,15 @@ struct RoutesView: View {
                     .disabled(model.providers.isEmpty)
                 )
             )
-            .padding(24)
+            .padding(MHDesign.pagePadding)
 
             DefaultRoutingRulePanel()
-                .padding(.horizontal, 24)
-                .padding(.bottom, 12)
+                .padding(.horizontal, MHDesign.pagePadding)
+                .padding(.bottom, 14)
+
+            RouteDecisionSimulator()
+                .padding(.horizontal, MHDesign.pagePadding)
+                .padding(.bottom, 14)
 
             if model.routes.isEmpty {
                 Spacer()
@@ -1247,9 +2548,12 @@ struct RoutesView: View {
                     }
                 }
                 .listStyle(.inset)
+                .scrollContentBackground(.hidden)
+                .background(Color.clear)
+                .padding(.horizontal, MHDesign.pagePadding - 8)
+                .padding(.bottom, MHDesign.pagePadding)
             }
         }
-        .navigationTitle("模型路由")
         .sheet(isPresented: $showingNewRoute) {
             RouteEditorView(route: nil)
                 .environmentObject(model)
@@ -1274,6 +2578,79 @@ struct RoutesView: View {
     }
 }
 
+private struct RouteDecisionSimulator: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var requestedModel = ""
+    @State private var report: RouteDecisionReport?
+    @State private var isRunning = false
+
+    var body: some View {
+        DisclosureGroup("路由决策模拟器") {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    TextField("输入路由别名或模型名称", text: $requestedModel)
+                        .textFieldStyle(.roundedBorder)
+                    Button("只读模拟") {
+                        Task {
+                            isRunning = true
+                            report = await model.simulateRoute(
+                                requestedModel: requestedModel.trimmingCharacters(
+                                    in: .whitespacesAndNewlines
+                                )
+                            )
+                            isRunning = false
+                        }
+                    }
+                    .disabled(requestedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isRunning)
+                }
+                Text("不会调用供应商、不会产生费用，也不会修改轮询计数、健康状态或用量。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let report {
+                    if report.candidates.isEmpty {
+                        Text("没有匹配的路由目标或直接模型。")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(report.candidates) { candidate in
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: candidate.state == .selected
+                                    ? "checkmark.circle.fill"
+                                    : candidate.state == .eligible ? "circle" : "xmark.circle.fill")
+                                    .foregroundStyle(candidate.state == .selected
+                                        ? .green : candidate.state == .eligible ? .blue : .orange)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("\(candidate.providerName) / \(candidate.target.model)")
+                                        .font(.system(.subheadline, design: .monospaced).weight(.semibold))
+                                    Text(candidate.reasons.joined(separator: "；"))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    if !candidate.endpoint.isEmpty {
+                                        Text(candidate.endpoint)
+                                            .font(.system(.caption2, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                            .textSelection(.enabled)
+                                    }
+                                }
+                                Spacer()
+                                if let rank = candidate.rank { Text("#\(rank)").font(.caption.monospacedDigit()) }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+            }
+            .padding(.top, 10)
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: MHDesign.cardRadius).fill(MHDesign.surface))
+        .overlay {
+            RoundedRectangle(cornerRadius: MHDesign.cardRadius)
+                .stroke(MHDesign.border)
+        }
+    }
+}
+
 private struct DefaultRoutingRulePanel: View {
     @EnvironmentObject private var model: AppModel
 
@@ -1291,51 +2668,62 @@ private struct DefaultRoutingRulePanel: View {
                 StatusBadge(text: "已启用：\(model.configuration.routing.activeRule.displayName)", active: true)
             }
 
-            ForEach(DefaultRoutingRule.allCases) { rule in
-                Button {
-                    model.setDefaultRoutingRule(rule)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: model.configuration.routing.activeRule == rule
-                            ? "checkmark.circle.fill"
-                            : "circle")
-                            .foregroundStyle(model.configuration.routing.activeRule == rule ? Color.accentColor : Color.secondary)
-                            .font(.title3)
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 8) {
-                                Text(rule.displayName)
-                                    .font(.subheadline.weight(.semibold))
-                                Text("内置 · 不可删除")
-                                    .font(.caption2)
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 220), spacing: 10)],
+                spacing: 10
+            ) {
+                ForEach(DefaultRoutingRule.allCases) { rule in
+                    Button {
+                        model.setDefaultRoutingRule(rule)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 9) {
+                            HStack {
+                                Image(systemName: model.configuration.routing.activeRule == rule
+                                    ? "checkmark.circle.fill"
+                                    : "circle")
+                                    .foregroundStyle(model.configuration.routing.activeRule == rule
+                                        ? Color.accentColor : Color.secondary)
+                                    .font(.title3)
+                                Spacer()
+                                Text("内置")
+                                    .font(.caption2.weight(.medium))
                                     .foregroundStyle(.secondary)
                             }
+                            Text(rule.displayName)
+                                .font(.subheadline.weight(.semibold))
                             Text(rule.detail)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.leading)
+                                .lineLimit(3)
+                            Spacer(minLength: 0)
                         }
-                        Spacer()
+                        .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
+                        .padding(12)
+                        .contentShape(Rectangle())
                     }
-                    .padding(10)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(model.configuration.routing.activeRule == rule
+                                ? Color.accentColor.opacity(0.09)
+                                : MHDesign.elevatedSurface)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(model.configuration.routing.activeRule == rule
+                                ? Color.accentColor.opacity(0.42)
+                                : MHDesign.border, lineWidth: 1)
+                    )
                 }
-                .buttonStyle(.plain)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(model.configuration.routing.activeRule == rule
-                            ? Color.accentColor.opacity(0.08)
-                            : Color.clear)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(model.configuration.routing.activeRule == rule
-                            ? Color.accentColor.opacity(0.35)
-                            : Color.secondary.opacity(0.15), lineWidth: 1)
-                )
             }
         }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .controlBackgroundColor)))
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: MHDesign.cardRadius).fill(MHDesign.surface))
+        .overlay {
+            RoundedRectangle(cornerRadius: MHDesign.cardRadius)
+                .stroke(MHDesign.border)
+        }
     }
 }
 
@@ -1348,8 +2736,9 @@ private struct RouteRow: View {
         HStack(spacing: 16) {
             Image(systemName: "arrow.triangle.branch")
                 .font(.title2)
-                .foregroundStyle(route.enabled ? Color.purple : Color.secondary)
-                .frame(width: 36)
+                .foregroundStyle(route.enabled ? MHDesign.accent : Color.secondary)
+                .frame(width: 38, height: 38)
+                .background(MHDesign.accent.opacity(route.enabled ? 0.10 : 0.04), in: RoundedRectangle(cornerRadius: 10))
             VStack(alignment: .leading, spacing: 5) {
                 HStack {
                     Text(route.alias)
@@ -1373,7 +2762,8 @@ private struct RouteRow: View {
             .menuStyle(.borderlessButton)
             .accessibilityLabel("\(route.alias) 路由操作")
         }
-        .padding(.vertical, 8)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 10)
         .contentShape(Rectangle())
         .onTapGesture(perform: edit)
     }
@@ -1390,19 +2780,20 @@ struct RouteEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text("模型路由")
-                    .font(.title2.weight(.semibold))
-                Spacer()
-                Button("取消") { dismiss() }
-                Button("保存") {
-                    model.saveRoute(route)
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!isValid)
-            }
-            .padding(20)
+            MHModalHeader(
+                title: "模型路由",
+                subtitle: "使用稳定别名组织多个上游，并配置故障转移。",
+                icon: "arrow.triangle.branch",
+                trailing: AnyView(HStack {
+                    Button("取消") { dismiss() }
+                    Button("保存") {
+                        model.saveRoute(route)
+                        dismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!isValid)
+                })
+            )
             Divider()
 
             Form {
@@ -1415,6 +2806,85 @@ struct RouteEditorView: View {
                         }
                     }
                     Toggle("启用此路由", isOn: $route.enabled)
+                }
+
+                Section("自适应约束") {
+                    Toggle(
+                        "启用价格、延迟、上下文与官方约束",
+                        isOn: Binding(
+                            get: { route.constraints != nil },
+                            set: { route.constraints = $0 ? (route.constraints ?? RouteConstraints()) : nil }
+                        )
+                    )
+                    if route.constraints != nil {
+                        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                            GridRow {
+                                Text("最高综合 $/百万 Token")
+                                TextField(
+                                    "不限",
+                                    value: Binding(
+                                        get: { route.constraints?.maximumCombinedCostPerMillionTokens ?? 0 },
+                                        set: { route.constraints?.maximumCombinedCostPerMillionTokens = $0 > 0 ? $0 : nil }
+                                    ),
+                                    format: .number
+                                )
+                                Text("最高 P90 延迟 ms")
+                                TextField(
+                                    "不限",
+                                    value: Binding(
+                                        get: { route.constraints?.maximumP90LatencyMilliseconds ?? 0 },
+                                        set: { route.constraints?.maximumP90LatencyMilliseconds = $0 > 0 ? $0 : nil }
+                                    ),
+                                    format: .number
+                                )
+                            }
+                            GridRow {
+                                Text("最小上下文窗口")
+                                TextField(
+                                    "不限",
+                                    value: Binding(
+                                        get: { route.constraints?.minimumContextWindow ?? 0 },
+                                        set: { route.constraints?.minimumContextWindow = $0 > 0 ? $0 : nil }
+                                    ),
+                                    format: .number
+                                )
+                                Toggle(
+                                    "必须有已知价格",
+                                    isOn: Binding(
+                                        get: { route.constraints?.requireKnownPrice ?? false },
+                                        set: { route.constraints?.requireKnownPrice = $0 }
+                                    )
+                                )
+                            }
+                        }
+                        Toggle(
+                            "仅允许模型官方供应商",
+                            isOn: Binding(
+                                get: { route.constraints?.requireOfficialProvider ?? false },
+                                set: { route.constraints?.requireOfficialProvider = $0 }
+                            )
+                        )
+                        Text("需要的模型能力")
+                            .font(.caption.weight(.semibold))
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3)) {
+                            ForEach(ModelCapability.allCases) { capability in
+                                Toggle(
+                                    capability.displayName,
+                                    isOn: Binding(
+                                        get: { route.constraints?.requiredCapabilities.contains(capability) == true },
+                                        set: {
+                                            if $0 { route.constraints?.requiredCapabilities.insert(capability) }
+                                            else { route.constraints?.requiredCapabilities.remove(capability) }
+                                        }
+                                    )
+                                )
+                                .toggleStyle(.checkbox)
+                            }
+                        }
+                        Text("约束缺少可核实数据时采用失败关闭：目标不会被调用。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Section {
@@ -1500,9 +2970,21 @@ struct RouteEditorView: View {
                                         )
                                     }
                                     GridRow {
+                                        Text("固定 $/次")
+                                        TextField(
+                                            "未知",
+                                            value: Binding(
+                                                get: { target.profile?.requestCostUSD ?? 0 },
+                                                set: {
+                                                    target.profile?.requestCostUSD = $0 >= 0 ? $0 : nil
+                                                    target.profile?.pricingUpdatedAt = .now
+                                                }
+                                            ),
+                                            format: .number
+                                        )
                                         Text("价格来源")
                                         TextField(
-                                            "例如：供应商定价页 / 手工",
+                                            "供应商目录 / 手工",
                                             text: Binding(
                                                 get: { target.profile?.pricingSource ?? "" },
                                                 set: {
@@ -1511,7 +2993,6 @@ struct RouteEditorView: View {
                                                 }
                                             )
                                         )
-                                        .gridCellColumns(3)
                                     }
                                 }
                                 Text("能力标签")
@@ -1559,7 +3040,9 @@ struct RouteEditorView: View {
                 }
             }
             .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
         }
+        .mhPageBackground()
         .frame(width: 780, height: 820)
     }
 
@@ -1587,10 +3070,10 @@ struct ConsoleView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 22) {
             PageHeader(title: "API 调试", subtitle: "从应用内部调用同一个本地 HTTP 接口，验证完整路由链路。")
 
-            HStack {
+            HStack(spacing: 14) {
                 Picker("模型", selection: $selectedModel) {
                     Text("请选择").tag("")
                     ForEach(availableModels, id: \.self) { model in
@@ -1610,14 +3093,18 @@ struct ConsoleView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
+                .controlSize(.large)
                 .disabled(selectedModel.isEmpty || prompt.isEmpty || model.consoleIsRunning)
             }
+            .mhSurface(.secondary, padding: 16)
 
             GroupBox("用户消息") {
                 TextEditor(text: $prompt)
                     .font(.body)
                     .frame(minHeight: 110)
                     .padding(8)
+                    .background(MHDesign.insetSurface, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay { RoundedRectangle(cornerRadius: 10).stroke(MHDesign.border) }
             }
 
             GroupBox("响应") {
@@ -1632,8 +3119,7 @@ struct ConsoleView: View {
                 .frame(maxHeight: .infinity)
             }
         }
-        .padding(24)
-        .navigationTitle("API 调试")
+        .padding(MHDesign.pagePadding)
         .onAppear {
             if selectedModel.isEmpty { selectedModel = availableModels.first ?? "" }
         }
@@ -1656,7 +3142,7 @@ struct LogsView: View {
                         .disabled(model.logs.isEmpty)
                 )
             )
-            .padding(24)
+            .padding(MHDesign.pagePadding)
 
             if model.logs.isEmpty {
                 Spacer()
@@ -1695,9 +3181,17 @@ struct LogsView: View {
                         Text(entry.detail)
                     }
                 }
+                .background(MHDesign.elevatedSurface)
+                .clipShape(RoundedRectangle(cornerRadius: MHDesign.cardRadius))
+                .overlay {
+                    RoundedRectangle(cornerRadius: MHDesign.cardRadius)
+                        .stroke(MHDesign.border)
+                        .allowsHitTesting(false)
+                }
+                .padding(.horizontal, MHDesign.pagePadding)
+                .padding(.bottom, MHDesign.pagePadding)
             }
         }
-        .navigationTitle("请求日志")
     }
 }
 
@@ -1715,23 +3209,111 @@ struct AnalyticsView: View {
         VStack(spacing: 0) {
             PageHeader(
                 title: "用量分析",
-                subtitle: "按模型与供应商聚合成功率、延迟、Token 和已知价格估算；不保存提示词或响应正文。"
-            )
-            .padding(24)
+                subtitle: "按模型与供应商聚合成功率、延迟、Token 和已知价格估算；不保存提示词或响应正文。",
+                trailing: AnyView(
+                    HStack(spacing: 10) {
+                        Text("展示币种")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Picker(
+                            "展示币种",
+                            selection: Binding(
+                                get: { model.currencyDisplaySettings.currency },
+                                set: { model.selectDisplayCurrency($0) }
+                            )
+                        ) {
+                            ForEach(DisplayCurrency.allCases) { currency in
+                                Text(mhLocalized(currency.displayName)).tag(currency)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .frame(width: 138)
+                        .disabled(model.isRefreshingCurrencyRates)
 
-            HStack(spacing: 16) {
+                        Button {
+                            model.refreshCurrencyRatesNow()
+                        } label: {
+                            if model.isRefreshingCurrencyRates {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                        }
+                        .help("刷新官方参考汇率")
+                        .accessibilityLabel("刷新官方参考汇率")
+                        .disabled(
+                            model.isRefreshingCurrencyRates
+                                || model.currencyDisplaySettings.currency == .usd
+                        )
+
+                        Button {
+                            model.refreshModelPricesNow()
+                        } label: {
+                            HStack(spacing: 7) {
+                                if model.isRefreshingModelPrices {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                }
+                                Text("一键同步官方价格")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .disabled(model.isRefreshingModelPrices || model.providers.isEmpty)
+                    }
+                )
+            )
+            .padding(MHDesign.pagePadding)
+
+            if let progress = model.modelPriceRefreshProgress {
+                ModelPriceRefreshBanner(progress: progress)
+                    .padding(.horizontal, MHDesign.pagePadding)
+                    .padding(.bottom, 16)
+            } else if let message = model.configuration.operational.pricingUpdate?.lastMessage,
+                      !message.isEmpty
+            {
+                Label(message, systemImage: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, MHDesign.pagePadding)
+                    .padding(.bottom, 12)
+                    .accessibilityElement(children: .combine)
+            }
+
+            Label(model.currencyRateStatusText, systemImage: "coloncurrencysign.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, MHDesign.pagePadding)
+                .padding(.bottom, 12)
+                .accessibilityElement(children: .combine)
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 220), spacing: 16)],
+                spacing: 16
+            ) {
                 MetricCard(title: "本月请求", value: "\(rows.reduce(0) { $0 + $1.requests })", icon: "arrow.up.arrow.down", color: .blue)
                 MetricCard(title: "Token", value: "\(totalTokens)", icon: "number", color: .purple)
-                MetricCard(title: "已知价格估算", value: String(format: "$%.4f", totalCost), icon: "dollarsign.circle", color: .green)
+                MetricCard(
+                    title: "已知价格估算（\(model.currencyDisplaySettings.currency.rawValue)）",
+                    value: model.formattedDisplayCost(totalCost),
+                    icon: "coloncurrencysign.circle",
+                    color: .green
+                )
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, MHDesign.pagePadding)
             .padding(.bottom, 16)
 
             if let warning = model.budgetStatusText {
                 Label(warning, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, MHDesign.pagePadding)
                     .padding(.bottom, 12)
             }
 
@@ -1750,12 +3332,51 @@ struct AnalyticsView: View {
                     TableColumn("平均耗时") { Text("\($0.averageLatencyMilliseconds) ms") }.width(90)
                     TableColumn("Token") { Text("\($0.inputTokens + $0.outputTokens)") }.width(80)
                     TableColumn("估算费用") { row in
-                        Text(row.pricedRequests > 0 ? String(format: "$%.4f", row.estimatedCostUSD) : "未知")
+                        Text(
+                            row.pricedRequests > 0
+                                ? model.formattedDisplayCost(row.estimatedCostUSD)
+                                : "未知"
+                        )
                     }.width(90)
                 }
+                .background(MHDesign.elevatedSurface)
+                .clipShape(RoundedRectangle(cornerRadius: MHDesign.cardRadius))
+                .overlay {
+                    RoundedRectangle(cornerRadius: MHDesign.cardRadius)
+                        .stroke(MHDesign.border)
+                        .allowsHitTesting(false)
+                }
+                .padding(.horizontal, MHDesign.pagePadding)
+                .padding(.bottom, MHDesign.pagePadding)
             }
         }
-        .navigationTitle("用量分析")
+    }
+}
+
+private struct ModelPriceRefreshBanner: View {
+    let progress: ModelPriceRefreshProgress
+
+    var body: some View {
+        HStack(spacing: 16) {
+            ProgressView(value: progress.fractionCompleted)
+                .frame(maxWidth: 240)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("正在逐个检查已启用供应商…")
+                    .font(.headline)
+                Text("\(progress.completed) / \(progress.total)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            Spacer()
+        }
+        .padding(16)
+        .background(MHDesign.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(MHDesign.accent.opacity(0.16))
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -1768,7 +3389,14 @@ struct OperationsView: View {
     @State private var pendingMCPInstall: MCPInstallDestination?
 
     var body: some View {
-        Form {
+        VStack(spacing: 0) {
+            PageHeader(
+                title: "路由与协议",
+                subtitle: "集中配置韧性、预算、上下文优化与本机 Agent 协议。"
+            )
+            .padding(MHDesign.pagePadding)
+
+            Form {
             Section("韧性控制") {
                 Stepper("每分钟请求上限：\(settings.resilience.requestsPerMinute)", value: $settings.resilience.requestsPerMinute, in: 10...10_000, step: 10)
                 Stepper("单目标并发上限：\(settings.resilience.maxConcurrentRequestsPerTarget)", value: $settings.resilience.maxConcurrentRequestsPerTarget, in: 1...64)
@@ -1789,6 +3417,124 @@ struct OperationsView: View {
                 Stepper("启用整理的最小字符数：\(settings.contextOptimization.minimumCharacters)", value: $settings.contextOptimization.minimumCharacters, in: 0...100_000, step: 500)
                 Text("保守整理默认关闭；只移除行尾空白和多余空行，跳过代码块、结构化多模态内容与工具参数。")
                     .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("模型价格自动更新") {
+                Toggle(
+                    "每天自动读取模型价格",
+                    isOn: Binding(
+                        get: { settings.pricingUpdate?.enabled ?? true },
+                        set: {
+                            var pricing = settings.pricingUpdate ?? PricingUpdateSettings()
+                            pricing.enabled = $0
+                            settings.pricingUpdate = pricing
+                        }
+                    )
+                )
+                if settings.pricingUpdate?.enabled ?? true {
+                    HStack {
+                        Picker(
+                            "本机时间",
+                            selection: Binding(
+                                get: { settings.pricingUpdate?.localHour ?? 0 },
+                                set: {
+                                    var pricing = settings.pricingUpdate ?? PricingUpdateSettings()
+                                    pricing.localHour = $0
+                                    settings.pricingUpdate = pricing
+                                }
+                            )
+                        ) {
+                            ForEach(0..<24, id: \.self) { hour in
+                                Text(String(format: "%02d 时", hour)).tag(hour)
+                            }
+                        }
+                        .frame(maxWidth: 180)
+                        Picker(
+                            "分钟",
+                            selection: Binding(
+                                get: { settings.pricingUpdate?.localMinute ?? 0 },
+                                set: {
+                                    var pricing = settings.pricingUpdate ?? PricingUpdateSettings()
+                                    pricing.localMinute = $0
+                                    settings.pricingUpdate = pricing
+                                }
+                            )
+                        ) {
+                            ForEach(0..<60, id: \.self) { minute in
+                                Text(String(format: "%02d 分", minute)).tag(minute)
+                            }
+                        }
+                        .frame(maxWidth: 180)
+                        Spacer()
+                    }
+                }
+                HStack {
+                    Button("立即更新模型价格") { model.refreshModelPricesNow() }
+                        .disabled(model.isRefreshingModelPrices)
+                    if model.isRefreshingModelPrices {
+                        ProgressView().controlSize(.small)
+                        Text("正在逐个检查已启用供应商…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if let message = model.configuration.operational.pricingUpdate?.lastMessage,
+                   !message.isEmpty
+                {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+                Text("默认每天本机时间 00:00 更新。只读取供应商自身已配置或已核验的官方模型目录，不修改 Base URL、不合并新模型、不调用生成接口；仅当目录明确提供 Token 或单次调用价格及单位时更新，其他供应商保留手动价格。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("本机内存缓存与离线回退") {
+                Toggle(
+                    "缓存完全相同的非流式文字请求",
+                    isOn: Binding(
+                        get: { settings.responseCache?.enabled ?? false },
+                        set: {
+                            var cache = settings.responseCache ?? ResponseCacheSettings()
+                            cache.enabled = $0
+                            settings.responseCache = cache
+                        }
+                    )
+                )
+                if settings.responseCache?.enabled == true {
+                    Stepper(
+                        "新鲜缓存：\(settings.responseCache?.timeToLiveSeconds ?? 300) 秒",
+                        value: Binding(
+                            get: { settings.responseCache?.timeToLiveSeconds ?? 300 },
+                            set: { settings.responseCache?.timeToLiveSeconds = $0 }
+                        ),
+                        in: 10...86_400,
+                        step: 10
+                    )
+                    Stepper(
+                        "故障回退最长：\(settings.responseCache?.staleFallbackSeconds ?? 3_600) 秒",
+                        value: Binding(
+                            get: { settings.responseCache?.staleFallbackSeconds ?? 3_600 },
+                            set: { settings.responseCache?.staleFallbackSeconds = $0 }
+                        ),
+                        in: 10...604_800,
+                        step: 60
+                    )
+                    Stepper(
+                        "最多条目：\(settings.responseCache?.maximumEntries ?? 128)",
+                        value: Binding(
+                            get: { settings.responseCache?.maximumEntries ?? 128 },
+                            set: { settings.responseCache?.maximumEntries = $0 }
+                        ),
+                        in: 1...2_000
+                    )
+                }
+                Button("立即清空内存缓存") { model.clearResponseCache() }
+                Text("默认关闭。仅缓存 /v1/chat/completions 与 /v1/responses 的非流式成功响应；键只保存 SHA-256 摘要，正文只驻留内存、不写磁盘，并按虚拟密钥隔离。上游 5xx 时可返回仍在回退时限内的旧响应，响应头会标记 X-ModelHub-Cache: STALE。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("本机 Agent 协议") {
@@ -1857,9 +3603,13 @@ struct OperationsView: View {
                 Button("保存路由与协议设置") { save() }
                     .buttonStyle(.borderedProminent)
             }
+            }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .background(Color.clear)
+            .frame(maxWidth: 1000)
+            .frame(maxWidth: .infinity)
         }
-        .formStyle(.grouped)
-        .navigationTitle("路由与协议")
         .confirmationDialog(
             "安装 ModelHub MCP？",
             isPresented: Binding(
@@ -1914,6 +3664,330 @@ private enum MCPInstallDestination: String, Identifiable {
     var title: String { self == .codex ? "Codex" : "Claude" }
 }
 
+struct GovernanceView: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var editingWorkspace: WorkspaceConfig?
+    @State private var showingWorkspaceEditor = false
+    @State private var showingKeyEditor = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                PageHeader(
+                    title: "访问与安全",
+                    subtitle: "用工作区、虚拟密钥、预算与隐私策略隔离不同客户端；原始虚拟令牌只显示一次。",
+                    trailing: AnyView(HStack {
+                        Button("新建工作区") { showingWorkspaceEditor = true }
+                        Button("签发虚拟密钥") { showingKeyEditor = true }
+                            .buttonStyle(.borderedProminent)
+                    })
+                )
+
+                if let token = model.lastIssuedVirtualKeyToken {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("请立即保存新虚拟密钥", systemImage: "key.fill")
+                            .font(.headline)
+                            .foregroundStyle(.orange)
+                        Text(token)
+                            .font(.system(.body, design: .monospaced))
+                            .textSelection(.enabled)
+                        Text("ModelHub 只保存 SHA-256 摘要；关闭此提示后无法再次显示原始令牌。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        HStack {
+                            Button("复制") {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(token, forType: .string)
+                            }
+                            Button("我已保存") { model.clearIssuedVirtualKeyToken() }
+                        }
+                    }
+                    .cardStyle()
+                }
+
+                GroupBox("工作区策略") {
+                    if model.configuration.workspaces.isEmpty {
+                        Text("尚无工作区。主访问令牌仍拥有本机全部权限。")
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(model.configuration.workspaces) { workspace in
+                                Button {
+                                    editingWorkspace = workspace
+                                } label: {
+                                    HStack {
+                                        Image(systemName: workspace.enabled ? "folder.badge.gearshape" : "folder")
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(workspace.name).font(.headline)
+                                            Text(workspaceSummary(workspace))
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Text(workspace.enabled ? "已启用" : "已停用")
+                                            .foregroundStyle(workspace.enabled ? .green : .secondary)
+                                    }
+                                    .padding(.vertical, 8)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                Divider()
+                            }
+                        }
+                    }
+                }
+
+                GroupBox("虚拟密钥") {
+                    if model.configuration.virtualKeys.isEmpty {
+                        Text("尚未签发虚拟密钥。可为 Codex、Claude、IDE 或项目分别设置模型范围、RPM、到期时间和预算。")
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(model.configuration.virtualKeys) { key in
+                                HStack {
+                                    Image(systemName: key.enabled ? "key.fill" : "key.slash")
+                                        .foregroundStyle(key.enabled ? .green : .secondary)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(key.name).font(.headline)
+                                        Text(keySummary(key))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    if key.enabled {
+                                        Button("撤销", role: .destructive) { model.revokeVirtualKey(key) }
+                                    } else {
+                                        Text("已撤销").foregroundStyle(.secondary)
+                                    }
+                                }
+                                .padding(.vertical, 8)
+                                Divider()
+                            }
+                        }
+                    }
+                }
+
+                GroupBox("安全审计（不含提示词、响应和密钥）") {
+                    if model.configuration.securityAudit.isEmpty {
+                        Text("暂无安全事件。")
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(model.configuration.securityAudit.prefix(100))) { event in
+                                HStack(alignment: .top) {
+                                    Text(event.timestamp, style: .relative)
+                                        .frame(width: 90, alignment: .leading)
+                                    Text(event.action.rawValue)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .frame(width: 140, alignment: .leading)
+                                    Text(event.detail)
+                                        .font(.caption)
+                                    Spacer()
+                                }
+                                .padding(.vertical, 6)
+                                Divider()
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(MHDesign.pagePadding)
+        }
+        .sheet(isPresented: $showingWorkspaceEditor) {
+            WorkspaceEditorView(workspace: nil).environmentObject(model)
+        }
+        .sheet(item: $editingWorkspace) { workspace in
+            WorkspaceEditorView(workspace: workspace).environmentObject(model)
+        }
+        .sheet(isPresented: $showingKeyEditor) {
+            VirtualKeyEditorView().environmentObject(model)
+        }
+    }
+
+    private func workspaceSummary(_ workspace: WorkspaceConfig) -> String {
+        let providers = workspace.allowedProviderIDs.isEmpty ? "全部供应商" : "\(workspace.allowedProviderIDs.count) 个供应商"
+        let models = workspace.allowedModels.isEmpty ? "全部模型" : "\(workspace.allowedModels.count) 个模型"
+        let regions = workspace.privacy.allowedRegions.isEmpty
+            ? "地区不限"
+            : workspace.privacy.allowedRegions.map(\.displayName).sorted().joined(separator: "、")
+        return "\(providers) · \(models) · \(regions)"
+    }
+
+    private func keySummary(_ key: VirtualAccessKey) -> String {
+        let workspace = key.workspaceID.flatMap { id in
+            model.configuration.workspaces.first { $0.id == id }?.name
+        } ?? "无工作区"
+        let budget = key.monthlyBudgetUSD.map { String(format: "$%.2f", $0) } ?? "不限预算"
+        return "\(workspace) · \(key.requestsPerMinute) RPM · \(budget) · 本月 \(key.requestsThisMonth) 次"
+    }
+}
+
+private struct WorkspaceEditorView: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var workspace: WorkspaceConfig
+    @State private var modelsText: String
+    @State private var budgetText: String
+    @State private var retentionText: String
+
+    init(workspace: WorkspaceConfig?) {
+        let value = workspace ?? WorkspaceConfig(name: "个人项目")
+        _workspace = State(initialValue: value)
+        _modelsText = State(initialValue: value.allowedModels.sorted().joined(separator: "\n"))
+        _budgetText = State(initialValue: value.monthlyBudgetUSD.map { String($0) } ?? "")
+        _retentionText = State(initialValue: value.privacy.maximumRetentionDays.map { String($0) } ?? "")
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            MHModalHeader(
+                title: "工作区策略",
+                subtitle: "限定供应商、模型、预算与数据边界。",
+                icon: "folder.badge.gearshape",
+                trailing: AnyView(HStack {
+                    Button("取消") { dismiss() }
+                    Button("保存") {
+                    workspace.allowedModels = Set(modelsText.components(separatedBy: .newlines)
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                        .filter { !$0.isEmpty })
+                    workspace.monthlyBudgetUSD = Double(budgetText).flatMap { $0 > 0 ? $0 : nil }
+                    workspace.privacy.maximumRetentionDays = Int(retentionText).flatMap { $0 >= 0 ? $0 : nil }
+                    model.saveWorkspace(workspace)
+                    dismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(workspace.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                })
+            )
+            Divider()
+            Form {
+                Section("基本范围") {
+                    TextField("工作区名称", text: $workspace.name)
+                    Toggle("启用", isOn: $workspace.enabled)
+                    TextField("月度费用上限 USD（留空不限）", text: $budgetText)
+                    Text("允许的模型（每行一个；留空允许全部）")
+                    TextEditor(text: $modelsText)
+                        .font(.system(.caption, design: .monospaced))
+                        .frame(minHeight: 80)
+                        .padding(8)
+                        .background(MHDesign.insetSurface, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay { RoundedRectangle(cornerRadius: 10).stroke(MHDesign.border) }
+                }
+                Section("允许的供应商（不选表示全部）") {
+                    ForEach(model.providers) { provider in
+                        Toggle(
+                            provider.name,
+                            isOn: Binding(
+                                get: { workspace.allowedProviderIDs.contains(provider.id) },
+                                set: {
+                                    if $0 { workspace.allowedProviderIDs.insert(provider.id) }
+                                    else { workspace.allowedProviderIDs.remove(provider.id) }
+                                }
+                            )
+                        )
+                    }
+                }
+                Section("隐私策略（严格失败关闭）") {
+                    Text("允许的数据地区（不选表示不限）")
+                    ForEach(ProviderDataRegion.allCases) { region in
+                        Toggle(
+                            region.displayName,
+                            isOn: Binding(
+                                get: { workspace.privacy.allowedRegions.contains(region) },
+                                set: {
+                                    if $0 { workspace.privacy.allowedRegions.insert(region) }
+                                    else { workspace.privacy.allowedRegions.remove(region) }
+                                }
+                            )
+                        )
+                        .toggleStyle(.checkbox)
+                    }
+                    Toggle("必须明确为零数据留存", isOn: $workspace.privacy.requireZeroDataRetention)
+                    Toggle("必须明确禁止用于训练", isOn: $workspace.privacy.forbidTrainingUse)
+                    TextField("最长留存天数（留空不限）", text: $retentionText)
+                }
+            }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+        }
+        .mhPageBackground()
+        .frame(width: 700, height: 800)
+    }
+}
+
+private struct VirtualKeyEditorView: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = "Codex"
+    @State private var workspaceID: UUID?
+    @State private var modelsText = ""
+    @State private var requestsPerMinute = 120
+    @State private var budgetText = ""
+    @State private var expires = false
+    @State private var expiryDays = 30
+
+    var body: some View {
+        VStack(spacing: 0) {
+            MHModalHeader(
+                title: "签发虚拟密钥",
+                subtitle: "为单个客户端创建可撤销、可限额的本地访问权。",
+                icon: "key.fill",
+                trailing: AnyView(HStack {
+                    Button("取消") { dismiss() }
+                    Button("签发") {
+                    let models = Set(modelsText.components(separatedBy: .newlines)
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                        .filter { !$0.isEmpty })
+                    if model.issueVirtualKey(
+                        name: name,
+                        workspaceID: workspaceID,
+                        allowedModels: models,
+                        requestsPerMinute: requestsPerMinute,
+                        monthlyBudgetUSD: Double(budgetText),
+                        expiresAt: expires ? Calendar.current.date(byAdding: .day, value: expiryDays, to: .now) : nil
+                    ) != nil { dismiss() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                })
+            )
+            Divider()
+            Form {
+                TextField("密钥名称", text: $name)
+                Picker("工作区", selection: $workspaceID) {
+                    Text("无工作区（仅密钥自身限制）").tag(UUID?.none)
+                    ForEach(model.configuration.workspaces.filter(\.enabled)) { workspace in
+                        Text(workspace.name).tag(Optional(workspace.id))
+                    }
+                }
+                Stepper("每分钟请求上限：\(requestsPerMinute)", value: $requestsPerMinute, in: 1...10_000)
+                TextField("月度预算 USD（留空不限）", text: $budgetText)
+                Text("允许的模型（每行一个；留空允许工作区范围内全部）")
+                TextEditor(text: $modelsText)
+                    .font(.system(.caption, design: .monospaced))
+                    .frame(minHeight: 100)
+                    .padding(8)
+                    .background(MHDesign.insetSurface, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay { RoundedRectangle(cornerRadius: 10).stroke(MHDesign.border) }
+                Toggle("设置到期时间", isOn: $expires)
+                if expires {
+                    Stepper("\(expiryDays) 天后到期", value: $expiryDays, in: 1...365)
+                }
+                Text("原始令牌只在签发后显示一次，配置文件只保存摘要。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+        }
+        .mhPageBackground()
+        .frame(width: 620, height: 620)
+    }
+}
+
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
     @State private var requireAuthentication = true
@@ -1921,7 +3995,14 @@ struct SettingsView: View {
     @State private var showToken = false
 
     var body: some View {
-        Form {
+        VStack(spacing: 0) {
+            PageHeader(
+                title: "服务设置",
+                subtitle: "管理本地 API、系统启动、访问令牌、备份与界面语言。"
+            )
+            .padding(MHDesign.pagePadding)
+
+            Form {
             Section("界面语言") {
                 Picker(
                     "语言",
@@ -2010,9 +4091,13 @@ struct SettingsView: View {
                         .buttonStyle(.borderedProminent)
                 }
             }
+            }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .background(Color.clear)
+            .frame(maxWidth: 1000)
+            .frame(maxWidth: .infinity)
         }
-        .formStyle(.grouped)
-        .navigationTitle("服务设置")
         .onAppear {
             requireAuthentication = model.configuration.server.requireAuthentication
             startAutomatically = model.configuration.server.startAutomatically
@@ -2031,38 +4116,95 @@ struct SettingsView: View {
     }
 }
 
+private struct MHGroupBoxStyle: GroupBoxStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(MHDesign.accent)
+                    .frame(width: 3, height: 16)
+                configuration.label
+                    .font(.headline)
+            }
+            configuration.content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .background(
+            MHDesign.elevatedSurface,
+            in: RoundedRectangle(cornerRadius: MHDesign.cardRadius, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: MHDesign.cardRadius, style: .continuous)
+                .stroke(MHDesign.border)
+        }
+        .shadow(color: .black.opacity(0.055), radius: 12, y: 5)
+    }
+}
+
 private struct PageHeader: View {
     let title: String
     let subtitle: String
     var trailing: AnyView? = nil
 
     var body: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.largeTitle.weight(.bold))
-                Text(subtitle)
-                    .font(.body)
+        HStack(alignment: .center, spacing: 18) {
+            MHIconTile(symbol: icon, size: 48, emphasized: true)
+            VStack(alignment: .leading, spacing: 5) {
+                Text("MODELHUB")
+                    .font(.caption2.weight(.bold))
+                    .tracking(1.2)
+                    .foregroundStyle(MHDesign.accent)
+                Text(mhLocalized(title))
+                    .font(.system(size: 29, weight: .semibold, design: .rounded))
+                Text(mhLocalized(subtitle))
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 680, alignment: .leading)
             }
-            Spacer()
+            Spacer(minLength: 24)
             trailing
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var icon: String {
+        switch title {
+        case "概览": "square.grid.2x2.fill"
+        case "模型供应商": "server.rack"
+        case "模型路由": "arrow.triangle.branch"
+        case "用量分析": "chart.xyaxis.line"
+        case "路由与协议": "switch.2"
+        case "访问与安全": "lock.shield.fill"
+        case "API 调试": "terminal.fill"
+        case "请求日志": "list.bullet.rectangle"
+        case "服务设置": "gearshape.fill"
+        default: "circle.grid.2x2.fill"
+        }
     }
 }
 
 private struct StatusBadge: View {
     let text: String
     let active: Bool
+    var onAccent = false
 
     var body: some View {
-        Label(text, systemImage: active ? "checkmark.circle.fill" : "pause.circle")
-            .font(.caption)
-            .foregroundStyle(active ? Color.green : Color.secondary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background((active ? Color.green : Color.secondary).opacity(0.1), in: Capsule())
+        Label(mhLocalized(text), systemImage: active ? "checkmark.circle.fill" : "pause.circle")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(onAccent ? Color.white : (active ? Color.green : Color.secondary))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(
+                onAccent ? Color.white.opacity(0.14) : (active ? Color.green : Color.secondary).opacity(0.1),
+                in: Capsule()
+            )
+            .overlay {
+                Capsule().stroke(
+                    onAccent ? Color.white.opacity(0.18) : (active ? Color.green : Color.secondary).opacity(0.16)
+                )
+            }
     }
 }
 
@@ -2074,32 +4216,26 @@ private struct EmptyCallout: View {
     let perform: () -> Void
 
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.system(size: 44))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            Text(title)
-                .font(.title2.weight(.semibold))
-            Text(detail)
+        VStack(spacing: 18) {
+            MHIconTile(symbol: icon, size: 64)
+            Text(mhLocalized(title))
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+            Text(mhLocalized(detail))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 520)
-            Button(action, action: perform)
+            Button(mhLocalized(action), action: perform)
                 .buttonStyle(.borderedProminent)
+                .controlSize(.large)
         }
-        .padding(32)
+        .padding(36)
+        .frame(maxWidth: 640)
+        .mhSurface(.secondary, padding: 4)
     }
 }
 
 private extension View {
     func cardStyle() -> some View {
-        self
-            .padding(20)
-            .background(.background, in: RoundedRectangle(cornerRadius: 14))
-            .overlay {
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(.separator.opacity(0.6), lineWidth: 1)
-            }
+        mhSurface(.elevated, padding: 20)
     }
 }

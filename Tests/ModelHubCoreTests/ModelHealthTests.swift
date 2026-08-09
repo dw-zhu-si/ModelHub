@@ -3,6 +3,73 @@ import XCTest
 @testable import ModelHubCore
 
 final class ModelHealthTests: XCTestCase {
+    func testLegacyBaseURLMigrationRecordsCompleteEndpointsOnce() {
+        let chat = ProviderConfig(
+            name: "兼容网关",
+            kind: .unifiedCompatible,
+            baseURL: "https://gateway.example.com/v1",
+            models: ["chat-model"]
+        )
+        let video = ProviderConfig(
+            name: "seedance",
+            kind: .unifiedCompatible,
+            baseURL: "https://api.apimart.ai",
+            models: ["doubao-seedance-2.0-fast"]
+        )
+        let complete = ProviderConfig(
+            name: "完整端点",
+            kind: .unifiedCompatible,
+            baseURL: "https://gateway.example.com/custom/inference",
+            models: ["chat-model"]
+        )
+        let speech = ProviderConfig(
+            name: "阿里云百炼 TTS",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode",
+            models: ["qwen-audio-3.0-tts-plus"]
+        )
+
+        XCTAssertEqual(
+            ProviderBaseURLMigration.completedLegacyURL(for: chat),
+            "https://gateway.example.com/v1/chat/completions"
+        )
+        XCTAssertEqual(
+            ProviderBaseURLMigration.completedLegacyURL(for: video),
+            "https://api.apimart.ai/v1/videos/generations"
+        )
+        let migratedVideo = ProviderBaseURLMigration.migratedProvider(video)
+        XCTAssertEqual(
+            migratedVideo?.endpointURLs[
+                ProviderEndpointRecord.key(for: .videoTask, model: "doubao-seedance-2.0-fast")
+            ],
+            "https://api.apimart.ai/v1/tasks/{task_id}"
+        )
+        XCTAssertEqual(
+            ProviderBaseURLMigration.completedLegacyURL(for: speech),
+            "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer"
+        )
+        let mixedSpeech = ProviderConfig(
+            name: "阿里云百炼 TTS",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode",
+            models: ["qwen-audio-3.0-tts-plus", "qwen3-tts-flash"]
+        )
+        let migratedSpeech = ProviderBaseURLMigration.migratedProvider(mixedSpeech)
+        XCTAssertEqual(
+            migratedSpeech?.endpointURLs[
+                ProviderEndpointRecord.key(for: .speech, model: "qwen-audio-3.0-tts-plus")
+            ],
+            "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer"
+        )
+        XCTAssertEqual(
+            migratedSpeech?.endpointURLs[
+                ProviderEndpointRecord.key(for: .speech, model: "qwen3-tts-flash")
+            ],
+            "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+        )
+        XCTAssertNil(ProviderBaseURLMigration.completedLegacyURL(for: complete))
+    }
+
     func testRemovedDirectProvidersAreDisabledAndLegacyCompatibleProvidersMigrate() throws {
         let removed = try JSONDecoder().decode(
             ProviderConfig.self,
@@ -77,7 +144,32 @@ final class ModelHealthTests: XCTestCase {
             JSONSerialization.jsonObject(with: body) as? [String: Any]
         )
         XCTAssertEqual(json["prompt"] as? String, "ModelHub connection test")
-        XCTAssertEqual(json["duration"] as? Int, 4)
+        XCTAssertEqual(json["duration"] as? Int, 5)
+        XCTAssertEqual(json["resolution"] as? String, "480p")
+        XCTAssertEqual(json["size"] as? String, "16:9")
+        XCTAssertEqual(json["generate_audio"] as? Bool, false)
+    }
+
+    func testVideoProbeRequiresARealTaskIdentifier() throws {
+        let accepted = ProviderResponse(
+            statusCode: 200,
+            headers: [:],
+            body: Data(#"{"code":200,"data":[{"status":"submitted","task_id":"task_123"}]}"#.utf8)
+        )
+        let falsePositive = ProviderResponse(
+            statusCode: 200,
+            headers: [:],
+            body: Data(#"{"code":200,"message":"accepted"}"#.utf8)
+        )
+        let businessFailure = ProviderResponse(
+            statusCode: 200,
+            headers: [:],
+            body: Data(#"{"code":400,"data":[{"task_id":"not_accepted"}]}"#.utf8)
+        )
+
+        XCTAssertEqual(ModelProbePolicy.videoTaskID(in: accepted), "task_123")
+        XCTAssertNil(ModelProbePolicy.videoTaskID(in: falsePositive))
+        XCTAssertNil(ModelProbePolicy.videoTaskID(in: businessFailure))
     }
 
     func testNativeManualProbeCanBypassQuarantineOnlyWhenExplicitlyAllowed() {
@@ -359,6 +451,44 @@ final class ModelHealthTests: XCTestCase {
         }
     }
 
+    func testBailianDeploymentAndWorkflowModelsNeverFallBackToChatProbe() {
+        let provider = ProviderConfig(
+            name: "阿里云百炼",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+
+        for model in [
+            "wanx-v1-0521", "emo", "emo-detect", "emo-v1", "emo-detect-v1",
+            "animate-anyone", "animate-anyone-detect", "animate-anyone-gen2"
+        ] {
+            XCTAssertEqual(
+                ModelProbePolicy.nativeProtocol(provider: provider, model: model),
+                .providerNative,
+                model
+            )
+            XCTAssertTrue(
+                ModelProbePolicy.nativeProbeUnavailableReason(
+                    provider: provider,
+                    model: model,
+                    nativeProtocol: .providerNative
+                ).contains("不会作为聊天模型请求")
+            )
+        }
+    }
+
+    func testTranscriptionProbeBuildsSmallMultipartWAV() throws {
+        let payload = try XCTUnwrap(
+            ModelProbePolicy.nativeProbePayload(for: .transcription, model: "whisper-1")
+        )
+        XCTAssertTrue(payload.contentType.hasPrefix("multipart/form-data; boundary="))
+        let text = String(decoding: payload.body, as: UTF8.self)
+        XCTAssertTrue(text.contains("name=\"file\"; filename=\"modelhub-probe.wav\""))
+        XCTAssertTrue(text.contains("name=\"model\""))
+        XCTAssertTrue(text.contains("whisper-1"))
+        XCTAssertLessThan(payload.body.count, 20_000)
+    }
+
     func testChatModelWithCredentialIsReadyForProbe() {
         let provider = ProviderConfig(
             name: "Agnes AI",
@@ -446,6 +576,66 @@ final class ModelHealthTests: XCTestCase {
         XCTAssertTrue(normalized.allSatisfy { $0.detail.contains("已隔离") })
     }
 
+    func testMigrationPrunesRecordsForRemovedProvidersAndModels() {
+        let provider = ProviderConfig(
+            name: "测试供应商",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.com/v1",
+            models: ["current"]
+        )
+        let removedProviderID = UUID()
+        let normalized = ModelHealthMigration.normalize(
+            records: [
+                ModelHealthRecord(providerID: provider.id, model: "current", status: .available),
+                ModelHealthRecord(providerID: provider.id, model: "removed", status: .unavailable),
+                ModelHealthRecord(providerID: removedProviderID, model: "orphan", status: .unavailable)
+            ],
+            providers: [provider]
+        )
+
+        XCTAssertEqual(normalized.count, 1)
+        XCTAssertEqual(normalized.first?.model, "current")
+        XCTAssertEqual(normalized.first?.status, .available)
+    }
+
+    func testRetryPolicyRespectsRetryAfterAndCapsAttempts() {
+        XCTAssertEqual(
+            ModelProbeRetryPolicy.decision(
+                statusCode: 429,
+                headers: ["Retry-After": "3"],
+                attempt: 1
+            ),
+            .retry(after: 3)
+        )
+        XCTAssertEqual(
+            ModelProbeRetryPolicy.decision(statusCode: 503, headers: [:], attempt: 1),
+            .retry(after: 1)
+        )
+        XCTAssertEqual(
+            ModelProbeRetryPolicy.decision(statusCode: 429, headers: [:], attempt: 2),
+            .stop
+        )
+        XCTAssertEqual(
+            ModelProbeRetryPolicy.decision(statusCode: 400, headers: [:], attempt: 1),
+            .stop
+        )
+    }
+
+    func testAdaptiveBatchPolicyThrottlesAfterRateLimitAndRecovers() {
+        XCTAssertEqual(
+            ModelTestBatchPolicy.nextSize(current: 3, statusCodes: [200, 429, 200]),
+            1
+        )
+        XCTAssertEqual(
+            ModelTestBatchPolicy.nextSize(current: 1, statusCodes: [200, 200, 200]),
+            2
+        )
+        XCTAssertEqual(
+            ModelTestBatchPolicy.nextSize(current: 2, statusCodes: [500]),
+            2
+        )
+    }
+
     func testVerifiedNativeHealthRecordSurvivesMigration() {
         let provider = ProviderConfig(
             name: "Agnes AI",
@@ -490,5 +680,69 @@ final class ModelHealthTests: XCTestCase {
         )
 
         XCTAssertEqual(normalized, [record])
+    }
+
+    func testQuarantineCauseExplainsCommonHTTPFailures() {
+        let providerID = UUID()
+        let cases: [(Int, ModelQuarantineCause)] = [
+            (400, .invalidRequest),
+            (401, .invalidCredential),
+            (403, .insufficientPermission),
+            (404, .endpointOrModelNotFound),
+            (408, .requestTimedOut),
+            (429, .rateLimitedOrOutOfQuota),
+            (500, .upstreamFailure),
+            (504, .requestTimedOut),
+        ]
+
+        for (statusCode, expectedCause) in cases {
+            let record = ModelHealthRecord(
+                providerID: providerID,
+                model: "test-\(statusCode)",
+                status: ModelAvailability(statusCode: statusCode),
+                statusCode: statusCode,
+                detail: "HTTP \(statusCode)"
+            )
+            XCTAssertEqual(record.quarantineCause, expectedCause)
+        }
+    }
+
+    func testQuarantineCauseUsesStatusAndSafeDetailFallbacks() {
+        let providerID = UUID()
+        XCTAssertEqual(
+            ModelHealthRecord(
+                providerID: providerID,
+                model: "missing-key",
+                status: .configurationRequired,
+                detail: "需要配置 API Key（未发起请求）"
+            ).quarantineCause,
+            .missingCredential
+        )
+        XCTAssertEqual(
+            ModelHealthRecord(
+                providerID: providerID,
+                model: "native",
+                status: .unavailable,
+                detail: "视频生成尚未通过真实协议验证，已隔离（未自动发起可能计费的请求）"
+            ).quarantineCause,
+            .nativeVerificationRequired
+        )
+        XCTAssertEqual(
+            ModelHealthRecord(
+                providerID: providerID,
+                model: "network",
+                status: .unavailable,
+                detail: "网络错误（-1009）"
+            ).quarantineCause,
+            .networkFailure
+        )
+        XCTAssertNil(
+            ModelHealthRecord(
+                providerID: providerID,
+                model: "ready",
+                status: .available,
+                statusCode: 200
+            ).quarantineCause
+        )
     }
 }

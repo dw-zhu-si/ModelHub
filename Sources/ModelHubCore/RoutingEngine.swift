@@ -12,7 +12,8 @@ public actor RoutingEngine {
         healthRecords: [ModelHealthRecord] = [],
         usage: [UsageAggregate] = [],
         requiredCapabilities: Set<ModelCapability> = [],
-        defaultRule: DefaultRoutingRule = .sameModelLowestCost
+        defaultRule: DefaultRoutingRule = .sameModelLowestCost,
+        accessPolicy: RoutingAccessPolicy = .unrestricted
     ) -> [RouteTarget] {
         candidates(
             for: requestedModel,
@@ -21,7 +22,8 @@ public actor RoutingEngine {
             health: ModelHealthIndex(records: healthRecords),
             usage: usage,
             requiredCapabilities: requiredCapabilities,
-            defaultRule: defaultRule
+            defaultRule: defaultRule,
+            accessPolicy: accessPolicy
         )
     }
 
@@ -32,7 +34,8 @@ public actor RoutingEngine {
         health: ModelHealthIndex,
         usage: [UsageAggregate] = [],
         requiredCapabilities: Set<ModelCapability> = [],
-        defaultRule: DefaultRoutingRule = .sameModelLowestCost
+        defaultRule: DefaultRoutingRule = .sameModelLowestCost,
+        accessPolicy: RoutingAccessPolicy = .unrestricted
     ) -> [RouteTarget] {
         let enabledProviders = Set(providers.filter(\.enabled).map(\.id))
 
@@ -47,14 +50,20 @@ public actor RoutingEngine {
                 var enriched = target
                 enriched.profile = inherited
                 return enriched
-            }.filter {
-                enabledProviders.contains($0.providerID)
-                    && !$0.model.trimmingCharacters(in: .whitespaces).isEmpty
-                    && health.status(
-                        providerID: $0.providerID,
-                        model: $0.model
-                    ).isRoutable
-                    && supports(requiredCapabilities, profile: $0.profile)
+            }.filter { target in
+                guard enabledProviders.contains(target.providerID),
+                      !target.model.trimmingCharacters(in: .whitespaces).isEmpty,
+                      let provider = providerIndex[target.providerID]
+                else { return false }
+                return RoutingPolicyEvaluator.exclusionReasons(
+                    target: target,
+                    provider: provider,
+                    health: health,
+                    usage: usage,
+                    requiredCapabilities: requiredCapabilities,
+                    constraints: route.constraints,
+                    access: accessPolicy
+                ).isEmpty
             }
             return orderedTargets(
                 targets,
@@ -77,20 +86,27 @@ public actor RoutingEngine {
                     ]
                     guard names.contains(where: {
                         $0.caseInsensitiveCompare(requestedModel) == .orderedSame
-                    }),
-                    health.status(providerID: provider.id, model: model).isRoutable
-                    else { return nil }
-                    return RouteTarget(
+                    }) else { return nil }
+                    let target = RouteTarget(
                         providerID: provider.id,
                         model: model,
                         profile: provider.modelProfiles?[model]
                     )
+                    guard RoutingPolicyEvaluator.exclusionReasons(
+                        target: target,
+                        provider: provider,
+                        health: health,
+                        usage: usage,
+                        requiredCapabilities: requiredCapabilities,
+                        constraints: nil,
+                        access: accessPolicy
+                    ).isEmpty else { return nil }
+                    return target
                 }
             }
         let healthOrdered = health.order(targets: directMatches)
         let originalOrder = Dictionary(uniqueKeysWithValues: healthOrdered.enumerated().map { ($0.element.id, $0.offset) })
         let ordered = healthOrdered
-            .filter { supports(requiredCapabilities, profile: $0.profile) }
             .sorted {
                 let leftCapability = capabilityRank($0.profile, required: requiredCapabilities)
                 let rightCapability = capabilityRank($1.profile, required: requiredCapabilities)
@@ -105,6 +121,7 @@ public actor RoutingEngine {
                     $1,
                     providers: providers,
                     health: health,
+                    usage: usage,
                     defaultRule: defaultRule
                 )
             }
@@ -173,7 +190,8 @@ public actor RoutingEngine {
         case .lowestLatency:
             return tiers.flatMap { tier in
                 tier.sorted {
-                    latency(for: $0, health: health) < latency(for: $1, health: health)
+                    latency(for: $0, health: health, usage: usage)
+                        < latency(for: $1, health: health, usage: usage)
                 }
             }
         case .highestStability:
@@ -207,6 +225,7 @@ public actor RoutingEngine {
         _ rhs: RouteTarget,
         providers: [ProviderConfig],
         health: ModelHealthIndex,
+        usage: [UsageAggregate],
         defaultRule: DefaultRoutingRule
     ) -> Bool {
         let leftModel = lhs.model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -220,8 +239,8 @@ public actor RoutingEngine {
             let right = estimatedUnitCost(for: rhs)
             if left != right { return left < right }
         case .sameModelLowestLatency:
-            let left = latency(for: lhs, health: health)
-            let right = latency(for: rhs, health: health)
+            let left = latency(for: lhs, health: health, usage: usage)
+            let right = latency(for: rhs, health: health, usage: usage)
             if left != right { return left < right }
         case .sameModelOfficial:
             let left = leftProvider?.kind.isOfficialProvider(for: lhs.model) == true
@@ -231,7 +250,15 @@ public actor RoutingEngine {
         return lhs.id.uuidString < rhs.id.uuidString
     }
 
-    private func latency(for target: RouteTarget, health: ModelHealthIndex) -> Int {
+    private func latency(
+        for target: RouteTarget,
+        health: ModelHealthIndex,
+        usage: [UsageAggregate] = []
+    ) -> Int {
+        let p90 = usage.filter {
+            $0.providerID == target.providerID && $0.model == target.model
+        }.compactMap(\.p90LatencyMilliseconds).max()
+        if let p90, p90 > 0 { return p90 }
         let measured = health.record(providerID: target.providerID, model: target.model)?
             .latencyMilliseconds
         return measured.flatMap { $0 > 0 ? $0 : nil } ?? Int.max
@@ -241,8 +268,7 @@ public actor RoutingEngine {
         guard let profile = target.profile, profile.hasKnownPrice else {
             return .greatestFiniteMagnitude
         }
-        return (profile.inputCostPerMillionTokens ?? 0)
-            + (profile.outputCostPerMillionTokens ?? 0)
+        return profile.configuredUnitCostUSD
     }
 
     private func stability(for target: RouteTarget, usage: [UsageAggregate]) -> Double {
@@ -260,7 +286,7 @@ public actor RoutingEngine {
         health: ModelHealthIndex,
         usage: [UsageAggregate]
     ) -> Double {
-        let latencyScore = Double(min(latency(for: target, health: health), 60_000)) / 1_000
+        let latencyScore = Double(min(latency(for: target, health: health, usage: usage), 60_000)) / 1_000
         let cost = estimatedUnitCost(for: target)
         let costScore = cost.isFinite ? min(cost, 1_000) : 100
         let context = Double(target.profile?.contextWindow ?? 0)

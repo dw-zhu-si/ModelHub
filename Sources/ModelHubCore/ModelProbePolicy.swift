@@ -28,6 +28,63 @@ public enum ModelProbeDisposition: Equatable, Sendable {
     case readyForNativeProtocol(ModelNativeProtocol)
 }
 
+public struct ModelProbePayload: Equatable, Sendable {
+    public let body: Data
+    public let contentType: String
+
+    public init(body: Data, contentType: String) {
+        self.body = body
+        self.contentType = contentType
+    }
+}
+
+public enum ModelProbeRetryDecision: Equatable, Sendable {
+    case stop
+    case retry(after: TimeInterval)
+}
+
+public enum ModelProbeRetryPolicy {
+    public static let maximumAttempts = 2
+
+    public static func decision(
+        statusCode: Int,
+        headers: [String: String],
+        attempt: Int
+    ) -> ModelProbeRetryDecision {
+        guard attempt < maximumAttempts,
+              statusCode == 429 || (500...599).contains(statusCode)
+        else { return .stop }
+        if statusCode == 429,
+           let raw = headers.first(where: {
+               $0.key.caseInsensitiveCompare("Retry-After") == .orderedSame
+           })?.value,
+           let seconds = TimeInterval(raw.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            return .retry(after: min(max(seconds, 0.25), 30))
+        }
+        return .retry(after: statusCode == 429 ? 2 : 1)
+    }
+
+    public static func shouldRetryNetworkError(_ error: URLError, attempt: Int) -> Bool {
+        guard attempt < maximumAttempts else { return false }
+        return [
+            .timedOut, .networkConnectionLost, .cannotConnectToHost,
+            .dnsLookupFailed, .notConnectedToInternet
+        ].contains(error.code)
+    }
+}
+
+public enum ModelTestBatchPolicy {
+    public static let maximumSize = 3
+
+    public static func nextSize(current: Int, statusCodes: [Int]) -> Int {
+        if statusCodes.contains(429) { return 1 }
+        let allSuccessful = statusCodes.count >= 3
+            && statusCodes.allSatisfy { (200..<300).contains($0) }
+        if allSuccessful { return min(maximumSize, current + 1) }
+        return min(max(current, 1), maximumSize)
+    }
+}
+
 public enum ModelProbePolicy {
     public static func nativeOperation(for nativeProtocol: ModelNativeProtocol) -> NativeAPIOperation? {
         switch nativeProtocol {
@@ -51,15 +108,30 @@ public enum ModelProbePolicy {
 
     public static func nativeProbeBody(
         for nativeProtocol: ModelNativeProtocol,
-        model _: String
+        model: String
     ) -> Data? {
+        nativeProbePayload(for: nativeProtocol, model: model)?.body
+    }
+
+    public static func nativeProbePayload(
+        for nativeProtocol: ModelNativeProtocol,
+        model: String
+    ) -> ModelProbePayload? {
         let object: [String: Any]
         switch nativeProtocol {
         case .imageGeneration:
             object = ["prompt": "ModelHub connection test", "n": 1]
         case .videoGeneration:
-            // Seedance-compatible gateways commonly enforce a 4-second minimum.
-            object = ["prompt": "ModelHub connection test", "duration": 4]
+            // Use the documented Seedance 2.0 minimum that is accepted across the
+            // standard and fast variants. Keep resolution and audio at their
+            // lowest-cost settings because this probe can create a billable task.
+            object = [
+                "prompt": "ModelHub connection test",
+                "duration": 5,
+                "resolution": "480p",
+                "size": "16:9",
+                "generate_audio": false
+            ]
         case .speech:
             object = ["input": "ModelHub connection test", "voice": "alloy"]
         case .embeddings:
@@ -69,10 +141,60 @@ public enum ModelProbePolicy {
                 "query": "ModelHub connection test",
                 "documents": ["ModelHub connection test"]
             ]
-        case .transcription, .providerNative:
+        case .transcription:
+            return transcriptionProbePayload(model: model)
+        case .providerNative:
             return nil
         }
-        return try? JSONSerialization.data(withJSONObject: object)
+        guard let data = try? JSONSerialization.data(withJSONObject: object) else { return nil }
+        return ModelProbePayload(body: data, contentType: "application/json")
+    }
+
+    public static func nativeProbeUnavailableReason(
+        provider: ProviderConfig,
+        model _: String,
+        nativeProtocol: ModelNativeProtocol
+    ) -> String {
+        if nativeProtocol == .providerNative {
+            let hostname = URL(string: provider.baseURL)?.host?.lowercased() ?? ""
+            let isBailian = provider.kind == .qwen
+                && (hostname == "dashscope.aliyuncs.com" || provider.name.contains("百炼"))
+            if isBailian {
+                return "百炼部署/工作流模型需要部署代码、素材或专用参数；不会作为聊天模型请求，请在 API 调试中按供应商文档验证。"
+            }
+            return "供应商专用模型需要素材或专用参数；不会作为聊天模型请求，请在 API 调试中按供应商文档验证。"
+        }
+        return "\(nativeProtocol.displayName)尚未通过真实协议验证，已隔离（未自动发起可能计费的请求）"
+    }
+
+    public static func videoTaskID(in response: ProviderResponse) -> String? {
+        guard (200..<300).contains(response.statusCode),
+              let root = try? JSONSerialization.jsonObject(with: response.body)
+        else { return nil }
+
+        let candidates: [Any?]
+        if let object = root as? [String: Any] {
+            if let businessCode = object["code"] as? NSNumber,
+               !(200..<300).contains(businessCode.intValue) {
+                return nil
+            }
+            let dataObject = object["data"] as? [String: Any]
+            let firstDataObject = (object["data"] as? [[String: Any]])?.first
+            candidates = [
+                object["task_id"], object["taskId"], object["id"],
+                dataObject?["task_id"], dataObject?["taskId"], dataObject?["id"],
+                firstDataObject?["task_id"], firstDataObject?["taskId"], firstDataObject?["id"]
+            ]
+        } else {
+            return nil
+        }
+
+        return candidates.compactMap { value -> String? in
+            guard let taskID = value as? String,
+                  !taskID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else { return nil }
+            return taskID
+        }.first
     }
 
     public static func disposition(
@@ -96,6 +218,9 @@ public enum ModelProbePolicy {
         let providerName = provider.name.lowercased()
         let name = model.lowercased()
 
+        if isBailian(provider), name == "wanx-v1" {
+            return .imageGeneration
+        }
         if isProviderNativeModel(provider: provider, name: name) {
             return .providerNative
         }
@@ -153,8 +278,19 @@ public enum ModelProbePolicy {
             return name.contains("voice-design")
                 || name.contains("voice-clone")
                 || name.contains("realtime")
+                || name.hasPrefix("wanx-")
+                || name.hasPrefix("emo")
+                || name.hasPrefix("animate-anyone")
         }
         return false
+    }
+
+    private static func isBailian(_ provider: ProviderConfig) -> Bool {
+        let hostname = URL(string: provider.baseURL)?.host?.lowercased() ?? ""
+        return provider.kind == .qwen && (
+            provider.name.lowercased().contains("百炼")
+                || hostname == "dashscope.aliyuncs.com"
+        )
     }
 
     private static func isSpeechModel(_ name: String) -> Bool {
@@ -180,6 +316,48 @@ public enum ModelProbePolicy {
         }
         return false
     }
+
+    private static func transcriptionProbePayload(model: String) -> ModelProbePayload {
+        let boundary = "ModelHubProbeBoundary"
+        var body = Data()
+        body.append(Data("--\(boundary)\r\n".utf8))
+        body.append(Data("Content-Disposition: form-data; name=\"model\"\r\n\r\n".utf8))
+        body.append(Data("\(model)\r\n".utf8))
+        body.append(Data("--\(boundary)\r\n".utf8))
+        body.append(Data("Content-Disposition: form-data; name=\"file\"; filename=\"modelhub-probe.wav\"\r\n".utf8))
+        body.append(Data("Content-Type: audio/wav\r\n\r\n".utf8))
+        body.append(silentWAV())
+        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
+        return ModelProbePayload(
+            body: body,
+            contentType: "multipart/form-data; boundary=\(boundary)"
+        )
+    }
+
+    private static func silentWAV() -> Data {
+        let sampleRate: UInt32 = 8_000
+        let sampleCount: UInt32 = 800
+        let dataSize = sampleCount * 2
+        var data = Data("RIFF".utf8)
+        appendLittleEndian(36 + dataSize, to: &data)
+        data.append(Data("WAVEfmt ".utf8))
+        appendLittleEndian(UInt32(16), to: &data)
+        appendLittleEndian(UInt16(1), to: &data)
+        appendLittleEndian(UInt16(1), to: &data)
+        appendLittleEndian(sampleRate, to: &data)
+        appendLittleEndian(sampleRate * 2, to: &data)
+        appendLittleEndian(UInt16(2), to: &data)
+        appendLittleEndian(UInt16(16), to: &data)
+        data.append(Data("data".utf8))
+        appendLittleEndian(dataSize, to: &data)
+        data.append(Data(repeating: 0, count: Int(dataSize)))
+        return data
+    }
+
+    private static func appendLittleEndian<T: FixedWidthInteger>(_ value: T, to data: inout Data) {
+        var littleEndian = value.littleEndian
+        withUnsafeBytes(of: &littleEndian) { data.append(contentsOf: $0) }
+    }
 }
 
 public enum ModelHealthMigration {
@@ -188,16 +366,15 @@ public enum ModelHealthMigration {
         providers: [ProviderConfig]
     ) -> [ModelHealthRecord] {
         let providersByID = Dictionary(uniqueKeysWithValues: providers.map { ($0.id, $0) })
-        var normalized = records.map { original in
-            guard let provider = providersByID[original.providerID] else {
-                guard original.status == .unknown else { return original }
-                var record = original
-                record.status = .unavailable
-                record.latencyMilliseconds = nil
-                record.statusCode = nil
-                record.detail = "旧版待验证记录已隔离"
-                return record
-            }
+        var normalized = records.compactMap { original -> ModelHealthRecord? in
+            guard let provider = providersByID[original.providerID],
+                  provider.models.contains(where: {
+                      $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                          .caseInsensitiveCompare(original.model.trimmingCharacters(
+                              in: .whitespacesAndNewlines
+                          )) == .orderedSame
+                  })
+            else { return nil }
 
             var record = original
             if original.detail == "未配置 API Key"
@@ -225,7 +402,11 @@ public enum ModelHealthMigration {
                 record.status = .unavailable
                 record.latencyMilliseconds = nil
                 record.statusCode = nil
-                record.detail = "\(nativeProtocol.displayName)尚未通过真实协议验证，已隔离（未自动发起可能计费的请求）"
+                record.detail = ModelProbePolicy.nativeProbeUnavailableReason(
+                    provider: provider,
+                    model: original.model,
+                    nativeProtocol: nativeProtocol
+                )
                 return record
             }
 
@@ -253,7 +434,11 @@ public enum ModelHealthMigration {
                     provider: provider,
                     model: trimmedModel
                 ) {
-                    detail = "\(nativeProtocol.displayName)尚未通过真实协议验证，已隔离（未自动发起可能计费的请求）"
+                    detail = ModelProbePolicy.nativeProbeUnavailableReason(
+                        provider: provider,
+                        model: trimmedModel,
+                        nativeProtocol: nativeProtocol
+                    )
                 } else {
                     detail = "尚未完成在线验证，已隔离"
                 }

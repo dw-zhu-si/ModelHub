@@ -37,6 +37,25 @@ public enum ModelAvailability: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// A stable, presentation-independent classification of why a model is not
+/// routable. The UI can localize this value without exposing raw upstream
+/// response bodies or credentials.
+public enum ModelQuarantineCause: String, Codable, CaseIterable, Sendable {
+    case notVerified
+    case missingCredential
+    case invalidCredential
+    case insufficientPermission
+    case invalidRequest
+    case endpointOrModelNotFound
+    case requestTimedOut
+    case rateLimitedOrOutOfQuota
+    case upstreamFailure
+    case networkFailure
+    case nativeVerificationRequired
+    case unsupportedProtocol
+    case unknownFailure
+}
+
 public struct ModelHealthRecord: Codable, Hashable, Identifiable, Sendable {
     public var providerID: UUID
     public var model: String
@@ -48,6 +67,76 @@ public struct ModelHealthRecord: Codable, Hashable, Identifiable, Sendable {
 
     public var id: String {
         "\(providerID.uuidString.lowercased())/\(model.lowercased())"
+    }
+
+    public var quarantineCause: ModelQuarantineCause? {
+        guard status.isQuarantined else { return nil }
+
+        switch status {
+        case .available:
+            return nil
+        case .unknown:
+            return .notVerified
+        case .configurationRequired:
+            if statusCode == 401 { return .invalidCredential }
+            if statusCode == 403 { return .insufficientPermission }
+            return .missingCredential
+        case .unsupported:
+            return .unsupportedProtocol
+        case .unavailable:
+            break
+        }
+
+        if let statusCode {
+            switch statusCode {
+            case 400, 409, 413, 422:
+                return .invalidRequest
+            case 401:
+                return .invalidCredential
+            case 403:
+                return .insufficientPermission
+            case 404, 410:
+                return .endpointOrModelNotFound
+            case 408, 504:
+                return .requestTimedOut
+            case 429:
+                return .rateLimitedOrOutOfQuota
+            case 500...599:
+                return .upstreamFailure
+            default:
+                break
+            }
+        }
+
+        let normalizedDetail = detail.folding(
+            options: [.caseInsensitive, .diacriticInsensitive],
+            locale: Locale(identifier: "en_US_POSIX")
+        )
+        if normalizedDetail.contains("api key") || normalizedDetail.contains("密钥") {
+            return .missingCredential
+        }
+        if normalizedDetail.contains("尚未通过真实协议验证")
+            || normalizedDetail.contains("未自动发起可能计费")
+            || normalizedDetail.contains("native verification")
+        {
+            return .nativeVerificationRequired
+        }
+        if normalizedDetail.contains("timeout") || normalizedDetail.contains("timed out")
+            || normalizedDetail.contains("超时")
+        {
+            return .requestTimedOut
+        }
+        if normalizedDetail.contains("network") || normalizedDetail.contains("网络")
+            || normalizedDetail.contains("offline")
+        {
+            return .networkFailure
+        }
+        if normalizedDetail.contains("未测试") || normalizedDetail.contains("待验证")
+            || normalizedDetail.contains("尚未完成真实验证")
+        {
+            return .notVerified
+        }
+        return .unknownFailure
     }
 
     public init(

@@ -45,7 +45,7 @@ Clients call `http://127.0.0.1:11435/v1`. ModelHub resolves aliases, chooses a t
 
 ### Testing is separate from normal traffic
 
-Normal external calls do not refresh provider catalogs or re-test models. A user must explicitly run a model, provider, or all-model test. Chat tests can make a real provider request; media and provider-specific action models are not incorrectly sent through the chat endpoint.
+Normal external calls do not refresh provider catalogs or re-test models. The provider editor accepts an exact catalog URL, fetches it only on demand, then lets the user search, select, preview, and deduplicate models before merging them. It can also import UTF-8, UTF-16, or Excel separator-declared CSV files and preview models, costs, and user-supplied exact endpoints before merging. Existing providers can hot-update models directly from the detail view without restarting the local service. A saved exact catalog takes priority; otherwise ModelHub may use only a complete provider-owned catalog whose official host is strictly matched by the built-in verified registry. Catalog entries are merged incrementally, manually maintained models and existing health records are preserved, and every newly discovered model—including deployment-reference entries—stays quarantined until a real provider verification succeeds. ModelHub never invents or appends `/v1/models` to a Base URL. Only explicit user actions access a catalog endpoint; failures leave the saved list usable. Chat tests can make a real provider request, while media and provider-specific action models are not incorrectly sent through the chat endpoint.
 
 ### Native macOS workflow
 
@@ -89,9 +89,23 @@ Every model health record includes its last check time, latency, HTTP status, an
 ### Cost and usage controls
 
 - aggregate requests, success rate, latency, tokens, estimated cost, and context savings by model and provider;
-- manual pricing source and timestamp, monthly token quotas, budget warnings, and hard limits;
+- per-model input, output, and fixed per-request costs with a recorded pricing source and timestamp;
+- one-click price synchronization with live progress directly from Usage Analytics, using configured or verified machine-readable catalogs owned by the provider and scheduled for 00:00 local time by default; existing manual values remain when explicit amounts or units are unavailable, with no third-party scraping or guessing;
+- monthly token quotas, budget warnings, and hard limits;
 - unknown pricing stays unknown instead of becoming a made-up estimate;
 - import preview, a 10 MiB configuration backup limit, and automatic rollback copies; Keychain secrets are never backed up.
+
+### Access governance for individuals and small teams
+
+- create workspaces that constrain providers, models, monthly budgets, and data-processing regions;
+- issue a separate virtual key for Codex, Claude, an IDE, or a project, with model scope, RPM, budget, and expiration;
+- raw virtual keys are shown once, while configuration stores only a SHA-256 digest and authentication uses constant-time comparison;
+- unknown privacy metadata is never guessed, and strict policies fail closed when a provider cannot prove compliance;
+- the security audit records policy and authorization outcomes without prompts, response bodies, or raw secrets.
+
+### Optional in-memory cache and failure fallback
+
+The **Routing & Protocols** screen can enable a bounded, opt-in memory cache for byte-identical non-streaming Chat Completions and Responses requests. It is off by default. Keys are request digests scoped to the primary or virtual access key, and response bodies remain in process memory only. TTL, entry count, total bytes, and LRU eviction provide hard bounds. When an upstream returns 5xx, ModelHub may serve a still-permitted stale response and marks it with `X-ModelHub-Cache: STALE` so cached output is never presented as a fresh generation.
 
 ### Providers and native protocols
 
@@ -121,7 +135,7 @@ On a clean installation with no configured providers, the Overview screen offers
 
 ## Install
 
-Download the notarized [v1.9.0 build 23 release](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.0-build23), open `ModelHub-1.9.0-macos-universal.dmg`, and drag `ModelHub.app` to Applications. The DMG and the app are Developer ID signed and passed Apple notarization, ticket stapling, image integrity, and Gatekeeper checks. A Universal ZIP is also available in the same release.
+Download the notarized [v1.9.1 build 33 release](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.1-build33), open `ModelHub-1.9.1-macos-universal.dmg`, and drag `ModelHub.app` to Applications. The DMG and the app are Developer ID signed and passed Apple notarization, ticket stapling, image integrity, and Gatekeeper checks. A Universal ZIP is also available in the same release.
 
 ### Requirements
 
@@ -132,17 +146,17 @@ Download the notarized [v1.9.0 build 23 release](https://github.com/dw-zhu-si/Mo
 ### Verify the release
 
 ```text
-ebe85bc9872c92182cd6925faf52e3b64e60b885e6474144f659ad6896c8021b  ModelHub-1.9.0-macos-universal.zip
-2f06fbcaeb91ed5300ff77128ee6b03e2d5faded4aa345ea695913874d0abf94  ModelHub-1.9.0-macos-universal.dmg
+d23bd9b32faeed0f71f1b7c4525de2d811ced3821e93f0204ccd351bb13bd567  ModelHub-1.9.1-macos-universal.zip
+acb7fe18620941ade1dbee0df275383514878ff87b52e1e42b6dc9e0e29080a6  ModelHub-1.9.1-macos-universal.dmg
 ```
 
 ```bash
-shasum -a 256 -c ModelHub-1.9.0-SHA256.txt
+shasum -a 256 -c ModelHub-1.9.1-SHA256.txt
 ```
 
 ## Quick start
 
-1. Add a provider, Base URL, API key, and model names in **Model Providers**.
+1. Add a provider, exact Base URL, and API key in **Model Providers**. Optionally enter an exact model-catalog URL to fetch, filter, and merge models, or enter model IDs manually.
 2. If you need an online check, run a model, provider, or all-model test and confirm possible upstream charges.
 3. Create a stable alias such as `smart` in **Model Routes**, add targets, and select a strategy.
 4. Copy the local endpoint and gateway token from **Service Settings**.

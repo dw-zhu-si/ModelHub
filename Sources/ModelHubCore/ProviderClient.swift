@@ -70,7 +70,7 @@ public enum ProviderClientError: LocalizedError {
 }
 
 public struct ProviderClient: Sendable {
-    private let session: URLSession
+    let session: URLSession
 
     public init(session: URLSession = .shared) {
         self.session = session
@@ -116,44 +116,14 @@ public struct ProviderClient: Sendable {
     }
 
     public func endpoint(for provider: ProviderConfig, model: String) throws -> URL {
-        let base = provider.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
-        guard !base.isEmpty else { throw ProviderClientError.invalidBaseURL }
-
-        switch provider.kind {
-        case .anthropic:
-            guard let url = URL(string: "\(base)/v1/messages") else {
-                throw ProviderClientError.invalidBaseURL
-            }
-            return url
-        case .gemini:
-            let encodedModel = model.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? model
-            guard let url = URL(string: "\(base)/v1beta/models/\(encodedModel):generateContent") else {
-                throw ProviderClientError.invalidBaseURL
-            }
-            return url
-        default:
-            let hasVersionedAPIPath = ["/v1", "/v2", "/v3"].contains {
-                base.hasSuffix($0)
-            }
-            let suffix = hasVersionedAPIPath ? "/chat/completions" : "/v1/chat/completions"
-            guard let url = URL(string: base + suffix) else {
-                throw ProviderClientError.invalidBaseURL
-            }
-            return url
-        }
+        try configuredURL(for: provider, kind: .chat, model: model)
     }
 
     public func responsesEndpoint(for provider: ProviderConfig) throws -> URL {
         guard provider.kind.usesUnifiedProtocol else {
             throw ProviderClientError.invalidRequest("该供应商暂不支持 Responses API 透传")
         }
-        let base = provider.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
-        guard !base.isEmpty else { throw ProviderClientError.invalidBaseURL }
-        let root = base.hasSuffix("/v1") ? String(base.dropLast(3)) : base
-        guard let url = URL(string: root + "/v1/responses") else {
-            throw ProviderClientError.invalidBaseURL
-        }
-        return url
+        return try configuredURL(for: provider, kind: .responses)
     }
 
     public func responsesRequest(
@@ -300,71 +270,37 @@ public struct ProviderClient: Sendable {
         operation: NativeAPIOperation,
         taskID: String? = nil
     ) throws -> URL {
-        let base = provider.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
-        guard var components = URLComponents(string: base),
-              components.scheme != nil,
-              components.host != nil
-        else {
-            throw ProviderClientError.invalidBaseURL
-        }
-
-        let providerName = provider.name.lowercased()
-        let hostname = components.host?.lowercased() ?? ""
-        let isAPIMart = hostname.contains("apimart.ai") || providerName.contains("apimart")
-        let isAgnes = hostname.contains("agnes-ai.com") || providerName.contains("agnes")
-        let isBailian = hostname.contains("dashscope.aliyuncs.com")
-            || providerName.contains("百炼")
-
-        if isBailian {
-            components.path = ""
-        } else if components.path.hasSuffix("/v1") {
-            components.path.removeLast(3)
-        }
-        components.query = nil
-        components.fragment = nil
-        guard let root = components.url?.absoluteString.trimmingCharacters(
-            in: CharacterSet(charactersIn: "/")
-        ) else {
-            throw ProviderClientError.invalidBaseURL
-        }
-
-        let suffix: String
-        switch operation {
-        case .imageGeneration:
-            suffix = "/v1/images/generations"
-        case .videoGeneration:
-            suffix = isAgnes ? "/v1/videos" : "/v1/videos/generations"
-        case .videoTask:
+        if operation == .videoTask {
             guard let taskID, !taskID.isEmpty else {
                 throw ProviderClientError.invalidRequest("查询视频任务需要 task_id")
             }
-            var pathAllowed = CharacterSet.urlPathAllowed
-            pathAllowed.remove(charactersIn: "/")
-            let encoded = taskID.addingPercentEncoding(withAllowedCharacters: pathAllowed) ?? taskID
-            suffix = isAPIMart ? "/v1/tasks/\(encoded)" : "/v1/videos/\(encoded)"
-        case .speech:
-            if isBailian {
-                let lowered = model.lowercased()
-                if lowered.hasPrefix("cosyvoice") || lowered.hasPrefix("qwen-audio-") {
-                    suffix = "/api/v1/services/audio/tts/SpeechSynthesizer"
-                } else {
-                    suffix = "/api/v1/services/aigc/multimodal-generation/generation"
-                }
-            } else {
-                suffix = "/v1/audio/speech"
-            }
-        case .transcription:
-            suffix = "/v1/audio/transcriptions"
-        case .embeddings:
-            suffix = "/v1/embeddings"
-        case .reranking:
-            suffix = "/v1/rerank"
         }
-
-        guard let url = URL(string: root + suffix) else {
-            throw ProviderClientError.invalidBaseURL
+        let endpointKind: ProviderEndpointKind = switch operation {
+        case .imageGeneration: .imageGeneration
+        case .videoGeneration: .videoGeneration
+        case .videoTask: .videoTask
+        case .speech: .speech
+        case .transcription: .transcription
+        case .embeddings: .embeddings
+        case .reranking: .reranking
         }
-        return url
+        if operation == .imageGeneration,
+           isBailian(provider),
+           model.caseInsensitiveCompare("wanx-v1") == .orderedSame,
+           provider.endpointURLs[
+               ProviderEndpointRecord.key(for: .imageGeneration, model: model)
+           ] == nil,
+           let official = URL(
+               string: "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
+           ) {
+            return official
+        }
+        return try configuredURL(
+            for: provider,
+            kind: endpointKind,
+            model: model,
+            taskID: taskID
+        )
     }
 
     public func nativeRequest(
@@ -398,6 +334,11 @@ public struct ProviderClient: Sendable {
                 json["model"] = targetModel
                 if operation == .speech && isBailian(provider) {
                     json = normalizeBailianSpeechJSON(json, model: targetModel)
+                } else if operation == .imageGeneration,
+                          isBailian(provider),
+                          targetModel.caseInsensitiveCompare("wanx-v1") == .orderedSame {
+                    json = normalizeBailianWanxJSON(json, model: targetModel)
+                    request.setValue("enable", forHTTPHeaderField: "X-DashScope-Async")
                 }
                 request.httpBody = try JSONSerialization.data(withJSONObject: json)
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -465,6 +406,22 @@ public struct ProviderClient: Sendable {
         }
         json["input"] = input
         return json
+    }
+
+    private func normalizeBailianWanxJSON(
+        _ original: [String: Any],
+        model: String
+    ) -> [String: Any] {
+        let prompt = original["prompt"] as? String ?? "ModelHub connection test"
+        var parameters: [String: Any] = [:]
+        if let count = original["n"] as? NSNumber {
+            parameters["n"] = count
+        }
+        return [
+            "model": model,
+            "input": ["prompt": prompt],
+            "parameters": parameters
+        ]
     }
 
     private func rewriteMultipartModel(
@@ -741,10 +698,40 @@ public struct ProviderClient: Sendable {
         model: String,
         streaming: Bool
     ) throws -> URL {
-        let base = provider.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
-        let encodedModel = model.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? model
-        let operation = streaming ? "streamGenerateContent" : "generateContent"
-        guard let url = URL(string: "\(base)/v1beta/models/\(encodedModel):\(operation)") else {
+        try configuredURL(
+            for: provider,
+            kind: streaming ? .chatStream : .chat,
+            model: model
+        )
+    }
+
+    private func configuredURL(
+        for provider: ProviderConfig,
+        kind: ProviderEndpointKind,
+        model: String? = nil,
+        taskID: String? = nil
+    ) throws -> URL {
+        let modelKey = ProviderEndpointRecord.key(for: kind, model: model)
+        let genericKey = ProviderEndpointRecord.key(for: kind)
+        var configured = (
+            provider.endpointURLs[modelKey]
+                ?? provider.endpointURLs[genericKey]
+                ?? provider.baseURL
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        if kind == .videoTask, configured.contains("{task_id}") {
+            guard let taskID, !taskID.isEmpty else {
+                throw ProviderClientError.invalidRequest("查询视频任务需要 task_id")
+            }
+            var pathAllowed = CharacterSet.urlPathAllowed
+            pathAllowed.remove(charactersIn: "/")
+            let encoded = taskID.addingPercentEncoding(withAllowedCharacters: pathAllowed) ?? taskID
+            configured = configured.replacingOccurrences(of: "{task_id}", with: encoded)
+        }
+        guard let components = URLComponents(string: configured),
+              components.scheme != nil,
+              components.host != nil,
+              let url = components.url
+        else {
             throw ProviderClientError.invalidBaseURL
         }
         return url

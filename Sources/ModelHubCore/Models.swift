@@ -120,6 +120,27 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
     }
 }
 
+public enum ProviderEndpointKind: String, Codable, Sendable {
+    case modelCatalog
+    case chat
+    case chatStream
+    case responses
+    case imageGeneration
+    case videoGeneration
+    case videoTask
+    case speech
+    case transcription
+    case embeddings
+    case reranking
+}
+
+public enum ProviderEndpointRecord {
+    public static func key(for kind: ProviderEndpointKind, model: String? = nil) -> String {
+        guard let model, !model.isEmpty else { return kind.rawValue }
+        return "\(kind.rawValue)|\(model.lowercased())"
+    }
+}
+
 public struct ProviderConfig: Codable, Identifiable, Hashable, Sendable {
     public var id: UUID
     public var name: String
@@ -129,6 +150,8 @@ public struct ProviderConfig: Codable, Identifiable, Hashable, Sendable {
     public var models: [String]
     public var apiVersion: String
     public var modelProfiles: [String: TargetProfile]?
+    public var endpointURLs: [String: String]
+    public var privacyProfile: ProviderPrivacyProfile?
 
     public init(
         id: UUID = UUID(),
@@ -138,7 +161,9 @@ public struct ProviderConfig: Codable, Identifiable, Hashable, Sendable {
         enabled: Bool = true,
         models: [String] = [],
         apiVersion: String = "",
-        modelProfiles: [String: TargetProfile]? = nil
+        modelProfiles: [String: TargetProfile]? = nil,
+        endpointURLs: [String: String] = [:],
+        privacyProfile: ProviderPrivacyProfile? = nil
     ) {
         self.id = id
         self.name = name
@@ -148,10 +173,12 @@ public struct ProviderConfig: Codable, Identifiable, Hashable, Sendable {
         self.models = models
         self.apiVersion = apiVersion
         self.modelProfiles = modelProfiles
+        self.endpointURLs = endpointURLs
+        self.privacyProfile = privacyProfile
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, kind, baseURL, enabled, models, apiVersion, modelProfiles
+        case id, name, kind, baseURL, enabled, models, apiVersion, modelProfiles, endpointURLs, privacyProfile
     }
 
     /// 读取旧版配置时移除已下线的内置直连供应商，并把旧通用兼容类型迁移为中性类型。
@@ -186,6 +213,8 @@ public struct ProviderConfig: Codable, Identifiable, Hashable, Sendable {
             models = []
             apiVersion = ""
             modelProfiles = nil
+            endpointURLs = [:]
+            privacyProfile = nil
         } else {
             name = try container.decode(String.self, forKey: .name)
             baseURL = try container.decode(String.self, forKey: .baseURL)
@@ -195,6 +224,14 @@ public struct ProviderConfig: Codable, Identifiable, Hashable, Sendable {
             modelProfiles = try container.decodeIfPresent(
                 [String: TargetProfile].self,
                 forKey: .modelProfiles
+            )
+            endpointURLs = try container.decodeIfPresent(
+                [String: String].self,
+                forKey: .endpointURLs
+            ) ?? [:]
+            privacyProfile = try container.decodeIfPresent(
+                ProviderPrivacyProfile.self,
+                forKey: .privacyProfile
             )
         }
     }
@@ -209,10 +246,243 @@ public struct ProviderConfig: Codable, Identifiable, Hashable, Sendable {
         try container.encode(models, forKey: .models)
         try container.encode(apiVersion, forKey: .apiVersion)
         try container.encodeIfPresent(modelProfiles, forKey: .modelProfiles)
+        if !endpointURLs.isEmpty {
+            try container.encode(endpointURLs, forKey: .endpointURLs)
+        }
+        try container.encodeIfPresent(privacyProfile, forKey: .privacyProfile)
     }
 
     private static func legacyIdentifier(_ bytes: [UInt8]) -> String {
         String(decoding: bytes.map { $0 ^ 0xA5 }, as: UTF8.self)
+    }
+}
+
+/// Converts legacy host/version-root records into explicit request endpoints once.
+/// Request execution itself never derives or appends an endpoint path.
+public enum ProviderBaseURLMigration {
+    public static func migratedProvider(_ provider: ProviderConfig) -> ProviderConfig? {
+        guard provider.endpointURLs.isEmpty, !provider.models.isEmpty else { return nil }
+        var migrated = provider
+        var records: [String: String] = [:]
+
+        for model in provider.models {
+            var singleModelProvider = provider
+            singleModelProvider.models = [model]
+            if let nativeProtocol = ModelProbePolicy.nativeProtocol(
+                provider: provider,
+                model: model
+            ), let operation = ModelProbePolicy.nativeOperation(for: nativeProtocol) {
+                let kind = endpointKind(for: operation)
+                records[ProviderEndpointRecord.key(for: kind, model: model)] =
+                    completedLegacyURL(for: singleModelProvider) ?? provider.baseURL
+                if operation == .videoGeneration,
+                   let taskTemplate = legacyVideoTaskTemplate(for: provider)
+                {
+                    records[
+                        ProviderEndpointRecord.key(for: .videoTask, model: model)
+                    ] = taskTemplate
+                }
+            } else {
+                records[ProviderEndpointRecord.key(for: .chat, model: model)] =
+                    completedLegacyURL(for: singleModelProvider) ?? provider.baseURL
+                if provider.kind == .gemini,
+                   let streamURL = legacyGeminiStreamURL(for: provider, model: model)
+                {
+                    records[
+                        ProviderEndpointRecord.key(for: .chatStream, model: model)
+                    ] = streamURL
+                }
+            }
+        }
+
+        guard !records.isEmpty else { return nil }
+        migrated.endpointURLs = records
+        if let firstModel = provider.models.first {
+            let nativeKind = ModelProbePolicy.nativeProtocol(provider: provider, model: firstModel)
+                .flatMap(ModelProbePolicy.nativeOperation(for:))
+                .map(endpointKind(for:))
+            let firstKind = nativeKind ?? .chat
+            if let explicitURL = records[
+                ProviderEndpointRecord.key(for: firstKind, model: firstModel)
+            ] {
+                migrated.baseURL = explicitURL
+            }
+        }
+        return migrated
+    }
+
+    public static func completedLegacyURL(for provider: ProviderConfig) -> String? {
+        let trimSet = CharacterSet.whitespacesAndNewlines.union(
+            CharacterSet(charactersIn: "/")
+        )
+        let base = provider.baseURL.trimmingCharacters(in: trimSet)
+        guard var components = URLComponents(string: base),
+              components.scheme != nil,
+              components.host != nil,
+              components.query == nil,
+              components.fragment == nil,
+              isLegacyBasePath(components.path)
+        else {
+            return nil
+        }
+
+        if let model = provider.models.first,
+           let nativeProtocol = ModelProbePolicy.nativeProtocol(provider: provider, model: model)
+        {
+            guard let operation = ModelProbePolicy.nativeOperation(for: nativeProtocol) else {
+                return nil
+            }
+            return legacyNativeEndpoint(
+                provider: provider,
+                model: model,
+                operation: operation,
+                components: &components
+            )
+        }
+
+        switch provider.kind {
+        case .anthropic:
+            return append("/v1/messages", to: base)
+        case .gemini:
+            guard let model = provider.models.first, !model.isEmpty else { return nil }
+            let encoded = model.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? model
+            return append("/v1beta/models/\(encoded):generateContent", to: base)
+        default:
+            let suffix = ["/v1", "/v2", "/v3"].contains(where: base.hasSuffix)
+                ? "/chat/completions"
+                : "/v1/chat/completions"
+            return append(suffix, to: base)
+        }
+    }
+
+    private static func endpointKind(for operation: NativeAPIOperation) -> ProviderEndpointKind {
+        switch operation {
+        case .imageGeneration: .imageGeneration
+        case .videoGeneration: .videoGeneration
+        case .videoTask: .videoTask
+        case .speech: .speech
+        case .transcription: .transcription
+        case .embeddings: .embeddings
+        case .reranking: .reranking
+        }
+    }
+
+    private static func legacyGeminiStreamURL(
+        for provider: ProviderConfig,
+        model: String
+    ) -> String? {
+        let base = provider.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        guard let components = URLComponents(string: base),
+              components.scheme != nil,
+              components.host != nil,
+              isLegacyBasePath(components.path)
+        else {
+            return provider.baseURL
+        }
+        let encoded = model.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? model
+        return append("/v1beta/models/\(encoded):streamGenerateContent", to: base)
+    }
+
+    private static func legacyVideoTaskTemplate(for provider: ProviderConfig) -> String? {
+        guard var components = URLComponents(string: provider.baseURL),
+              components.scheme != nil,
+              components.host != nil
+        else {
+            return nil
+        }
+        let hostname = components.host?.lowercased() ?? ""
+        let providerName = provider.name.lowercased()
+        let isAPIMart = hostname.contains("apimart.ai") || providerName.contains("apimart")
+        let isAgnes = hostname.contains("agnes-ai.com")
+            || hostname.contains("agnes-ai.cn")
+            || providerName.contains("agnes")
+        let knownCreationPaths = ["/v1/videos/generations", "/v1/videos"]
+        if let creationPath = knownCreationPaths.first(where: components.path.hasSuffix) {
+            components.path.removeLast(creationPath.count)
+        } else if components.path.hasSuffix("/v1") {
+            components.path.removeLast(3)
+        } else if !components.path.isEmpty && components.path != "/" {
+            return provider.baseURL
+        }
+        components.query = nil
+        components.fragment = nil
+        guard let root = components.url?.absoluteString.trimmingCharacters(
+            in: CharacterSet(charactersIn: "/")
+        ) else {
+            return nil
+        }
+        let suffix = isAPIMart
+            ? "/v1/tasks/{task_id}"
+            : isAgnes ? "/v1/videos/{task_id}" : "/v1/videos/{task_id}"
+        return root + suffix
+    }
+
+    private static func isLegacyBasePath(_ path: String) -> Bool {
+        let normalized = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return normalized.isEmpty || [
+            "v1", "v2", "v3", "api/v1", "api/v2", "api/v3",
+            "api/paas", "api/paas/v4", "compatible-mode",
+            "compatibility/v1", "inference/v1"
+        ].contains(normalized)
+    }
+
+    private static func legacyNativeEndpoint(
+        provider: ProviderConfig,
+        model: String,
+        operation: NativeAPIOperation,
+        components: inout URLComponents
+    ) -> String? {
+        let providerName = provider.name.lowercased()
+        let hostname = components.host?.lowercased() ?? ""
+        let isAgnes = hostname.contains("agnes-ai.com")
+            || hostname.contains("agnes-ai.cn")
+            || providerName.contains("agnes")
+        let isBailian = hostname.contains("dashscope.aliyuncs.com")
+            || providerName.contains("百炼")
+
+        let suffix: String
+        switch operation {
+        case .imageGeneration:
+            suffix = isBailian && model.lowercased() == "wanx-v1"
+                ? "/api/v1/services/aigc/text2image/image-synthesis"
+                : "/v1/images/generations"
+        case .videoGeneration:
+            suffix = isAgnes ? "/v1/videos" : "/v1/videos/generations"
+        case .speech:
+            if isBailian {
+                let lowered = model.lowercased()
+                suffix = lowered.hasPrefix("cosyvoice") || lowered.hasPrefix("qwen-audio-")
+                    ? "/api/v1/services/audio/tts/SpeechSynthesizer"
+                    : "/api/v1/services/aigc/multimodal-generation/generation"
+            } else {
+                suffix = "/v1/audio/speech"
+            }
+        case .transcription:
+            suffix = "/v1/audio/transcriptions"
+        case .embeddings:
+            suffix = "/v1/embeddings"
+        case .reranking:
+            suffix = "/v1/rerank"
+        case .videoTask:
+            return nil
+        }
+
+        if isBailian {
+            components.path = ""
+        } else if components.path.hasSuffix("/v1") && suffix.hasPrefix("/v1/") {
+            components.path.removeLast(3)
+        }
+        guard let root = components.url?.absoluteString.trimmingCharacters(
+            in: CharacterSet(charactersIn: "/")
+        ) else {
+            return nil
+        }
+        return append(suffix, to: root)
+    }
+
+    private static func append(_ suffix: String, to base: String) -> String? {
+        URL(string: base.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + suffix)?
+            .absoluteString
     }
 }
 
@@ -273,19 +543,22 @@ public struct RouteConfig: Codable, Identifiable, Hashable, Sendable {
     public var enabled: Bool
     public var strategy: RouteStrategy
     public var targets: [RouteTarget]
+    public var constraints: RouteConstraints?
 
     public init(
         id: UUID = UUID(),
         alias: String,
         enabled: Bool = true,
         strategy: RouteStrategy = .priority,
-        targets: [RouteTarget] = []
+        targets: [RouteTarget] = [],
+        constraints: RouteConstraints? = nil
     ) {
         self.id = id
         self.alias = alias
         self.enabled = enabled
         self.strategy = strategy
         self.targets = targets
+        self.constraints = constraints
     }
 }
 
@@ -336,6 +609,9 @@ public struct AppConfiguration: Codable, Sendable {
     public var modelHealth: [ModelHealthRecord]
     public var operational: OperationalSettings
     public var usage: [UsageAggregate]
+    public var workspaces: [WorkspaceConfig]
+    public var virtualKeys: [VirtualAccessKey]
+    public var securityAudit: [SecurityAuditEvent]
 
     public init(
         providers: [ProviderConfig] = [],
@@ -344,7 +620,10 @@ public struct AppConfiguration: Codable, Sendable {
         server: ServerSettings = .init(),
         modelHealth: [ModelHealthRecord] = [],
         operational: OperationalSettings = .init(),
-        usage: [UsageAggregate] = []
+        usage: [UsageAggregate] = [],
+        workspaces: [WorkspaceConfig] = [],
+        virtualKeys: [VirtualAccessKey] = [],
+        securityAudit: [SecurityAuditEvent] = []
     ) {
         self.providers = providers
         self.routes = routes
@@ -353,10 +632,14 @@ public struct AppConfiguration: Codable, Sendable {
         self.modelHealth = modelHealth
         self.operational = operational
         self.usage = usage
+        self.workspaces = workspaces
+        self.virtualKeys = virtualKeys
+        self.securityAudit = securityAudit
     }
 
     enum CodingKeys: String, CodingKey {
-        case providers, routes, routing, server, modelHealth, operational, usage
+        case providers, routes, routing, server, modelHealth, operational, usage,
+             workspaces, virtualKeys, securityAudit
     }
 
     public init(from decoder: Decoder) throws {
@@ -371,6 +654,9 @@ public struct AppConfiguration: Codable, Sendable {
             forKey: .operational
         ) ?? .init()
         usage = try container.decodeIfPresent([UsageAggregate].self, forKey: .usage) ?? []
+        workspaces = try container.decodeIfPresent([WorkspaceConfig].self, forKey: .workspaces) ?? []
+        virtualKeys = try container.decodeIfPresent([VirtualAccessKey].self, forKey: .virtualKeys) ?? []
+        securityAudit = try container.decodeIfPresent([SecurityAuditEvent].self, forKey: .securityAudit) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -382,6 +668,9 @@ public struct AppConfiguration: Codable, Sendable {
         try container.encode(modelHealth, forKey: .modelHealth)
         try container.encode(operational, forKey: .operational)
         try container.encode(usage, forKey: .usage)
+        try container.encode(workspaces, forKey: .workspaces)
+        try container.encode(virtualKeys, forKey: .virtualKeys)
+        try container.encode(securityAudit, forKey: .securityAudit)
     }
 }
 
