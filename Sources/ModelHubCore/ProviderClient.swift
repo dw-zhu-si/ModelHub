@@ -51,6 +51,7 @@ public struct NativeQueryItem: Sendable, Equatable {
 public enum ProviderClientError: LocalizedError {
     case invalidBaseURL
     case missingAPIKey
+    case credentialMismatch(String)
     case invalidRequest(String)
     case nonHTTPResponse
 
@@ -58,22 +59,52 @@ public enum ProviderClientError: LocalizedError {
         switch self {
         case .invalidBaseURL: "供应商 Base URL 无效"
         case .missingAPIKey: "供应商 API Key 未配置"
+        case .credentialMismatch(let message): message
         case .invalidRequest(let detail): "请求无法转换：\(detail)"
         case .nonHTTPResponse: "供应商返回了非 HTTP 响应"
         }
     }
 
     public var isInvalidClientRequest: Bool {
-        if case .invalidRequest = self { return true }
-        return false
+        switch self {
+        case .invalidRequest, .credentialMismatch: true
+        default: false
+        }
+    }
+
+    public var isCredentialIssue: Bool {
+        switch self {
+        case .missingAPIKey, .credentialMismatch: true
+        default: false
+        }
     }
 }
 
 public struct ProviderClient: Sendable {
     let session: URLSession
+    let catalogRecoverySessionFactory: (@Sendable () -> URLSession)?
 
     public init(session: URLSession = .shared) {
         self.session = session
+        if session === URLSession.shared {
+            self.catalogRecoverySessionFactory = {
+                let configuration = URLSessionConfiguration.ephemeral
+                configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+                configuration.urlCache = nil
+                configuration.waitsForConnectivity = true
+                return URLSession(configuration: configuration)
+            }
+        } else {
+            self.catalogRecoverySessionFactory = nil
+        }
+    }
+
+    init(
+        session: URLSession,
+        catalogRecoverySessionFactory: @escaping @Sendable () -> URLSession
+    ) {
+        self.session = session
+        self.catalogRecoverySessionFactory = catalogRecoverySessionFactory
     }
 
     public func send(
@@ -83,9 +114,7 @@ public struct ProviderClient: Sendable {
         apiKey: String?,
         timeoutInterval: TimeInterval = 180
     ) async throws -> ProviderResponse {
-        if provider.kind.needsAPIKey && (apiKey?.isEmpty != false) {
-            throw ProviderClientError.missingAPIKey
-        }
+        try validateCredential(provider: provider, apiKey: apiKey)
 
         switch provider.kind {
         case .anthropic:
@@ -133,9 +162,7 @@ public struct ProviderClient: Sendable {
         apiKey: String?,
         timeoutInterval: TimeInterval = 180
     ) throws -> URLRequest {
-        if provider.kind.needsAPIKey && (apiKey?.isEmpty != false) {
-            throw ProviderClientError.missingAPIKey
-        }
+        try validateCredential(provider: provider, apiKey: apiKey)
         var json = try jsonObject(from: rawBody)
         json["model"] = targetModel
         var request = URLRequest(url: try responsesEndpoint(for: provider))
@@ -156,9 +183,7 @@ public struct ProviderClient: Sendable {
         apiKey: String?,
         timeoutInterval: TimeInterval = 180
     ) throws -> URLRequest {
-        if provider.kind.needsAPIKey && (apiKey?.isEmpty != false) {
-            throw ProviderClientError.missingAPIKey
-        }
+        try validateCredential(provider: provider, apiKey: apiKey)
         switch provider.kind {
         case .anthropic:
             var request = URLRequest(url: try endpoint(for: provider, model: targetModel))
@@ -270,13 +295,15 @@ public struct ProviderClient: Sendable {
         operation: NativeAPIOperation,
         taskID: String? = nil
     ) throws -> URL {
-        if operation == .videoTask {
+        if operation == .videoTask || operation == .musicTask {
             guard let taskID, !taskID.isEmpty else {
-                throw ProviderClientError.invalidRequest("查询视频任务需要 task_id")
+                throw ProviderClientError.invalidRequest("查询生成任务需要 task_id")
             }
         }
         let endpointKind: ProviderEndpointKind = switch operation {
         case .imageGeneration: .imageGeneration
+        case .musicGeneration: .musicGeneration
+        case .musicTask: .musicTask
         case .videoGeneration: .videoGeneration
         case .videoTask: .videoTask
         case .speech: .speech
@@ -313,9 +340,7 @@ public struct ProviderClient: Sendable {
         contentType: String = "application/json",
         timeoutInterval: TimeInterval = 600
     ) throws -> URLRequest {
-        if provider.kind.needsAPIKey && (apiKey?.isEmpty != false) {
-            throw ProviderClientError.missingAPIKey
-        }
+        try validateCredential(provider: provider, apiKey: apiKey)
 
         var request = URLRequest(
             url: try nativeEndpoint(
@@ -325,10 +350,11 @@ public struct ProviderClient: Sendable {
                 taskID: taskID
             )
         )
-        request.httpMethod = operation == .videoTask ? "GET" : "POST"
+        let isTaskQuery = operation == .videoTask || operation == .musicTask
+        request.httpMethod = isTaskQuery ? "GET" : "POST"
         request.timeoutInterval = timeoutInterval
 
-        if operation != .videoTask {
+        if !isTaskQuery {
             if contentType.lowercased().contains("application/json") {
                 var json = try jsonObject(from: rawBody)
                 json["model"] = targetModel
@@ -521,9 +547,7 @@ public struct ProviderClient: Sendable {
         headers: [String: String] = [:],
         timeoutInterval: TimeInterval = 600
     ) throws -> URLRequest {
-        if provider.kind.needsAPIKey && (apiKey?.isEmpty != false) {
-            throw ProviderClientError.missingAPIKey
-        }
+        try validateCredential(provider: provider, apiKey: apiKey)
 
         let normalizedMethod = method.uppercased()
         let allowedMethods = ["GET", "POST", "PUT", "PATCH", "DELETE"]
@@ -639,6 +663,22 @@ public struct ProviderClient: Sendable {
         )
     }
 
+    private func validateCredential(
+        provider: ProviderConfig,
+        apiKey: String?
+    ) throws {
+        let key = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if provider.kind.needsAPIKey && key.isEmpty {
+            throw ProviderClientError.missingAPIKey
+        }
+        if let message = ProviderCredentialPolicy.validationMessage(
+            for: provider.kind,
+            apiKey: key
+        ) {
+            throw ProviderClientError.credentialMismatch(message)
+        }
+    }
+
     private func sendUnifiedCompatible(
         rawBody: Data,
         targetModel: String,
@@ -713,14 +753,25 @@ public struct ProviderClient: Sendable {
     ) throws -> URL {
         let modelKey = ProviderEndpointRecord.key(for: kind, model: model)
         let genericKey = ProviderEndpointRecord.key(for: kind)
-        var configured = (
-            provider.endpointURLs[modelKey]
-                ?? provider.endpointURLs[genericKey]
-                ?? provider.baseURL
-        ).trimmingCharacters(in: .whitespacesAndNewlines)
-        if kind == .videoTask, configured.contains("{task_id}") {
+        let recordedEndpoint = provider.endpointURLs[modelKey]
+            ?? provider.endpointURLs[genericKey]
+        if kind == .musicTask, recordedEndpoint?.isEmpty != false {
+            throw ProviderClientError.invalidRequest("查询音乐任务需要保存精确的 musicTask 端点")
+        }
+        var configured = (recordedEndpoint ?? provider.baseURL)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if configured.contains("{model}") {
+            guard let model, !model.isEmpty else {
+                throw ProviderClientError.invalidRequest("模型端点模板需要模型名称")
+            }
+            configured = configured.replacingOccurrences(
+                of: "{model}",
+                with: encodedModelTemplateValue(model, providerKind: provider.kind)
+            )
+        }
+        if (kind == .videoTask || kind == .musicTask), configured.contains("{task_id}") {
             guard let taskID, !taskID.isEmpty else {
-                throw ProviderClientError.invalidRequest("查询视频任务需要 task_id")
+                throw ProviderClientError.invalidRequest("查询生成任务需要 task_id")
             }
             var pathAllowed = CharacterSet.urlPathAllowed
             pathAllowed.remove(charactersIn: "/")
@@ -728,13 +779,28 @@ public struct ProviderClient: Sendable {
             configured = configured.replacingOccurrences(of: "{task_id}", with: encoded)
         }
         guard let components = URLComponents(string: configured),
-              components.scheme != nil,
-              components.host != nil,
+              ProviderEndpointSecurity.isSafeConfigurationURL(components),
               let url = components.url
         else {
             throw ProviderClientError.invalidBaseURL
         }
         return url
+    }
+
+    private func encodedModelTemplateValue(
+        _ model: String,
+        providerKind: ProviderKind
+    ) -> String {
+        var raw = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        if providerKind == .gemini {
+            if raw.lowercased().hasPrefix("models/") {
+                raw.removeFirst("models/".count)
+            }
+        }
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/?#%{}")
+        let encoded = raw.addingPercentEncoding(withAllowedCharacters: allowed) ?? raw
+        return providerKind == .gemini ? "models/\(encoded)" : encoded
     }
 
     private func requestStreams(_ rawBody: Data) -> Bool {

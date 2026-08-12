@@ -18,10 +18,19 @@ remove_item() {
     /usr/bin/swift -e 'import Foundation; let path = CommandLine.arguments[1]; if FileManager.default.fileExists(atPath: path) { try FileManager.default.removeItem(atPath: path) }' "$1"
 }
 
-cleanup() {
-    if /sbin/mount | /usr/bin/grep -Fq "${MOUNT_ROOT}"; then
-        /usr/bin/hdiutil detach "${MOUNT_ROOT}" -quiet || true
+detach_mount() {
+    if ! /sbin/mount | /usr/bin/grep -Fq "${MOUNT_ROOT}"; then
+        return 0
     fi
+    if /usr/bin/hdiutil detach "${MOUNT_ROOT}" -quiet; then
+        return 0
+    fi
+    /bin/sleep 1
+    /usr/bin/hdiutil detach "${MOUNT_ROOT}" -force -quiet
+}
+
+cleanup() {
+    detach_mount || true
     remove_item "${STAGING_ROOT}"
 }
 trap cleanup EXIT
@@ -85,7 +94,7 @@ fi
 /usr/bin/codesign --verify --deep --strict "${MOUNT_ROOT}/ModelHub.app"
 /usr/bin/xcrun stapler validate "${MOUNT_ROOT}/ModelHub.app"
 /usr/sbin/spctl --assess --type execute --verbose=2 "${MOUNT_ROOT}/ModelHub.app"
-/usr/bin/hdiutil detach "${MOUNT_ROOT}" -quiet
+detach_mount
 
 DMG_SHA256=$(/usr/bin/shasum -a 256 "${DMG_PATH}" | /usr/bin/awk '{print $1}')
 /usr/bin/printf '%s  %s\n' "${DMG_SHA256}" "${DMG_PATH:t}" > "${SHA256_PATH}"

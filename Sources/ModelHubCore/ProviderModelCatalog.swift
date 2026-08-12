@@ -53,10 +53,14 @@ public enum ProviderModelCatalogError: LocalizedError, Equatable {
     case insecureEndpoint
     case credentialInURL
     case missingAPIKey
+    case credentialMismatch(String)
     case redirectedToDifferentOrigin
     case nonHTTPResponse
+    case secureConnectionFailed
+    case networkUnavailable
+    case timedOut
     case responseTooLarge(maximumBytes: Int)
-    case rejected(statusCode: Int)
+    case rejected(statusCode: Int, providerKind: ProviderKind)
     case invalidResponse
     case noModels
 
@@ -72,18 +76,51 @@ public enum ProviderModelCatalogError: LocalizedError, Equatable {
             "模型名录 URL 不得包含用户名、密码、API Key 或 Token 查询参数"
         case .missingAPIKey:
             "供应商 API Key 未配置"
+        case .credentialMismatch(let message):
+            message
         case .redirectedToDifferentOrigin:
             "模型名录请求被重定向到其他来源，为防止凭证泄露已拒绝响应"
         case .nonHTTPResponse:
             "供应商返回了非 HTTP 响应"
+        case .secureConnectionFailed:
+            "TLS 安全连接失败；ModelHub 未绕过证书校验。请检查 VPN/TUN、代理或系统时间后重试"
+        case .networkUnavailable:
+            "无法连接模型供应商；请检查网络、DNS、VPN/TUN 或代理状态后重试"
+        case .timedOut:
+            "模型名录请求超时；已停止重试，请稍后再试"
         case .responseTooLarge(let maximumBytes):
             "模型名录响应超过安全上限（\(maximumBytes / 1_048_576) MiB）"
-        case .rejected(let statusCode):
-            "供应商拒绝模型名录请求（HTTP \(statusCode)）"
+        case .rejected(let statusCode, let providerKind):
+            rejectionDescription(statusCode: statusCode, providerKind: providerKind)
         case .invalidResponse:
             "模型名录不是可识别的 JSON 格式"
         case .noModels:
             "响应成功，但没有解析到模型名称"
+        }
+    }
+
+    private func rejectionDescription(
+        statusCode: Int,
+        providerKind: ProviderKind
+    ) -> String {
+        guard statusCode == 401 || statusCode == 403 else {
+            return "供应商拒绝模型名录请求（HTTP \(statusCode)）"
+        }
+        switch providerKind {
+        case .qwenPersonal:
+            return "百炼个人版鉴权失败（HTTP \(statusCode)）：请使用与 Token Plan Base URL 配套、以 sk-sp- 开头的个人版专属 API Key，并确认订阅仍有效。"
+        case .qwenEnterprise:
+            return "百炼 Token Plan 团队版鉴权失败（HTTP \(statusCode)）：请先分配成员席位，再使用与 Token Plan Base URL 配套、以 sk-sp- 开头的团队版专属 API Key。"
+        case .qwen:
+            return "百炼按量付费版鉴权失败（HTTP \(statusCode)）：请使用当前地域/默认业务空间对应的按量付费 API Key 与 Base URL，不能混用 sk-sp- 套餐密钥。"
+        case .qwenBusiness:
+            return "百炼企业业务空间鉴权失败（HTTP \(statusCode)）：请使用 API Keys 页面生成的按量付费 API Key，并核对页面展示的地域、业务空间和 Base URL；不能混用 sk-sp- 套餐密钥。"
+        case .minimax:
+            return "MiniMax 国际站鉴权失败（HTTP \(statusCode)）：当前 API Key 不被 api.minimax.io 接受；如果使用中国站账号，请将供应商类型切换为“MiniMax 中国站”。"
+        case .minimaxChina:
+            return "MiniMax 中国站鉴权失败（HTTP \(statusCode)）：当前 API Key 不被 api.minimaxi.com 接受；请确认密钥来自中国站开放平台，或切换为“MiniMax 国际站”。"
+        default:
+            return "供应商拒绝模型名录请求（HTTP \(statusCode)）；请检查 API Key、账号权限、区域和订阅状态。"
         }
     }
 }
@@ -551,13 +588,22 @@ public enum ProviderModelCatalogSuggestions {
             return fixed("generativelanguage.googleapis.com", "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000", "Gemini API 可用模型")
         case .deepSeek:
             return fixed("api.deepseek.com", "https://api.deepseek.com/models", "DeepSeek API 可用模型")
-        case .qwen:
+        case .qwen, .qwenBusiness:
             return fixed(
                 "dashscope.aliyuncs.com",
-                "https://dashscope.aliyuncs.com/api/v1/deployments/models?page_no=1&page_size=100&version=v1.0&model_source=base",
-                "百炼北京地域可部署的基础模型；不代表全部按量付费或语音模型",
-                importBehavior: .deploymentReferenceOnly
+                "https://dashscope.aliyuncs.com/api/v1/models",
+                "百炼北京地域账户可用模型"
             )
+        case .qwenPersonal, .qwenEnterprise:
+            return fixed(
+                "token-plan.cn-beijing.maas.aliyuncs.com",
+                "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/models",
+                "百炼 Token Plan 当前版本可用模型"
+            )
+        case .moonshot:
+            return fixed("api.moonshot.cn", "https://api.moonshot.cn/v1/models", "Moonshot 账户可用模型")
+        case .zhipu:
+            return fixed("open.bigmodel.cn", "https://open.bigmodel.cn/api/paas/v4/models", "智谱开放平台账户可用模型")
         case .xAI:
             return fixed("api.x.ai", "https://api.x.ai/v1/models", "xAI 可用模型及其公开 Token 价格", prices: true)
         case .groq:
@@ -585,9 +631,15 @@ public enum ProviderModelCatalogSuggestions {
             return fixed("api.cohere.ai", "https://api.cohere.ai/v1/models", "Cohere 账户可用模型")
         case .siliconFlow:
             return fixed("api.siliconflow.cn", "https://api.siliconflow.cn/v1/models", "SiliconFlow 账户可用模型")
+        case .volcengine:
+            return fixed("ark.cn-beijing.volces.com", "https://ark.cn-beijing.volces.com/api/v3/models", "火山方舟账户可用模型")
         case .baiduQianfan:
             return fixed("qianfan.baidubce.com", "https://qianfan.baidubce.com/v2/models", "百度千帆账户可用模型")
-        case .moonshot, .zhipu, .volcengine, .minimax, .apimart, .agnes, .yunwu,
+        case .minimax:
+            return fixed("api.minimax.io", "https://api.minimax.io/v1/models", "MiniMax 账户可用模型")
+        case .minimaxChina:
+            return fixed("api.minimaxi.com", "https://api.minimaxi.com/v1/models", "MiniMax 中国站账户可用模型")
+        case .apimart, .agnes, .yunwu,
              .unifiedCompatible:
             return nil
         }
@@ -595,6 +647,65 @@ public enum ProviderModelCatalogSuggestions {
 
     public static func exactURL(for provider: ProviderConfig) -> URL? {
         suggestion(for: provider)?.exactURL
+    }
+}
+
+public enum ProviderModelPricingAvailability: Sendable, Equatable {
+    case available
+    case unavailable(reason: String)
+}
+
+public enum ProviderModelCatalogPricingPolicy {
+    private static let builtInMachinePriceKinds: Set<ProviderKind> = [
+        .xAI, .openRouter, .togetherAI,
+    ]
+
+    /// Avoids scheduled requests to built-in model catalogs that are known not
+    /// to publish machine-readable prices. A user-supplied custom catalog stays
+    /// eligible because its response contract is controlled by that provider.
+    public static func shouldFetch(provider: ProviderConfig, endpoint: URL) -> Bool {
+        availability(provider: provider, endpoint: endpoint) == .available
+    }
+
+    public static func availability(
+        provider: ProviderConfig,
+        endpoint: URL
+    ) -> ProviderModelPricingAvailability {
+        if let suggestion = ProviderModelCatalogSuggestions.suggestion(for: provider),
+           suggestion.exactURL == endpoint
+        {
+            guard suggestion.canReturnTokenPrices else {
+                return .unavailable(reason: unavailableReason(for: provider.kind))
+            }
+            return .available
+        }
+
+        let catalogKey = ProviderEndpointRecord.key(for: .modelCatalog)
+        if let presetCatalog = ProviderConnectionPresets.preset(for: provider.kind)?
+            .endpointURLs[catalogKey],
+           URL(string: presetCatalog) == endpoint
+        {
+            guard builtInMachinePriceKinds.contains(provider.kind) else {
+                return .unavailable(reason: unavailableReason(for: provider.kind))
+            }
+            return .available
+        }
+        return .available
+    }
+
+    private static func unavailableReason(for kind: ProviderKind) -> String {
+        switch kind {
+        case .qwenPersonal, .qwenEnterprise:
+            return "百炼 Token Plan 的模型目录不提供美元单价；套餐按 Credits 与动态抵扣系数计量，请以百炼控制台为准。现有费用不会被覆盖。"
+        case .qwen, .qwenBusiness:
+            return "百炼按量付费模型目录不提供带明确币种与单位的机器可读价格；请以百炼控制台价格页为准，现有费用不会被覆盖。"
+        case .minimax, .minimaxChina:
+            return "MiniMax 模型目录只返回模型信息，不提供机器可读价格；当前不能从该目录自动同步金额，现有费用不会被覆盖。"
+        case .apimart, .yunwu:
+            return "该供应商的模型目录没有返回带明确币种和单位的机器可读价格；为避免猜价，现有费用不会被覆盖。"
+        default:
+            return "该供应商的官方模型目录没有机器可读价格字段；为避免猜价，现有费用不会被覆盖。"
+        }
     }
 }
 
@@ -623,6 +734,14 @@ extension ProviderClient {
     ) throws -> URLRequest {
         if provider.kind.needsAPIKey && apiKey?.isEmpty != false {
             throw ProviderModelCatalogError.missingAPIKey
+        }
+        if let apiKey,
+           let message = ProviderCredentialPolicy.validationMessage(
+               for: provider.kind,
+               apiKey: apiKey
+           )
+        {
+            throw ProviderModelCatalogError.credentialMismatch(message)
         }
         let configured = provider.endpointURLs[
             ProviderEndpointRecord.key(for: .modelCatalog)
@@ -677,13 +796,56 @@ extension ProviderClient {
     public func fetchModelCatalog(
         provider: ProviderConfig,
         apiKey: String?,
-        timeoutInterval: TimeInterval = 20
+        timeoutInterval: TimeInterval = 20,
+        retryDelayNanoseconds: UInt64 = 250_000_000
     ) async throws -> ProviderModelCatalogResult {
         let request = try modelCatalogRequest(
             provider: provider,
             apiKey: apiKey,
             timeoutInterval: timeoutInterval
         )
+        var requestSession = session
+        var recoverySession: URLSession?
+        defer { recoverySession?.finishTasksAndInvalidate() }
+        var retryCount = 0
+        while true {
+            do {
+                return try await performModelCatalogRequest(
+                    request,
+                    providerKind: provider.kind,
+                    session: requestSession
+                )
+            } catch let error as URLError {
+                if retryCount == 0,
+                   shouldReestablishCatalogSession(after: error),
+                   let factory = catalogRecoverySessionFactory
+                {
+                    retryCount += 1
+                    let freshSession = factory()
+                    recoverySession = freshSession
+                    requestSession = freshSession
+                    if retryDelayNanoseconds > 0 {
+                        try await Task.sleep(nanoseconds: retryDelayNanoseconds)
+                    }
+                    continue
+                }
+                if retryCount == 0, shouldRetryCatalogRequest(after: error) {
+                    retryCount += 1
+                    if retryDelayNanoseconds > 0 {
+                        try await Task.sleep(nanoseconds: retryDelayNanoseconds)
+                    }
+                    continue
+                }
+                throw mappedCatalogNetworkError(error)
+            }
+        }
+    }
+
+    private func performModelCatalogRequest(
+        _ request: URLRequest,
+        providerKind: ProviderKind,
+        session: URLSession
+    ) async throws -> ProviderModelCatalogResult {
         let startedAt = ContinuousClock.now
         let (bytes, response) = try await session.bytes(
             for: request,
@@ -696,7 +858,10 @@ extension ProviderClient {
             throw ProviderModelCatalogError.redirectedToDifferentOrigin
         }
         guard (200..<300).contains(http.statusCode) else {
-            throw ProviderModelCatalogError.rejected(statusCode: http.statusCode)
+            throw ProviderModelCatalogError.rejected(
+                statusCode: http.statusCode,
+                providerKind: providerKind
+            )
         }
 
         var body = Data()
@@ -713,7 +878,7 @@ extension ProviderClient {
         }
         let parsed = try ProviderModelCatalogParser.parseDetailed(
             body,
-            providerKind: provider.kind,
+            providerKind: providerKind,
             source: request.url!.absoluteString
         )
         let elapsed = startedAt.duration(to: .now)
@@ -726,6 +891,41 @@ extension ProviderClient {
             durationMilliseconds: milliseconds,
             responseBytes: body.count
         )
+    }
+
+    private func shouldRetryCatalogRequest(after error: URLError) -> Bool {
+        switch error.code {
+        case .timedOut, .cannotFindHost, .cannotConnectToHost,
+             .dnsLookupFailed, .networkConnectionLost, .notConnectedToInternet,
+             .secureConnectionFailed:
+            true
+        default:
+            false
+        }
+    }
+
+    private func shouldReestablishCatalogSession(after error: URLError) -> Bool {
+        switch error.code {
+        case .serverCertificateUntrusted, .secureConnectionFailed:
+            true
+        default:
+            false
+        }
+    }
+
+    private func mappedCatalogNetworkError(
+        _ error: URLError
+    ) -> ProviderModelCatalogError {
+        switch error.code {
+        case .serverCertificateHasBadDate, .serverCertificateUntrusted,
+             .serverCertificateNotYetValid, .clientCertificateRejected,
+             .clientCertificateRequired, .secureConnectionFailed:
+            .secureConnectionFailed
+        case .timedOut:
+            .timedOut
+        default:
+            .networkUnavailable
+        }
     }
 
     private func sameOrigin(_ lhs: URL?, _ rhs: URL?) -> Bool {

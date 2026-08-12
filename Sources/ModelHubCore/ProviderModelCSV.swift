@@ -84,6 +84,8 @@ public enum ProviderModelCSVImporter {
         (["endpoint", "chat_endpoint", "聊天端点"], .chat),
         (["responses_endpoint", "responses端点"], .responses),
         (["image_endpoint", "image_generation_endpoint", "图片端点"], .imageGeneration),
+        (["music_endpoint", "music_generation_endpoint", "音乐端点"], .musicGeneration),
+        (["music_task_endpoint", "音乐任务端点"], .musicTask),
         (["video_endpoint", "video_generation_endpoint", "视频端点"], .videoGeneration),
         (["video_task_endpoint", "视频任务端点"], .videoTask),
         (["speech_endpoint", "语音端点"], .speech),
@@ -331,17 +333,8 @@ public enum ProviderModelCSVImporter {
 
     private static func isValidEndpoint(_ rawValue: String) -> Bool {
         guard let components = URLComponents(string: rawValue),
-              let scheme = components.scheme?.lowercased(),
-              ["http", "https"].contains(scheme),
-              components.host?.isEmpty == false,
-              components.user == nil,
-              components.password == nil,
-              components.fragment == nil
+              ProviderEndpointSecurity.isSafeConfigurationURL(components)
         else { return false }
-        let sensitiveNames = ["key", "token", "secret", "password", "credential"]
-        return !(components.queryItems ?? []).contains { item in
-            let name = item.name.lowercased()
-            return sensitiveNames.contains { name.contains($0) }
-        }
+        return true
     }
 }

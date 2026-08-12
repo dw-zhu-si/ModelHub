@@ -125,8 +125,172 @@ final class ModelHealthTests: XCTestCase {
         XCTAssertEqual(ProviderKind.siliconFlow.defaultBaseURL, "https://api.siliconflow.cn/v1")
         XCTAssertEqual(ProviderKind.volcengine.defaultBaseURL, "https://ark.cn-beijing.volces.com/api/v3")
         XCTAssertEqual(ProviderKind.baiduQianfan.defaultBaseURL, "https://qianfan.baidubce.com/v2")
+        XCTAssertEqual(ProviderKind.minimax.defaultBaseURL, "https://api.minimax.io/v1")
+        XCTAssertEqual(ProviderKind.unifiedCompatible.defaultBaseURL, "")
         XCTAssertTrue(ProviderKind.openRouter.usesUnifiedProtocol)
         XCTAssertTrue(ProviderKind.volcengine.needsAPIKey)
+    }
+
+    func testBailianEditionsAreDistinctAndValidateOfficialEndpointFamilies() throws {
+        XCTAssertEqual(ProviderKind.qwen.displayName, "阿里云百炼（按量版）")
+        XCTAssertEqual(ProviderKind.qwenPersonal.displayName, "阿里云百炼个人版")
+        XCTAssertEqual(ProviderKind.qwenBusiness.displayName, "阿里云百炼企业版（业务空间/按量付费）")
+        XCTAssertEqual(ProviderKind.qwenEnterprise.displayName, "阿里云百炼 Token Plan 团队版")
+        XCTAssertEqual(
+            ProviderKind.qwenPersonal.recommendedBaseURL,
+            "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+        )
+        XCTAssertEqual(
+            ProviderKind.qwenEnterprise.recommendedBaseURL,
+            ProviderKind.qwenPersonal.recommendedBaseURL
+        )
+        XCTAssertEqual(
+            ProviderKind.qwenEnterprise.recommendedChatEndpoint,
+            "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions"
+        )
+        XCTAssertEqual(
+            ProviderKind.qwenBusiness.recommendedBaseURL,
+            "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+        XCTAssertNotNil(
+            BailianEndpointPolicy.validationMessage(
+                for: ProviderConfig(
+                    name: "个人版",
+                    kind: .qwenPersonal,
+                    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                    models: ["qwen-plus"]
+                )
+            )
+        )
+        XCTAssertNotNil(
+            BailianEndpointPolicy.validationMessage(
+                for: ProviderConfig(
+                    name: "旧百炼",
+                    kind: .qwen,
+                    baseURL: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+                    models: ["qwen-plus"]
+                )
+            )
+        )
+
+        let personal = ProviderConfig(
+            name: "个人版",
+            kind: .qwenPersonal,
+            baseURL: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+            models: ["qwen-plus"]
+        )
+        XCTAssertNil(BailianEndpointPolicy.validationMessage(for: personal))
+        XCTAssertEqual(
+            ProviderBaseURLMigration.completedLegacyURL(for: personal),
+            "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions"
+        )
+
+        let encoded = try JSONEncoder().encode(personal)
+        XCTAssertEqual(try JSONDecoder().decode(ProviderConfig.self, from: encoded).kind, .qwenPersonal)
+
+        let regionalPayAsYouGo = ProviderConfig(
+            name: "新加坡业务空间",
+            kind: .qwen,
+            baseURL: "https://workspace.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+            models: ["qwen-plus"]
+        )
+        XCTAssertNil(BailianEndpointPolicy.validationMessage(for: regionalPayAsYouGo))
+
+        let businessPayAsYouGo = ProviderConfig(
+            name: "企业业务空间",
+            kind: .qwenBusiness,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            models: ["qwen-plus"]
+        )
+        XCTAssertNil(BailianEndpointPolicy.validationMessage(for: businessPayAsYouGo))
+    }
+
+    func testBailianTokenPlanRejectsMismatchedExplicitChatEndpoint() {
+        let provider = ProviderConfig(
+            name: "企业版",
+            kind: .qwenEnterprise,
+            baseURL: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+            models: ["qwen-plus"],
+            endpointURLs: [
+                ProviderEndpointRecord.key(for: .chat, model: "qwen-plus"):
+                    "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+            ]
+        )
+        XCTAssertNotNil(BailianEndpointPolicy.validationMessage(for: provider))
+    }
+
+    func testBailianCredentialFamiliesFailClosedBeforeNetworkUse() {
+        XCTAssertNil(
+            ProviderCredentialPolicy.validationMessage(
+                for: .qwenEnterprise,
+                apiKey: "sk-sp-team-token"
+            )
+        )
+        XCTAssertNotNil(
+            ProviderCredentialPolicy.validationMessage(
+                for: .qwenEnterprise,
+                apiKey: "sk-ws-pay-as-you-go-token"
+            )
+        )
+        XCTAssertNotNil(
+            ProviderCredentialPolicy.validationMessage(
+                for: .qwenPersonal,
+                apiKey: "sk-pay-as-you-go-token"
+            )
+        )
+        XCTAssertNotNil(
+            ProviderCredentialPolicy.validationMessage(
+                for: .qwen,
+                apiKey: "sk-sp-token-plan-token"
+            )
+        )
+        XCTAssertNil(
+            ProviderCredentialPolicy.validationMessage(
+                for: .qwen,
+                apiKey: "sk-ws-pay-as-you-go-token"
+            )
+        )
+        XCTAssertNil(
+            ProviderCredentialPolicy.validationMessage(
+                for: .qwenBusiness,
+                apiKey: "sk-ws-business-workspace-token"
+            )
+        )
+        XCTAssertNotNil(
+            ProviderCredentialPolicy.validationMessage(
+                for: .qwenBusiness,
+                apiKey: "sk-sp-token-plan-token"
+            )
+        )
+        XCTAssertTrue(
+            ProviderCredentialPolicy.canReuseCredential(
+                from: .qwenEnterprise,
+                to: .qwenBusiness,
+                apiKey: "sk-ws-business-workspace-token"
+            )
+        )
+        XCTAssertFalse(
+            ProviderCredentialPolicy.canReuseCredential(
+                from: .qwenEnterprise,
+                to: .qwenBusiness,
+                apiKey: "sk-sp-token-plan-token"
+            )
+        )
+        XCTAssertFalse(
+            ProviderCredentialPolicy.canReuseCredential(
+                from: .qwenPersonal,
+                to: .qwenEnterprise,
+                apiKey: "sk-sp-token-plan-token"
+            )
+        )
+    }
+
+    func testMiniMaxRegionsAreDistinct() {
+        XCTAssertEqual(ProviderKind.minimaxChina.displayName, "MiniMax 中国站")
+        XCTAssertEqual(ProviderKind.minimax.displayName, "MiniMax 国际站")
+        XCTAssertEqual(ProviderKind.minimaxChina.defaultBaseURL, "https://api.minimaxi.com/v1")
+        XCTAssertEqual(ProviderKind.minimax.defaultBaseURL, "https://api.minimax.io/v1")
+        XCTAssertTrue(ProviderKind.minimaxChina.isOfficialProvider(for: "MiniMax-M2.7"))
     }
 
     func testNativeManualProbeMapsVideoToGenerationOperationAndBody() throws {
@@ -148,6 +312,81 @@ final class ModelHealthTests: XCTestCase {
         XCTAssertEqual(json["resolution"] as? String, "480p")
         XCTAssertEqual(json["size"] as? String, "16:9")
         XCTAssertEqual(json["generate_audio"] as? Bool, false)
+    }
+
+    func testMusicGenerationHasDedicatedCapabilityProtocolAndMinimalProbe() throws {
+        let provider = ProviderConfig(
+            name: "Music Provider",
+            kind: .unifiedCompatible,
+            baseURL: "https://music.example.com/v1/music/generations",
+            models: ["musicgen-large"]
+        )
+
+        XCTAssertEqual(
+            ModelProbePolicy.nativeProtocol(provider: provider, model: "musicgen-large"),
+            .musicGeneration
+        )
+        XCTAssertEqual(
+            ModelProbePolicy.nativeOperation(for: .musicGeneration),
+            .musicGeneration
+        )
+        XCTAssertTrue(
+            ModelCategory.infer(
+                model: "custom-audio-model",
+                capabilities: [.musicGeneration]
+            ).contains(.music)
+        )
+
+        let payload = try XCTUnwrap(
+            ModelProbePolicy.nativeProbePayload(
+                for: .musicGeneration,
+                model: "musicgen-large"
+            )
+        )
+        let json = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: payload.body) as? [String: Any]
+        )
+        XCTAssertEqual(json["prompt"] as? String, "ModelHub connection test")
+        XCTAssertEqual(json["duration"] as? Int, 5)
+        XCTAssertEqual(json["instrumental"] as? Bool, true)
+    }
+
+    func testVendorMusicActionUsesUnifiedProtocolOnlyWithExplicitMusicEndpoint() {
+        var provider = ProviderConfig(
+            name: "云雾 API",
+            kind: .unifiedCompatible,
+            baseURL: "https://yunwu.ai/v1",
+            models: ["suno_music_open"]
+        )
+        XCTAssertEqual(
+            ModelProbePolicy.nativeProtocol(provider: provider, model: "suno_music_open"),
+            .providerNative
+        )
+
+        provider.endpointURLs[
+            ProviderEndpointRecord.key(for: .musicGeneration, model: "suno_music_open")
+        ] = "https://yunwu.ai/v1/music/generations"
+        XCTAssertEqual(
+            ModelProbePolicy.nativeProtocol(provider: provider, model: "suno_music_open"),
+            .musicGeneration
+        )
+    }
+
+    func testNativeGatewayRoutesMusicCreationAndTaskWithoutConfusingVideoPaths() {
+        XCTAssertEqual(
+            NativeGatewayRoute.match(method: "POST", path: "/v1/music/generations"),
+            NativeGatewayMatch(operation: .musicGeneration)
+        )
+        XCTAssertEqual(
+            NativeGatewayRoute.match(method: "GET", path: "/v1/music/task_123"),
+            NativeGatewayMatch(operation: .musicTask, taskID: "task_123")
+        )
+        XCTAssertEqual(
+            NativeGatewayRoute.match(method: "GET", path: "/v1/tasks/task_456"),
+            NativeGatewayMatch(operation: .videoTask, taskID: "task_456")
+        )
+        XCTAssertNil(NativeGatewayRoute.match(method: "GET", path: "/v1/music/generations"))
+        XCTAssertNil(NativeGatewayRoute.match(method: "POST", path: "/v1/music/task_123"))
     }
 
     func testVideoProbeRequiresARealTaskIdentifier() throws {

@@ -45,7 +45,7 @@ ModelHub 本机网关（127.0.0.1:11435）
 
 ### 测试与正常调用分离
 
-正常外部调用不会为了刷新目录而重复拉取或测试模型。供应商编辑器支持填写精确的模型名录 URL，主动拉取后先搜索、勾选和预览，再与已有模型去重合并；也可导入 UTF-8、UTF-16 或含 Excel 分隔符声明的 CSV，预览后合并模型、费用和用户给出的精确端点。已有供应商还可在详情页直接“热更新模型”：优先使用已保存的精确目录；未保存时，只允许使用内置核验注册表中与供应商官方主机严格匹配的完整目录地址。服务无需重启，目录结果只做增量合并，不删除手工模型，不改变既有检测状态；包括百炼可部署参考项在内的新发现模型都会先保持隔离，完成真实验证后才能参与外部路由。ModelHub 绝不会擅自给 Base URL 拼接 `/v1/models`。只有用户主动执行热更新、单模型、单供应商或“测试全部”时才会访问名录端点；拉取失败会明确提示并继续使用已保存列表。测试聊天模型可能产生供应商费用，媒体和专用动作模型不会被错误送到聊天端点。
+正常外部调用不会为了刷新目录而重复拉取或测试模型。选择内置供应商时，编辑器会直接带出已核验的完整 Base URL、模型名录 URL 和该供应商适用的协议端点，通常只需填写 API Key；当前除必须由用户定义主机的“通用兼容协议”外，所有内置供应商类型都具备独立且完整的模型名录预设。MiniMax 明确区分中国站与国际站；百炼则区分通用按量付费、企业业务空间按量付费、Token Plan 个人版和 Token Plan 团队版，避免跨地域、跨计费体系混用密钥和端点。主动拉取后先搜索、勾选和预览，再与已有模型去重合并；也可导入 UTF-8、UTF-16 或含 Excel 分隔符声明的 CSV，预览后合并模型、费用和用户给出的精确端点。已有供应商还可在详情页直接“热更新模型”：优先使用已保存的精确目录；未保存时，只允许使用内置核验注册表中与供应商官方主机严格匹配的完整目录地址。服务无需重启，目录结果只做增量合并，不删除手工模型，不改变既有检测状态；新发现模型都会先保持隔离，完成真实验证后才能参与外部路由。ModelHub 只使用预设中明确保存的完整地址，不会根据 Base URL 临时拼接 `/v1/models`。只有用户主动执行热更新、单模型、单供应商或“测试全部”时才会访问名录端点；拉取失败会明确提示并继续使用已保存列表。测试聊天模型可能产生供应商费用，媒体和专用动作模型不会被错误送到聊天端点。
 
 ### 原生 macOS 体验
 
@@ -58,10 +58,10 @@ ModelHub 本机网关（127.0.0.1:11435）
 - 通用协议 Chat Completions：`POST /v1/chat/completions`；
 - 通用协议 Responses：`POST /v1/responses`，支持工具、多模态字段与增量 SSE；
 - 模型、供应商、健康和用量：`GET /v1/models`、`GET /v1/models/available`、`GET /v1/providers`、`GET /v1/analytics`；
-- 图像、视频、任务、语音、转录、向量和重排：`/v1/images/*`、`/v1/videos/*`、`/v1/tasks/*`、`/v1/audio/*`、`/v1/embeddings`、`/v1/rerank`；
+- 图像、视频、音乐、任务、语音、转录、向量和重排：`/v1/images/*`、`/v1/videos/*`、`/v1/music/*`、`/v1/tasks/*`、`/v1/audio/*`、`/v1/embeddings`、`/v1/rerank`；
 - 供应商动作协议：`POST /v1/native`，仅允许访问已配置供应商的固定主机；
 - 本机 Agent 管理面：使用独立 Agent Token 的只读 MCP、A2A 和 ACP stdio 入口。
-- MCP 可读取用户主动保存的任务上下文，并调用文字、图像、视频、语音、向量与重排模型；支持一键安装到 Codex、Claude Desktop，或复制手动安装配置。
+- MCP 可读取用户主动保存的任务上下文，并调用文字、图像、视频、音乐、语音、向量与重排模型；支持一键安装到 Codex、Claude Desktop，或复制手动安装配置。音乐生成工具必须收到明确的可能计费确认，任务查询保持只读。
 
 完整请求/响应合同见 [OpenAPI 规范](openapi/modelhub-openapi.yaml)。
 
@@ -90,7 +90,7 @@ ModelHub 本机网关（127.0.0.1:11435）
 
 - 按模型和供应商汇总请求数、成功率、延迟、Token、估算费用和上下文节省量；
 - 每个模型可分别配置输入、输出和单次调用费用，并记录价格来源与更新时间；
-- 支持从“用量分析”页一键同步供应商自身已配置或已核验的官方机器可读价格，并显示执行进度；默认每天本机时间 00:00 更新。没有明确金额或单位时保留手工价格，不抓取第三方页面、不猜价；
+- 支持从“用量分析”页一键同步供应商自身已配置或已核验的官方机器可读价格，并显示执行进度；默认每天本机时间 00:00 更新。内置目录中 OpenRouter、xAI 和 Together AI 已确认提供单位明确的机器价格；用户明确填写的自有价格目录也可参与同步。其他供应商的 `/models` 只用于模型名录，调度器不会每天重复请求已知不含价格的目录；没有明确金额或单位时保留手工价格，不抓取第三方页面、不猜价；
 - 支持月度 Token 配额、预算预警和硬限制；
 - 价格未知时保持“未知”，不会伪造费用；
 - 支持导入预览、10 MiB 配置备份上限和自动回滚副本，备份永不包含 Keychain 凭证。
@@ -113,8 +113,8 @@ ModelHub 本机网关（127.0.0.1:11435）
 | --- | --- |
 | 通用兼容 | DeepSeek、Qwen、Kimi、GLM、Grok、Groq、Mistral、Ollama，以及其他通用兼容协议的服务 |
 | 原生文本协议 | Anthropic Claude、Google Gemini |
-| 原生媒体/任务协议 | APIMart Seedance、Agnes 图像/视频、阿里云百炼语音，以及 通用格式的图像、音频、Embedding、Rerank |
-| 专用动作协议 | 云雾 API 等已配置供应商的 Midjourney、Suno、可灵、PixVerse 等动作接口（通过受限原生透传） |
+| 原生媒体/任务协议 | APIMart Seedance、Agnes 图像/视频、阿里云百炼语音，以及通用格式的图像、视频、音乐、音频、Embedding、Rerank；音乐使用精确生成与任务端点 |
+| 专用动作协议 | 云雾 API 等已配置供应商的 Midjourney、Suno、可灵、PixVerse 等动作接口（未配置统一音乐端点时继续通过受限原生透传） |
 
 “支持供应商”只表示协议和配置入口已实现，不代表用户账户拥有对应权限、余额或地区资格；真实可用性仍以用户自己的 Key 和供应商返回为准。
 
@@ -137,7 +137,7 @@ ModelHub 本机网关（127.0.0.1:11435）
 
 ### 普通用户：下载已公证 DMG
 
-从 [GitHub Releases](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.1-build33) 下载 `ModelHub-1.9.1-macos-universal.dmg`，打开后把 `ModelHub.app` 拖到“应用程序”文件夹。该 DMG 与其中的 App 均使用 Developer ID 签名，并已通过 Apple 公证、票据装订、镜像完整性和 Gatekeeper 验证。
+从 [GitHub Releases](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.1-build41) 下载 `ModelHub-1.9.1-macos-universal.dmg`，打开后把 `ModelHub.app` 拖到“应用程序”文件夹。该 DMG 与其中的 App 均使用 Developer ID 签名，并已通过 Apple 公证、票据装订、镜像完整性和 Gatekeeper 验证。
 
 也可以下载同一 Release 中的 Universal ZIP，解压后手动移动到“应用程序”。
 
@@ -150,8 +150,8 @@ ModelHub 本机网关（127.0.0.1:11435）
 ### 校验安装包
 
 ```text
-d23bd9b32faeed0f71f1b7c4525de2d811ced3821e93f0204ccd351bb13bd567  ModelHub-1.9.1-macos-universal.zip
-acb7fe18620941ade1dbee0df275383514878ff87b52e1e42b6dc9e0e29080a6  ModelHub-1.9.1-macos-universal.dmg
+1bddfa2393d20c4b76724b43231b2f194f8a8922848ba9dd126dd0e970ebb0d9  ModelHub-1.9.1-macos-universal.zip
+860e1da3e71dbe4394669cc0f86fd34928c5398bb234bbeb1dcce22b891d6aac  ModelHub-1.9.1-macos-universal.dmg
 ```
 
 下载 Release 中的 `ModelHub-1.9.1-SHA256.txt` 后，可执行：
@@ -162,7 +162,7 @@ shasum -a 256 -c ModelHub-1.9.1-SHA256.txt
 
 ## 五分钟开始使用
 
-1. 启动 ModelHub，在“模型供应商”中添加供应商、精确 Base URL 和 API Key；可填写精确模型名录 URL，拉取、筛选并合并模型，也可手工逐行填写。
+1. 启动 ModelHub，在“模型供应商”中选择内置供应商，连接地址会自动填好，通常只需输入 API Key 并保存；如果选择“通用兼容协议”或使用账户专属地址，再手工填写精确 URL。之后可拉取、筛选并合并模型，也可手工逐行填写。
 2. 如需在线验证，点击“单模型测试”“供应商测试”或“测试全部”，确认可能产生的上游费用。
 3. 在“模型路由”中创建稳定别名，例如 `smart`，添加一个或多个模型目标，并选择路由策略。
 4. 在“服务设置”复制本机接口地址和网关访问令牌。
@@ -219,6 +219,27 @@ curl http://127.0.0.1:11435/v1/videos/generations \
     "size": "16:9",
     "duration": 5
   }'
+```
+
+### 音乐任务示例
+
+选择已内置音乐协议的供应商时，ModelHub 会带出已核验的 `musicGeneration` 端点；异步供应商还需要含 `{task_id}` 的 `musicTask` 端点。通用兼容供应商仍由用户按官方文档填写完整地址，ModelHub 不会根据 Base URL 临时猜测或拼接。
+
+```bash
+curl http://127.0.0.1:11435/v1/music/generations \
+  -H "Authorization: Bearer YOUR_MODELHUB_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "音乐供应商/musicgen-large",
+    "prompt": "温暖、轻快的钢琴与弦乐，适合清晨",
+    "title": "清晨",
+    "style": "流行器乐",
+    "duration": 30,
+    "instrumental": true
+  }'
+
+curl 'http://127.0.0.1:11435/v1/music/TASK_ID?model=音乐供应商%2Fmusicgen-large' \
+  -H "Authorization: Bearer YOUR_MODELHUB_TOKEN"
 ```
 
 ### 供应商专用动作接口

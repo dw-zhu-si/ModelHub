@@ -118,6 +118,9 @@ struct ModelHubApp: App {
             // saved configuration and Keychain. This also makes screenshot
             // capture deterministic and prevents authorization prompts.
             model.enterReviewDemoMode()
+            if environment["MODELHUB_VISUAL_STRESS"] == "1" {
+                model.prepareProviderLayoutStressDemo()
+            }
         } else {
             model.bootstrap(initializeSecrets: false)
         }

@@ -5,6 +5,9 @@ final class ProviderModelCatalogTests: XCTestCase {
     override func tearDown() {
         CatalogURLProtocolStub.responseBody = Data()
         CatalogURLProtocolStub.statusCode = 200
+        CatalogURLProtocolStub.failuresBeforeSuccess = 0
+        CatalogURLProtocolStub.failureCode = .unknown
+        CatalogURLProtocolStub.attemptCount = 0
         super.tearDown()
     }
 
@@ -136,6 +139,53 @@ final class ProviderModelCatalogTests: XCTestCase {
         XCTAssertNil(ProviderModelCatalogSuggestions.exactURL(for: customRegion))
     }
 
+    func testBailianTokenPlansUseVerifiedCompatibleModelCatalogEndpoint() {
+        let expected = "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/models"
+        for kind in [ProviderKind.qwenPersonal, .qwenEnterprise] {
+            let provider = ProviderConfig(
+                name: kind.displayName,
+                kind: kind,
+                baseURL: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+            )
+            XCTAssertEqual(
+                ProviderModelCatalogSuggestions.exactURL(for: provider)?.absoluteString,
+                expected
+            )
+        }
+    }
+
+    func testBailianBusinessWorkspaceUsesPayAsYouGoAccountCatalog() {
+        let provider = ProviderConfig(
+            name: ProviderKind.qwenBusiness.displayName,
+            kind: .qwenBusiness,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+        XCTAssertEqual(
+            ProviderModelCatalogSuggestions.exactURL(for: provider)?.absoluteString,
+            "https://dashscope.aliyuncs.com/api/v1/models"
+        )
+    }
+
+    func testNewlyVerifiedBuiltInCatalogsUseExactProviderOwnedURLs() {
+        let expected: [(ProviderKind, String, String)] = [
+            (.moonshot, "https://api.moonshot.cn/v1", "https://api.moonshot.cn/v1/models"),
+            (.zhipu, "https://open.bigmodel.cn/api/paas/v4", "https://open.bigmodel.cn/api/paas/v4/models"),
+            (.volcengine, "https://ark.cn-beijing.volces.com/api/v3", "https://ark.cn-beijing.volces.com/api/v3/models"),
+        ]
+        for (kind, baseURL, catalogURL) in expected {
+            let provider = ProviderConfig(
+                name: kind.displayName,
+                kind: kind,
+                baseURL: baseURL
+            )
+            XCTAssertEqual(
+                ProviderModelCatalogSuggestions.exactURL(for: provider)?.absoluteString,
+                catalogURL,
+                kind.rawValue
+            )
+        }
+    }
+
     func testAccountCallableCatalogsStillMergeAutomatically() throws {
         let provider = ProviderConfig(
             name: "DeepSeek",
@@ -202,7 +252,10 @@ final class ProviderModelCatalogTests: XCTestCase {
             (.perplexity, "https://api.perplexity.ai/v1", "https://api.perplexity.ai/v1/models"),
             (.cohere, "https://api.cohere.ai/compatibility/v1", "https://api.cohere.ai/v1/models"),
             (.siliconFlow, "https://api.siliconflow.cn/v1", "https://api.siliconflow.cn/v1/models"),
-            (.baiduQianfan, "https://qianfan.baidubce.com/v2", "https://qianfan.baidubce.com/v2/models")
+            (.baiduQianfan, "https://qianfan.baidubce.com/v2", "https://qianfan.baidubce.com/v2/models"),
+            (.minimax, "https://api.minimax.io/v1", "https://api.minimax.io/v1/models"),
+            (.minimaxChina, "https://api.minimaxi.com/v1", "https://api.minimaxi.com/v1/models"),
+            (.qwenBusiness, "https://dashscope.aliyuncs.com/compatible-mode/v1", "https://dashscope.aliyuncs.com/api/v1/models")
         ]
         for (kind, baseURL, exactURL) in supported {
             let provider = ProviderConfig(name: kind.displayName, kind: kind, baseURL: baseURL)
@@ -301,6 +354,77 @@ final class ProviderModelCatalogTests: XCTestCase {
         XCTAssertEqual(
             ProviderModelCatalogSuggestions.suggestion(for: unpriced)?.canReturnTokenPrices,
             false
+        )
+    }
+
+    func testPricingPolicySkipsKnownUnpricedCatalogsButAllowsPricedAndCustomSources() throws {
+        let catalogKey = ProviderEndpointRecord.key(for: .modelCatalog)
+        for kind in ProviderKind.allCases where kind != .unifiedCompatible {
+            let preset = try XCTUnwrap(ProviderConnectionPresets.preset(for: kind))
+            let rawEndpoint = try XCTUnwrap(preset.endpointURLs[catalogKey])
+            let endpoint = try XCTUnwrap(URL(string: rawEndpoint))
+            let provider = preset.applying(
+                to: ProviderConfig(name: kind.displayName, kind: kind, baseURL: ""),
+                mode: .replaceURLs
+            )
+            let expectsMachinePrices: Bool = [.xAI, .openRouter, .togetherAI].contains(kind)
+            XCTAssertEqual(
+                ProviderModelCatalogPricingPolicy.shouldFetch(
+                    provider: provider,
+                    endpoint: endpoint
+                ),
+                expectsMachinePrices,
+                kind.rawValue
+            )
+        }
+
+        let custom = ProviderConfig(
+            name: "Custom",
+            kind: .unifiedCompatible,
+            baseURL: "https://api.example.com/v1",
+            endpointURLs: [catalogKey: "https://pricing.example.com/models"]
+        )
+        XCTAssertTrue(
+            ProviderModelCatalogPricingPolicy.shouldFetch(
+                provider: custom,
+                endpoint: try XCTUnwrap(URL(string: "https://pricing.example.com/models"))
+            )
+        )
+    }
+
+    func testPricingPolicyExplainsWhyBuiltInCatalogCannotSupplyPrices() throws {
+        let catalogKey = ProviderEndpointRecord.key(for: .modelCatalog)
+        for kind in [ProviderKind.minimax, .apimart, .yunwu, .qwenEnterprise] {
+            let preset = try XCTUnwrap(ProviderConnectionPresets.preset(for: kind))
+            let provider = preset.applying(
+                to: ProviderConfig(name: kind.displayName, kind: kind, baseURL: ""),
+                mode: .replaceURLs
+            )
+            let endpoint = try XCTUnwrap(URL(string: provider.endpointURLs[catalogKey]!))
+            let availability = ProviderModelCatalogPricingPolicy.availability(
+                provider: provider,
+                endpoint: endpoint
+            )
+            guard case .unavailable(let reason) = availability else {
+                return XCTFail("Expected unavailable pricing for \(kind.rawValue)")
+            }
+            XCTAssertFalse(reason.isEmpty)
+        }
+
+        let openRouterPreset = try XCTUnwrap(
+            ProviderConnectionPresets.preset(for: .openRouter)
+        )
+        let openRouter = openRouterPreset.applying(
+            to: ProviderConfig(name: "OpenRouter", kind: .openRouter, baseURL: ""),
+            mode: .replaceURLs
+        )
+        let endpoint = try XCTUnwrap(URL(string: openRouter.endpointURLs[catalogKey]!))
+        XCTAssertEqual(
+            ProviderModelCatalogPricingPolicy.availability(
+                provider: openRouter,
+                endpoint: endpoint
+            ),
+            .available
         )
     }
 
@@ -475,16 +599,236 @@ final class ProviderModelCatalogTests: XCTestCase {
         XCTAssertEqual(result.endpoint.absoluteString, "https://catalog.example.com/exact")
         XCTAssertEqual(result.responseBytes, CatalogURLProtocolStub.responseBody.count)
     }
+
+    func testCatalogRequestRejectsMismatchedBailianCredentialBeforeNetwork() throws {
+        let preset = try XCTUnwrap(
+            ProviderConnectionPresets.preset(for: .qwenEnterprise)
+        )
+        let provider = preset.applying(
+            to: ProviderConfig(
+                name: "阿里云百炼 Token Plan 团队版",
+                kind: .qwenEnterprise,
+                baseURL: ""
+            ),
+            mode: .replaceURLs
+        )
+
+        XCTAssertThrowsError(
+            try ProviderClient().modelCatalogRequest(
+                provider: provider,
+                apiKey: "sk-ws-pay-as-you-go-token"
+            )
+        ) { error in
+            guard case .credentialMismatch(let message) = error as? ProviderModelCatalogError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertTrue(message.contains("sk-sp-"))
+        }
+    }
+
+    func testCatalogFetchRetriesOneTransientSecureConnectionFailure() async throws {
+        CatalogURLProtocolStub.responseBody = Data(
+            #"{"data":[{"id":"live-after-retry"}]}"#.utf8
+        )
+        CatalogURLProtocolStub.failuresBeforeSuccess = 1
+        CatalogURLProtocolStub.failureCode = .secureConnectionFailed
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [CatalogURLProtocolStub.self]
+        let client = ProviderClient(session: URLSession(configuration: configuration))
+        let provider = ProviderConfig(
+            name: "Compatible",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.com/v1",
+            endpointURLs: [
+                ProviderEndpointRecord.key(for: .modelCatalog):
+                    "https://catalog.example.com/models"
+            ]
+        )
+
+        let result = try await client.fetchModelCatalog(
+            provider: provider,
+            apiKey: "test-key",
+            retryDelayNanoseconds: 0
+        )
+
+        XCTAssertEqual(result.models, ["live-after-retry"])
+        XCTAssertEqual(CatalogURLProtocolStub.attemptCount, 2)
+    }
+
+    func testCatalogFetchMapsPersistentTLSFailureWithoutBypassingValidation() async throws {
+        CatalogURLProtocolStub.failuresBeforeSuccess = .max
+        CatalogURLProtocolStub.failureCode = .serverCertificateUntrusted
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [CatalogURLProtocolStub.self]
+        let client = ProviderClient(session: URLSession(configuration: configuration))
+        let provider = ProviderConfig(
+            name: "Compatible",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.com/v1",
+            endpointURLs: [
+                ProviderEndpointRecord.key(for: .modelCatalog):
+                    "https://catalog.example.com/models"
+            ]
+        )
+
+        do {
+            _ = try await client.fetchModelCatalog(
+                provider: provider,
+                apiKey: "test-key",
+                retryDelayNanoseconds: 0
+            )
+            XCTFail("Expected TLS failure")
+        } catch {
+            XCTAssertEqual(
+                error as? ProviderModelCatalogError,
+                .secureConnectionFailed
+            )
+            XCTAssertEqual(CatalogURLProtocolStub.attemptCount, 1)
+        }
+    }
+
+    func testCatalogFetchReestablishesSessionOnceAfterTUNTrustFailure() async throws {
+        CatalogURLProtocolStub.responseBody = Data(
+            #"{"data":[{"id":"live-after-tun-refresh"}]}"#.utf8
+        )
+        CatalogURLProtocolStub.failuresBeforeSuccess = 1
+        CatalogURLProtocolStub.failureCode = .serverCertificateUntrusted
+
+        let makeSession: @Sendable () -> URLSession = {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [CatalogURLProtocolStub.self]
+            return URLSession(configuration: configuration)
+        }
+
+        let client = ProviderClient(
+            session: makeSession(),
+            catalogRecoverySessionFactory: { makeSession() }
+        )
+        let provider = ProviderConfig(
+            name: "Compatible",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.com/v1",
+            endpointURLs: [
+                ProviderEndpointRecord.key(for: .modelCatalog):
+                    "https://catalog.example.com/models"
+            ]
+        )
+
+        let result = try await client.fetchModelCatalog(
+            provider: provider,
+            apiKey: "test-key",
+            retryDelayNanoseconds: 0
+        )
+
+        XCTAssertEqual(result.models, ["live-after-tun-refresh"])
+        XCTAssertEqual(CatalogURLProtocolStub.attemptCount, 2)
+    }
+
+    func testCatalogSessionRecoveryStillRejectsPersistentUntrustedCertificate() async throws {
+        CatalogURLProtocolStub.failuresBeforeSuccess = .max
+        CatalogURLProtocolStub.failureCode = .serverCertificateUntrusted
+
+        let makeSession: @Sendable () -> URLSession = {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [CatalogURLProtocolStub.self]
+            return URLSession(configuration: configuration)
+        }
+        let client = ProviderClient(
+            session: makeSession(),
+            catalogRecoverySessionFactory: { makeSession() }
+        )
+        let provider = ProviderConfig(
+            name: "Compatible",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.com/v1",
+            endpointURLs: [
+                ProviderEndpointRecord.key(for: .modelCatalog):
+                    "https://catalog.example.com/models"
+            ]
+        )
+
+        do {
+            _ = try await client.fetchModelCatalog(
+                provider: provider,
+                apiKey: "test-key",
+                retryDelayNanoseconds: 0
+            )
+            XCTFail("Expected persistent TLS failure")
+        } catch {
+            XCTAssertEqual(
+                error as? ProviderModelCatalogError,
+                .secureConnectionFailed
+            )
+            XCTAssertEqual(CatalogURLProtocolStub.attemptCount, 2)
+        }
+    }
+
+    func testCatalog401ProvidesProviderSpecificCredentialGuidance() async throws {
+        CatalogURLProtocolStub.statusCode = 401
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [CatalogURLProtocolStub.self]
+        let client = ProviderClient(session: URLSession(configuration: configuration))
+        let preset = try XCTUnwrap(ProviderConnectionPresets.preset(for: .minimax))
+        let provider = preset.applying(
+            to: ProviderConfig(name: "MiniMax", kind: .minimax, baseURL: ""),
+            mode: .replaceURLs
+        )
+
+        do {
+            _ = try await client.fetchModelCatalog(provider: provider, apiKey: "sk-test")
+            XCTFail("Expected rejection")
+        } catch {
+            guard case .rejected(let statusCode, let providerKind) =
+                error as? ProviderModelCatalogError
+            else { return XCTFail("Unexpected error: \(error)") }
+            XCTAssertEqual(statusCode, 401)
+            XCTAssertEqual(providerKind, .minimax)
+            XCTAssertTrue(error.localizedDescription.contains("MiniMax"))
+        }
+    }
+
+    func testMiniMaxChinaCatalog401SuggestsCorrectRegion() async throws {
+        CatalogURLProtocolStub.statusCode = 401
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [CatalogURLProtocolStub.self]
+        let client = ProviderClient(session: URLSession(configuration: configuration))
+        let preset = try XCTUnwrap(ProviderConnectionPresets.preset(for: .minimaxChina))
+        let provider = preset.applying(
+            to: ProviderConfig(name: "MiniMax 中国站", kind: .minimaxChina, baseURL: ""),
+            mode: .replaceURLs
+        )
+
+        do {
+            _ = try await client.fetchModelCatalog(provider: provider, apiKey: "test-key")
+            XCTFail("Expected rejection")
+        } catch {
+            guard case .rejected(let statusCode, let providerKind) =
+                error as? ProviderModelCatalogError
+            else { return XCTFail("Unexpected error: \(error)") }
+            XCTAssertEqual(statusCode, 401)
+            XCTAssertEqual(providerKind, .minimaxChina)
+            XCTAssertTrue(error.localizedDescription.contains("api.minimaxi.com"))
+            XCTAssertTrue(error.localizedDescription.contains("中国站"))
+        }
+    }
 }
 
 private final class CatalogURLProtocolStub: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var responseBody = Data()
     nonisolated(unsafe) static var statusCode = 200
+    nonisolated(unsafe) static var failuresBeforeSuccess = 0
+    nonisolated(unsafe) static var failureCode = URLError.Code.unknown
+    nonisolated(unsafe) static var attemptCount = 0
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
+        Self.attemptCount += 1
+        if Self.attemptCount <= Self.failuresBeforeSuccess {
+            client?.urlProtocol(self, didFailWithError: URLError(Self.failureCode))
+            return
+        }
         guard let url = request.url,
               let response = HTTPURLResponse(
                   url: url,

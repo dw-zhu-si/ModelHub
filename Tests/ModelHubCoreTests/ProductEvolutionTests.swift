@@ -14,6 +14,29 @@ final class ProductEvolutionTests: XCTestCase {
         XCTAssertThrowsError(try ProviderEndpointEditorCodec.records(from: "chat|alpha = https://example.com/a#secret"))
     }
 
+    func testEndpointEditorAllowsTaskTemplateOnlyForVideoAndMusicTaskKinds() throws {
+        let musicTask = "musicTask|musicgen-large = https://music.example.com/tasks/{task_id}"
+        XCTAssertEqual(
+            try ProviderEndpointEditorCodec.records(from: musicTask)["musicTask|musicgen-large"],
+            "https://music.example.com/tasks/{task_id}"
+        )
+        XCTAssertThrowsError(
+            try ProviderEndpointEditorCodec.records(
+                from: "musicGeneration|musicgen-large = https://music.example.com/{task_id}"
+            )
+        )
+        XCTAssertThrowsError(
+            try ProviderEndpointEditorCodec.records(
+                from: "musicGeneration|musicgen-large = https://user:secret@music.example.com/generate"
+            )
+        )
+        XCTAssertThrowsError(
+            try ProviderEndpointEditorCodec.records(
+                from: "musicGeneration|musicgen-large = https://music.example.com/generate?api_key=secret"
+            )
+        )
+    }
+
     func testVerificationEvidenceDistinguishesLiveSuccessFromManualAvailability() {
         let provider = ProviderConfig(
             name: "P",

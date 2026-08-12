@@ -5,6 +5,9 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
     case gemini
     case deepSeek
     case qwen
+    case qwenBusiness
+    case qwenPersonal
+    case qwenEnterprise
     case moonshot
     case zhipu
     case xAI
@@ -20,6 +23,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
     case volcengine
     case baiduQianfan
     case minimax
+    case minimaxChina
     case apimart
     case agnes
     case yunwu
@@ -32,7 +36,10 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .anthropic: "Anthropic Claude"
         case .gemini: "Google Gemini"
         case .deepSeek: "DeepSeek"
-        case .qwen: "阿里云百炼 / Qwen"
+        case .qwen: "阿里云百炼（按量版）"
+        case .qwenBusiness: "阿里云百炼企业版（业务空间/按量付费）"
+        case .qwenPersonal: "阿里云百炼个人版"
+        case .qwenEnterprise: "阿里云百炼 Token Plan 团队版"
         case .moonshot: "Moonshot / Kimi"
         case .zhipu: "智谱 GLM"
         case .xAI: "xAI Grok"
@@ -47,7 +54,8 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .siliconFlow: "SiliconFlow"
         case .volcengine: "火山引擎 / 豆包"
         case .baiduQianfan: "百度千帆"
-        case .minimax: "MiniMax"
+        case .minimax: "MiniMax 国际站"
+        case .minimaxChina: "MiniMax 中国站"
         case .apimart: "APIMart"
         case .agnes: "Agnes AI"
         case .yunwu: "云雾 API"
@@ -56,31 +64,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
     }
 
     public var defaultBaseURL: String {
-        switch self {
-        case .anthropic: "https://api.anthropic.com"
-        case .gemini: "https://generativelanguage.googleapis.com"
-        case .deepSeek: "https://api.deepseek.com"
-        case .qwen: "https://dashscope.aliyuncs.com/compatible-mode"
-        case .moonshot: "https://api.moonshot.cn"
-        case .zhipu: "https://open.bigmodel.cn/api/paas"
-        case .xAI: "https://api.x.ai"
-        case .groq: "https://api.groq.com/" + Self.legacyIdentifier([202, 213, 192, 203, 196, 204])
-        case .mistral: "https://api.mistral.ai"
-        case .ollama: "http://127.0.0.1:11434"
-        case .openRouter: "https://openrouter.ai/api/v1"
-        case .togetherAI: "https://api.together.xyz/v1"
-        case .fireworksAI: "https://api.fireworks.ai/inference/v1"
-        case .perplexity: "https://api.perplexity.ai/v1"
-        case .cohere: "https://api.cohere.ai/compatibility/v1"
-        case .siliconFlow: "https://api.siliconflow.cn/v1"
-        case .volcengine: "https://ark.cn-beijing.volces.com/api/v3"
-        case .baiduQianfan: "https://qianfan.baidubce.com/v2"
-        case .minimax: "https://api.minimax.chat/v1"
-        case .apimart: "https://api.apimart.ai"
-        case .agnes: "https://apihub.agnes-ai.com"
-        case .yunwu: "https://yunwu.ai"
-        case .unifiedCompatible: "https://"
-        }
+        ProviderConnectionPresets.preset(for: self)?.baseURL ?? ""
     }
 
     public var usesUnifiedProtocol: Bool {
@@ -94,8 +78,40 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
         self != .ollama
     }
 
-    private static func legacyIdentifier(_ bytes: [UInt8]) -> String {
-        String(decoding: bytes.map { $0 ^ 0xA5 }, as: UTF8.self)
+    public var isBailian: Bool {
+        switch self {
+        case .qwen, .qwenBusiness, .qwenPersonal, .qwenEnterprise: true
+        default: false
+        }
+    }
+
+    public var isBailianTokenPlan: Bool {
+        self == .qwenPersonal || self == .qwenEnterprise
+    }
+
+    /// 内置供应商的可恢复连接预设；通用兼容类型永远不提供推测值。
+    public var recommendedBaseURL: String? {
+        guard isBailian else { return nil }
+        return defaultBaseURL
+    }
+
+    public var recommendedChatEndpoint: String? {
+        recommendedBaseURL.map { $0 + "/chat/completions" }
+    }
+
+    public var bailianEditionDescription: String? {
+        switch self {
+        case .qwen:
+            "按量付费版使用 DashScope API Key 与对应地域或业务空间端点。"
+        case .qwenBusiness:
+            "企业业务空间按量付费版；使用 API Keys 页面生成的按量付费 API Key（新版通常以 sk-ws 开头），可使用页面展示的共享或业务空间专属 Base URL。"
+        case .qwenPersonal:
+            "Token Plan 个人版；必须使用个人版专属 API Key，不能与按量付费、Coding Plan 或团队版混用。"
+        case .qwenEnterprise:
+            "Token Plan 团队版；必须使用分配席位后生成的团队版专属 API Key，不能与企业业务空间按量付费 Key 混用。"
+        default:
+            nil
+        }
     }
 
     /// 对模型名称做保守的官方归属判断，用于“同模型官方优先”。
@@ -106,7 +122,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .anthropic: return name.hasPrefix("claude")
         case .gemini: return name.hasPrefix("gemini")
         case .deepSeek: return name.hasPrefix("deepseek")
-        case .qwen: return name.hasPrefix("qwen")
+        case .qwen, .qwenBusiness, .qwenPersonal, .qwenEnterprise: return name.hasPrefix("qwen")
         case .moonshot: return name.hasPrefix("moonshot") || name.hasPrefix("kimi")
         case .zhipu: return name.hasPrefix("glm")
         case .xAI: return name.hasPrefix("grok")
@@ -114,9 +130,121 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .cohere: return name.hasPrefix("command") || name.hasPrefix("embed-")
         case .perplexity: return name.hasPrefix("sonar")
         case .volcengine: return name.contains("doubao") || name.contains("seed")
-        case .minimax: return name.hasPrefix("minimax")
+        case .minimax, .minimaxChina: return name.hasPrefix("minimax")
         default: return false
         }
+    }
+}
+
+/// Prevents the three mutually isolated Bailian credential/endpoint families
+/// from being mixed. It validates only saved values and never rewrites them.
+public enum BailianEndpointPolicy {
+    public static let payAsYouGoHost = "dashscope.aliyuncs.com"
+    public static let tokenPlanHost = "token-plan.cn-beijing.maas.aliyuncs.com"
+
+    public static func validationMessage(for provider: ProviderConfig) -> String? {
+        guard provider.kind.isBailian else { return nil }
+        guard let baseURL = URL(string: provider.baseURL),
+              baseURL.scheme?.lowercased() == "https",
+              let baseHost = baseURL.host?.lowercased()
+        else {
+            return "百炼 Base URL 必须是完整的 HTTPS 地址。"
+        }
+
+        if [.qwen, .qwenBusiness].contains(provider.kind), baseHost == tokenPlanHost {
+            return "当前地址属于百炼 Token Plan，请将供应商类型改为“Token Plan 个人版”或“Token Plan 团队版”。"
+        }
+        if provider.kind.isBailianTokenPlan {
+            guard baseHost == tokenPlanHost else {
+                return "百炼 Token Plan 个人版和团队版必须使用 Token Plan 官方 Base URL；按量付费 DashScope 地址与其 API Key 不兼容。"
+            }
+            guard hasTokenPlanCompatiblePath(baseURL.path) else {
+                return "Token Plan Base URL 必须包含 /compatible-mode/v1；ModelHub 不会自动补全路径。"
+            }
+        }
+
+        for (key, rawURL) in provider.endpointURLs where isInferenceEndpoint(key) {
+            guard let endpoint = URL(string: rawURL),
+                  endpoint.scheme?.lowercased() == "https",
+                  let host = endpoint.host?.lowercased()
+            else {
+                return "百炼显式请求端点必须是完整的 HTTPS 地址。"
+            }
+            if provider.kind.isBailianTokenPlan {
+                guard host == tokenPlanHost, hasTokenPlanCompatiblePath(endpoint.path) else {
+                    return "百炼 Token Plan 个人版/团队版的聊天端点必须属于 Token Plan 官方 /compatible-mode/v1 路径。"
+                }
+            } else if host == tokenPlanHost {
+                return "当前聊天端点属于百炼 Token Plan，请选择 Token Plan 个人版或团队版，不能沿用按量付费类型。"
+            }
+        }
+        return nil
+    }
+
+    private static func isInferenceEndpoint(_ key: String) -> Bool {
+        let kind = key.split(separator: "|", maxSplits: 1).first.map(String.init)
+        return [
+            ProviderEndpointKind.chat.rawValue,
+            ProviderEndpointKind.chatStream.rawValue,
+            ProviderEndpointKind.responses.rawValue,
+        ].contains(kind)
+    }
+
+    private static func hasTokenPlanCompatiblePath(_ path: String) -> Bool {
+        let normalized = "/" + path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return normalized == "/compatible-mode/v1"
+            || normalized.hasPrefix("/compatible-mode/v1/")
+    }
+}
+
+/// Validates only credential families that have an unambiguous, public prefix
+/// contract. It never logs, persists, or returns the credential itself.
+public enum ProviderCredentialPolicy {
+    /// Reuses a stored key only when the target credential family can be
+    /// established without exposing or testing the secret. This includes
+    /// repairing an old Token Plan misclassification when the saved key is
+    /// clearly a pay-as-you-go key, but never crosses Token Plan editions.
+    public static func canReuseCredential(
+        from previousKind: ProviderKind,
+        to nextKind: ProviderKind,
+        apiKey: String
+    ) -> Bool {
+        let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard key.hasPrefix("sk-") else { return false }
+        guard previousKind != nextKind else { return true }
+
+        let payAsYouGoKinds: Set<ProviderKind> = [.qwen, .qwenBusiness]
+        guard previousKind.isBailian,
+              payAsYouGoKinds.contains(nextKind),
+              validationMessage(for: nextKind, apiKey: key) == nil
+        else { return false }
+        return true
+    }
+
+    public static func validationMessage(
+        for providerKind: ProviderKind,
+        apiKey: String
+    ) -> String? {
+        let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return nil }
+
+        switch providerKind {
+        case .qwenPersonal:
+            guard key.hasPrefix("sk-sp-") else {
+                return "百炼个人版必须使用 Token Plan 专属 API Key（以 sk-sp- 开头）；当前凭证属于其他百炼计费体系，未发起网络请求。"
+            }
+        case .qwenEnterprise:
+            guard key.hasPrefix("sk-sp-") else {
+                return "百炼 Token Plan 团队版必须使用分配席位后生成的专属 API Key（以 sk-sp- 开头）；企业业务空间的按量付费 Key 不能在此使用，未发起网络请求。"
+            }
+        case .qwen, .qwenBusiness:
+            guard !key.hasPrefix("sk-sp-") else {
+                return "百炼按量付费版不能使用 Token Plan 专属 API Key（sk-sp-）；请改用按量付费 API Key，或切换到 Token Plan 个人版/团队版。"
+            }
+        default:
+            break
+        }
+        return nil
     }
 }
 
@@ -126,6 +254,8 @@ public enum ProviderEndpointKind: String, Codable, Sendable {
     case chatStream
     case responses
     case imageGeneration
+    case musicGeneration
+    case musicTask
     case videoGeneration
     case videoTask
     case speech
@@ -138,6 +268,24 @@ public enum ProviderEndpointRecord {
     public static func key(for kind: ProviderEndpointKind, model: String? = nil) -> String {
         guard let model, !model.isEmpty else { return kind.rawValue }
         return "\(kind.rawValue)|\(model.lowercased())"
+    }
+}
+
+public enum ProviderEndpointSecurity {
+    public static func isSafeConfigurationURL(_ components: URLComponents) -> Bool {
+        guard let scheme = components.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              components.host?.isEmpty == false,
+              components.user == nil,
+              components.password == nil,
+              components.fragment == nil
+        else { return false }
+
+        let sensitiveNames = ["key", "token", "secret", "password", "credential"]
+        return !(components.queryItems ?? []).contains { item in
+            let name = item.name.lowercased()
+            return sensitiveNames.contains { name.contains($0) }
+        }
     }
 }
 
@@ -358,6 +506,8 @@ public enum ProviderBaseURLMigration {
     private static func endpointKind(for operation: NativeAPIOperation) -> ProviderEndpointKind {
         switch operation {
         case .imageGeneration: .imageGeneration
+        case .musicGeneration: .musicGeneration
+        case .musicTask: .musicTask
         case .videoGeneration: .videoGeneration
         case .videoTask: .videoTask
         case .speech: .speech
@@ -422,7 +572,7 @@ public enum ProviderBaseURLMigration {
         return normalized.isEmpty || [
             "v1", "v2", "v3", "api/v1", "api/v2", "api/v3",
             "api/paas", "api/paas/v4", "compatible-mode",
-            "compatibility/v1", "inference/v1"
+            "compatible-mode/v1", "compatibility/v1", "inference/v1"
         ].contains(normalized)
     }
 
@@ -437,8 +587,9 @@ public enum ProviderBaseURLMigration {
         let isAgnes = hostname.contains("agnes-ai.com")
             || hostname.contains("agnes-ai.cn")
             || providerName.contains("agnes")
-        let isBailian = hostname.contains("dashscope.aliyuncs.com")
-            || providerName.contains("百炼")
+        let isBailian = [.qwen, .qwenBusiness].contains(provider.kind)
+            && (hostname == BailianEndpointPolicy.payAsYouGoHost
+                || providerName.contains("百炼"))
 
         let suffix: String
         switch operation {
@@ -446,6 +597,10 @@ public enum ProviderBaseURLMigration {
             suffix = isBailian && model.lowercased() == "wanx-v1"
                 ? "/api/v1/services/aigc/text2image/image-synthesis"
                 : "/v1/images/generations"
+        case .musicGeneration, .musicTask:
+            // Music APIs differ by provider, so legacy Base URLs are never
+            // completed into guessed music paths.
+            return nil
         case .videoGeneration:
             suffix = isAgnes ? "/v1/videos" : "/v1/videos/generations"
         case .speech:

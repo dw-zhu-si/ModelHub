@@ -355,7 +355,7 @@ public enum EndpointEditorError: Error, Equatable, LocalizedError {
         case .invalidKey(let line): "第 \(line) 行的端点键无效。"
         case .duplicateKey(let key): "端点键重复：\(key)"
         case .invalidURL(let line): "第 \(line) 行不是完整的 HTTP(S) URL。"
-        case .unsupportedTemplate(let line): "第 \(line) 行只允许视频任务端点使用 {task_id}。"
+        case .unsupportedTemplate(let line): "第 \(line) 行只允许聊天端点使用 {model}，视频或音乐任务端点使用 {task_id}。"
         }
     }
 }
@@ -384,19 +384,25 @@ public enum ProviderEndpointEditorCodec {
             guard validKey(key) else { throw EndpointEditorError.invalidKey(lineNumber) }
             guard result[key] == nil else { throw EndpointEditorError.duplicateKey(key) }
             guard let components = URLComponents(string: value),
-                  let scheme = components.scheme?.lowercased(),
-                  ["http", "https"].contains(scheme),
-                  components.host?.isEmpty == false,
-                  components.fragment == nil
+                  ProviderEndpointSecurity.isSafeConfigurationURL(components)
             else { throw EndpointEditorError.invalidURL(lineNumber) }
 
-            let isTaskEndpoint = key.split(separator: "|", maxSplits: 1).first
-                == Substring(ProviderEndpointKind.videoTask.rawValue)
+            let endpointKind = key.split(separator: "|", maxSplits: 1).first.map(String.init)
             if value.contains("{") || value.contains("}") {
-                guard isTaskEndpoint,
-                      value.components(separatedBy: "{task_id}").count == 2,
-                      value.replacingOccurrences(of: "{task_id}", with: "").contains("{") == false,
-                      value.replacingOccurrences(of: "{task_id}", with: "").contains("}") == false
+                let template: String? = switch endpointKind {
+                case ProviderEndpointKind.videoTask.rawValue,
+                     ProviderEndpointKind.musicTask.rawValue:
+                    "{task_id}"
+                case ProviderEndpointKind.chat.rawValue,
+                     ProviderEndpointKind.chatStream.rawValue:
+                    "{model}"
+                default:
+                    nil
+                }
+                guard let template,
+                      value.components(separatedBy: template).count == 2,
+                      value.replacingOccurrences(of: template, with: "").contains("{") == false,
+                      value.replacingOccurrences(of: template, with: "").contains("}") == false
                 else { throw EndpointEditorError.unsupportedTemplate(lineNumber) }
             }
             result[key] = value
@@ -666,6 +672,8 @@ extension RoutingEngine {
         {
             kind = switch operation {
             case .imageGeneration: .imageGeneration
+            case .musicGeneration: .musicGeneration
+            case .musicTask: .musicTask
             case .videoGeneration: .videoGeneration
             case .videoTask: .videoTask
             case .speech: .speech

@@ -2,6 +2,84 @@ import XCTest
 @testable import ModelHubCore
 
 final class ProviderClientTests: XCTestCase {
+    func testBailianBusinessWorkspaceUsesPayAsYouGoEndpointAndCredential() throws {
+        let preset = try XCTUnwrap(
+            ProviderConnectionPresets.preset(for: .qwenBusiness)
+        )
+        let provider = preset.applying(
+            to: ProviderConfig(
+                name: "阿里云百炼企业版（业务空间/按量付费）",
+                kind: .qwenBusiness,
+                baseURL: ""
+            ),
+            mode: .replaceURLs
+        )
+
+        let request = try ProviderClient().chatRequest(
+            rawBody: Data(#"{"messages":[{"role":"user","content":"ping"}]}"#.utf8),
+            targetModel: "qwen-plus",
+            provider: provider,
+            apiKey: "sk-ws-business-workspace-token"
+        )
+        XCTAssertEqual(
+            request.url?.absoluteString,
+            "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+        )
+    }
+
+    func testBailianTokenPlanCredentialMismatchIsRejectedForInferenceRequests() throws {
+        let preset = try XCTUnwrap(
+            ProviderConnectionPresets.preset(for: .qwenEnterprise)
+        )
+        let provider = preset.applying(
+            to: ProviderConfig(
+                name: "阿里云百炼 Token Plan 团队版",
+                kind: .qwenEnterprise,
+                baseURL: ""
+            ),
+            mode: .replaceURLs
+        )
+
+        XCTAssertThrowsError(
+            try ProviderClient().chatRequest(
+                rawBody: Data(#"{"messages":[{"role":"user","content":"ping"}]}"#.utf8),
+                targetModel: "qwen3.5-plus",
+                provider: provider,
+                apiKey: "sk-ws-pay-as-you-go-token"
+            )
+        ) { error in
+            guard case .credentialMismatch(let message) = error as? ProviderClientError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertTrue(message.contains("sk-sp-"))
+        }
+    }
+
+    func testBailianPersonalAndEnterpriseUseExactTokenPlanChatEndpoint() throws {
+        let body = Data(#"{"model":"ignored","messages":[{"role":"user","content":"hi"}]}"#.utf8)
+        for kind in [ProviderKind.qwenPersonal, .qwenEnterprise] {
+            let endpoint = "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions"
+            let provider = ProviderConfig(
+                name: kind.displayName,
+                kind: kind,
+                baseURL: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+                models: ["qwen-plus"],
+                endpointURLs: [ProviderEndpointRecord.key(for: .chat): endpoint]
+            )
+            let request = try ProviderClient().chatRequest(
+                rawBody: body,
+                targetModel: "qwen-plus",
+                provider: provider,
+                apiKey: "sk-sp-edition-specific-secret"
+            )
+            XCTAssertEqual(request.url?.absoluteString, endpoint)
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "Authorization"),
+                "Bearer sk-sp-edition-specific-secret"
+            )
+        }
+    }
+
     func testCompatibleEndpointUsesConfiguredBaseURLWithoutCompletion() throws {
         let provider = ProviderConfig(
             name: "Compatible",
@@ -257,6 +335,102 @@ final class ProviderClientTests: XCTestCase {
         )
     }
 
+    func testMusicGenerationAndTaskUseOnlyExplicitConfiguredEndpoints() throws {
+        let model = "musicgen-large"
+        let provider = ProviderConfig(
+            name: "Music Provider",
+            kind: .unifiedCompatible,
+            baseURL: "https://music.example.com/root",
+            models: [model],
+            endpointURLs: [
+                ProviderEndpointRecord.key(for: .musicGeneration, model: model):
+                    "https://music.example.com/v2/generations",
+                ProviderEndpointRecord.key(for: .musicTask, model: model):
+                    "https://music.example.com/v2/tasks/{task_id}"
+            ]
+        )
+        let client = ProviderClient()
+        let create = try client.nativeRequest(
+            rawBody: Data(#"{"model":"route","prompt":"piano","style":"ambient"}"#.utf8),
+            targetModel: model,
+            provider: provider,
+            apiKey: "test-key",
+            operation: .musicGeneration
+        )
+        let task = try client.nativeRequest(
+            rawBody: Data(),
+            targetModel: model,
+            provider: provider,
+            apiKey: "test-key",
+            operation: .musicTask,
+            taskID: "music task/123"
+        )
+
+        XCTAssertEqual(create.url?.absoluteString, "https://music.example.com/v2/generations")
+        XCTAssertEqual(create.httpMethod, "POST")
+        let body = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try XCTUnwrap(create.httpBody)) as? [String: Any]
+        )
+        XCTAssertEqual(body["model"] as? String, model)
+        XCTAssertEqual(body["style"] as? String, "ambient")
+        XCTAssertEqual(task.url?.absoluteString, "https://music.example.com/v2/tasks/music%20task%2F123")
+        XCTAssertEqual(task.httpMethod, "GET")
+        XCTAssertNil(task.httpBody)
+    }
+
+    func testMusicTaskNeverFallsBackToGenerationBaseURL() {
+        let provider = ProviderConfig(
+            name: "Music Provider",
+            kind: .unifiedCompatible,
+            baseURL: "https://music.example.com/v2/generations",
+            models: ["musicgen-large"]
+        )
+
+        XCTAssertThrowsError(
+            try ProviderClient().nativeEndpoint(
+                for: provider,
+                model: "musicgen-large",
+                operation: .musicTask,
+                taskID: "task_123"
+            )
+        ) { error in
+            guard case ProviderClientError.invalidRequest = error else {
+                return XCTFail("Expected invalidRequest, got \(error)")
+            }
+        }
+    }
+
+    func testMusicEndpointsRejectEmbeddedCredentialsAndSecretQueriesAtRuntime() {
+        for endpoint in [
+            "https://user:secret@music.example.com/generate",
+            "https://music.example.com/generate?access_token=secret"
+        ] {
+            let provider = ProviderConfig(
+                name: "Music Provider",
+                kind: .unifiedCompatible,
+                baseURL: endpoint,
+                models: ["musicgen-large"],
+                endpointURLs: [
+                    ProviderEndpointRecord.key(
+                        for: .musicGeneration,
+                        model: "musicgen-large"
+                    ): endpoint
+                ]
+            )
+            XCTAssertThrowsError(
+                try ProviderClient().nativeEndpoint(
+                    for: provider,
+                    model: "musicgen-large",
+                    operation: .musicGeneration
+                )
+            ) { error in
+                guard case ProviderClientError.invalidBaseURL = error else {
+                    return XCTFail("Expected invalidBaseURL, got \(error)")
+                }
+            }
+        }
+    }
+
     func testAPIMartVideoTaskDoesNotReplaceConfiguredEndpoint() throws {
         let provider = ProviderConfig(
             name: "seedance",
@@ -275,6 +449,54 @@ final class ProviderClientTests: XCTestCase {
             endpoint.absoluteString,
             "https://api.apimart.ai/v1/videos/generations"
         )
+    }
+
+    func testAPIMartPresetBuildsOfficialVideoCreateAndTaskRequests() throws {
+        let preset = try XCTUnwrap(ProviderConnectionPresets.preset(for: .apimart))
+        let provider = preset.applying(
+            to: ProviderConfig(
+                name: "APIMart",
+                kind: .apimart,
+                baseURL: "",
+                models: ["doubao-seedance-2.0-fast"]
+            ),
+            mode: .replaceURLs
+        )
+        let client = ProviderClient()
+
+        let create = try client.nativeRequest(
+            rawBody: Data(#"{"prompt":"ModelHub connection test","duration":5,"resolution":"480p","size":"16:9","generate_audio":false}"#.utf8),
+            targetModel: "doubao-seedance-2.0-fast",
+            provider: provider,
+            apiKey: "test-key",
+            operation: .videoGeneration
+        )
+        XCTAssertEqual(
+            create.url?.absoluteString,
+            "https://api.apimart.ai/v1/videos/generations"
+        )
+        XCTAssertEqual(create.httpMethod, "POST")
+        XCTAssertEqual(create.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
+        let body = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try XCTUnwrap(create.httpBody))
+                as? [String: Any]
+        )
+        XCTAssertEqual(body["model"] as? String, "doubao-seedance-2.0-fast")
+
+        let task = try client.nativeRequest(
+            rawBody: Data(),
+            targetModel: "doubao-seedance-2.0-fast",
+            provider: provider,
+            apiKey: "test-key",
+            operation: .videoTask,
+            taskID: "task 123"
+        )
+        XCTAssertEqual(
+            task.url?.absoluteString,
+            "https://api.apimart.ai/v1/tasks/task%20123"
+        )
+        XCTAssertEqual(task.httpMethod, "GET")
+        XCTAssertNil(task.httpBody)
     }
 
     func testGenericSeedanceVideoDoesNotCompleteRootBaseURL() throws {

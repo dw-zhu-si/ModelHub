@@ -263,8 +263,10 @@ final class OperationalCoreTests: XCTestCase {
         XCTAssertNotNil(toolsByName["generate_text"])
         XCTAssertNotNil(toolsByName["generate_image"])
         XCTAssertNotNil(toolsByName["generate_video"])
+        XCTAssertNotNil(toolsByName["generate_music"])
         XCTAssertNotNil(toolsByName["generate_speech"])
         XCTAssertNotNil(toolsByName["get_video_task"])
+        XCTAssertNotNil(toolsByName["get_music_task"])
         XCTAssertNotNil(toolsByName["create_embeddings"])
         XCTAssertNotNil(toolsByName["rerank_documents"])
 
@@ -309,15 +311,15 @@ final class OperationalCoreTests: XCTestCase {
             ).body,
             as: UTF8.self
         )
-        XCTAssertTrue(initializeText.contains(#""version":"1.9.0""#))
+        XCTAssertTrue(initializeText.contains(#""version":"1.9.1""#))
         XCTAssertTrue(String(
             decoding: LocalAgentProtocols.a2aAgentCard(baseURL: "http://127.0.0.1"),
             as: UTF8.self
-        ).contains(#""version":"1.9.0""#))
+        ).contains(#""version":"1.9.1""#))
         XCTAssertTrue(String(
             decoding: LocalAgentProtocols.acpManifest(baseURL: "http://127.0.0.1"),
             as: UTF8.self
-        ).contains(#""version":"1.9.0""#))
+        ).contains(#""version":"1.9.1""#))
     }
 
     func testMCPGenerationArgumentsMapToProtectedGatewayRequests() throws {
@@ -335,6 +337,32 @@ final class OperationalCoreTests: XCTestCase {
         XCTAssertEqual(videoBody["prompt"] as? String, "海面日出")
         XCTAssertEqual(videoBody["duration"] as? Int, 4)
         XCTAssertNil(videoBody["confirm_billable"])
+
+        let musicInvocation = MCPActionInvocation(
+            tool: .generateMusic,
+            argumentsJSON: Data(#"{"model":"music-model","prompt":"轻快钢琴曲","lyrics":"你好世界","style":"流行","title":"清晨","duration_seconds":30,"instrumental":false,"confirm_billable":true}"#.utf8)
+        )
+        let musicRequest = try LocalAgentProtocols.gatewayRequest(for: musicInvocation)
+        XCTAssertEqual(musicRequest.method, "POST")
+        XCTAssertEqual(musicRequest.path, "/v1/music/generations")
+        let musicBody = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: musicRequest.body) as? [String: Any]
+        )
+        XCTAssertEqual(musicBody["prompt"] as? String, "轻快钢琴曲")
+        XCTAssertEqual(musicBody["lyrics"] as? String, "你好世界")
+        XCTAssertEqual(musicBody["style"] as? String, "流行")
+        XCTAssertEqual(musicBody["title"] as? String, "清晨")
+        XCTAssertEqual(musicBody["duration"] as? Int, 30)
+        XCTAssertEqual(musicBody["instrumental"] as? Bool, false)
+        XCTAssertNil(musicBody["confirm_billable"])
+
+        let deniedMusicInvocation = MCPActionInvocation(
+            tool: .generateMusic,
+            argumentsJSON: Data(#"{"model":"music-model","prompt":"钢琴曲","confirm_billable":false}"#.utf8)
+        )
+        XCTAssertThrowsError(try LocalAgentProtocols.gatewayRequest(for: deniedMusicInvocation)) { error in
+            XCTAssertEqual(error as? MCPActionValidationError, .billableConfirmationRequired)
+        }
 
         let deniedInvocation = MCPActionInvocation(
             tool: .generateImage,
@@ -369,5 +397,14 @@ final class OperationalCoreTests: XCTestCase {
         XCTAssertEqual(taskRequest.method, "GET")
         XCTAssertEqual(taskRequest.path, "/v1/videos/task-safe_123")
         XCTAssertEqual(taskRequest.queryItems["model"], "video-model")
+
+        let musicTaskInvocation = MCPActionInvocation(
+            tool: .getMusicTask,
+            argumentsJSON: Data(#"{"model":"music-model","task_id":"music-safe_123"}"#.utf8)
+        )
+        let musicTaskRequest = try LocalAgentProtocols.gatewayRequest(for: musicTaskInvocation)
+        XCTAssertEqual(musicTaskRequest.method, "GET")
+        XCTAssertEqual(musicTaskRequest.path, "/v1/music/music-safe_123")
+        XCTAssertEqual(musicTaskRequest.queryItems["model"], "music-model")
     }
 }

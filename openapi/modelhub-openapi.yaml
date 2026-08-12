@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
   title: ModelHub Local Gateway API
-  version: 1.9.0
+  version: 1.9.1
   description: >
-    模型枢纽提供的本机统一接口，覆盖聊天、图像、视频、语音、转录、
+    模型枢纽提供的本机统一接口，覆盖聊天、图像、视频、音乐、语音、转录、
     Embedding 与 Rerank。服务仅监听 127.0.0.1，客户端使用应用中生成的
     Bearer 令牌访问。请求体支持 Content-Length 和 chunked；请求头上限
     64 KiB，解码后请求体上限 32 MiB，已知路径的错误方法返回 405。
@@ -247,6 +247,45 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/ProtocolMismatch"
+  /v1/music/generations:
+    post:
+      summary: 创建音乐生成任务
+      description: >
+        将 model 路由别名替换为真实模型名，并保留 lyrics、style、title、
+        duration、instrumental 以及供应商扩展字段。上游只使用用户保存的
+        精确音乐端点或精确 Base URL，ModelHub 不猜测供应商路径。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MusicGenerationRequest"
+      responses:
+        "200":
+          $ref: "#/components/responses/NativeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ProtocolMismatch"
+        "409":
+          description: 模型处于隔离状态，未调用上游
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/music/{task_id}:
+    get:
+      summary: 查询异步音乐任务
+      parameters:
+        - $ref: "#/components/parameters/TaskID"
+        - $ref: "#/components/parameters/RequiredModelQuery"
+      responses:
+        "200":
+          $ref: "#/components/responses/NativeResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /v1/videos/generations:
     post:
       summary: 创建视频生成任务
@@ -526,6 +565,32 @@ components:
           examples:
             - APIMart Seedance/doubao-seedance-2.0
             - Agnes AI/agnes-image-2.1-flash
+    MusicGenerationRequest:
+      type: object
+      required: [model, prompt]
+      additionalProperties: true
+      properties:
+        model:
+          type: string
+          description: 可用模型名、供应商/模型或路由别名
+        prompt:
+          type: string
+          maxLength: 20000
+        lyrics:
+          type: string
+          maxLength: 50000
+        style:
+          type: string
+          maxLength: 2000
+        title:
+          type: string
+          maxLength: 500
+        duration:
+          type: integer
+          minimum: 1
+          maximum: 600
+        instrumental:
+          type: boolean
     ErrorResponse:
       type: object
       required: [error]

@@ -64,4 +64,20 @@ final class ReviewDemoTests: XCTestCase {
         XCTAssertEqual(model.logs.first?.provider, "Review Demo")
         XCTAssertEqual(model.logs.first?.statusCode, 200)
     }
+
+    func testDemoMusicConsoleUsesSyntheticProtocolResponseWithoutUpstream() async {
+        let model = AppModel()
+        model.enterReviewDemoMode()
+
+        await model.runConsole(
+            model: "review-music-1",
+            prompt: "温暖的钢琴曲",
+            operation: .musicGeneration
+        )
+
+        XCTAssertTrue(model.consoleOutput.contains("REVIEW DEMO"))
+        XCTAssertTrue(model.consoleOutput.contains("music.generation"))
+        XCTAssertTrue(model.consoleOutput.contains("未访问上游"))
+        XCTAssertEqual(model.logs.first?.provider, "Review Demo")
+    }
 }

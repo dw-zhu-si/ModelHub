@@ -9,6 +9,7 @@ public enum ModelCapability: String, Codable, CaseIterable, Identifiable, Sendab
     case embeddings
     case reranking
     case imageGeneration
+    case musicGeneration
     case videoGeneration
 
     public var id: String { rawValue }
@@ -23,6 +24,7 @@ public enum ModelCapability: String, Codable, CaseIterable, Identifiable, Sendab
         case .embeddings: "向量"
         case .reranking: "重排"
         case .imageGeneration: "图像生成"
+        case .musicGeneration: "音乐生成"
         case .videoGeneration: "视频生成"
         }
     }
@@ -98,7 +100,7 @@ public enum ModelCategory: String, Codable, CaseIterable, Identifiable, Sendable
         if capabilities.contains(.videoGeneration) || videoMarkers.contains(where: name.contains) {
             categories.insert(.video)
         }
-        if musicMarkers.contains(where: name.contains) {
+        if capabilities.contains(.musicGeneration) || musicMarkers.contains(where: name.contains) {
             categories.insert(.music)
         }
 

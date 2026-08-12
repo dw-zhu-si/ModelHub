@@ -66,6 +66,20 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     }
 }
 
+enum ConsoleOperation: String, CaseIterable, Identifiable {
+    case chat
+    case musicGeneration
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .chat: String(localized: "文字聊天", locale: AppLanguage.saved.locale)
+        case .musicGeneration: String(localized: "音乐生成", locale: AppLanguage.saved.locale)
+        }
+    }
+}
+
 struct ModelHealthSummary: Equatable {
     let total: Int
     let available: Int
@@ -141,6 +155,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var launchAtLoginStatusText = String(localized: "尚未启用", locale: AppLanguage.saved.locale)
     @Published private(set) var preferredLanguage = AppLanguage.saved
     @Published private(set) var isReviewDemoMode = false
+    @Published private(set) var isProviderLayoutStressDemo = false
     @Published private(set) var lastIssuedVirtualKeyToken: String?
     @Published private(set) var isRefreshingModelPrices = false
     @Published private(set) var modelPriceRefreshProgress: ModelPriceRefreshProgress?
@@ -386,6 +401,50 @@ final class AppModel: ObservableObject {
         selection = .overview
     }
 
+    #if DEBUG
+    /// 仅供无凭证界面回归使用：复现批量检测时的高密度供应商布局。
+    func prepareProviderLayoutStressDemo() {
+        guard isReviewDemoMode, let template = configuration.providers.first else { return }
+        isProviderLayoutStressDemo = true
+        let names = [
+            "seedance",
+            "阿里云百炼",
+            "Agnes AI",
+            "云雾 API",
+            "claude-fable-5（0.7）",
+            "claude-fable-5(0.5)"
+        ]
+        configuration.providers = names.enumerated().map { index, name in
+            var provider = template
+            provider.id = UUID(
+                uuidString: String(format: "00000000-0000-0000-0000-%012d", 201 + index)
+            )!
+            provider.name = name
+            provider.kind = index == 1 ? .qwen : .unifiedCompatible
+            provider.models = (1...max(21, 281 - index * 43)).map {
+                "layout-stress-\(index + 1)-\($0)"
+            }
+            provider.modelProfiles = nil
+            provider.endpointURLs = [:]
+            return provider
+        }
+        configuration.modelHealth = []
+        configuration.routes = []
+        rebuildHealthIndex()
+        isTestingModels = true
+        modelTestProgress = ModelTestProgress(
+            total: 804,
+            completed: 441,
+            available: 203,
+            unavailable: 227,
+            skipped: 11,
+            currentProvider: "云雾 API",
+            isCancelled: false
+        )
+        selection = .providers
+    }
+    #endif
+
     func exitReviewDemoMode() {
         guard isReviewDemoMode, let backup = reviewDemoBackup else { return }
         pendingPersistenceTask?.cancel()
@@ -397,6 +456,7 @@ final class AppModel: ObservableObject {
         consoleOutput = backup.consoleOutput
         reviewDemoBackup = nil
         isReviewDemoMode = false
+        isProviderLayoutStressDemo = false
         rebuildHealthIndex()
         selection = .overview
     }
@@ -414,7 +474,7 @@ final class AppModel: ObservableObject {
             textModel: TargetProfile(contextWindow: 128_000, capabilities: [.chat, .tools]),
             reasoningModel: TargetProfile(contextWindow: 64_000, capabilities: [.chat, .reasoning]),
             imageModel: TargetProfile(capabilities: [.imageGeneration]),
-            musicModel: TargetProfile(capabilities: [.audio]),
+            musicModel: TargetProfile(capabilities: [.musicGeneration]),
             videoModel: TargetProfile(capabilities: [.videoGeneration])
         ]
         let providers = [
@@ -679,18 +739,52 @@ final class AppModel: ObservableObject {
             notice = String(localized: "审核演示模式不会保存供应商或凭证。退出演示模式后可正常配置。", locale: AppLanguage.saved.locale)
             return false
         }
+        let replacementKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         var providerToSave = provider
+        let credentialToValidate = replacementKey.isEmpty
+            ? providerAPIKeyWithoutInteraction(provider)
+            : replacementKey
+        if let message = ProviderCredentialPolicy.validationMessage(
+            for: provider.kind,
+            apiKey: credentialToValidate
+        ) {
+            notice = mhLocalized(message)
+            return false
+        }
         if let index = providers.firstIndex(where: { $0.id == provider.id }) {
+            if providers[index].kind != provider.kind,
+               provider.kind.isBailian,
+               replacementKey.isEmpty,
+               !ProviderCredentialPolicy.canReuseCredential(
+                   from: providers[index].kind,
+                   to: provider.kind,
+                   apiKey: providerAPIKeyWithoutInteraction(provider)
+               ),
+               KeychainStore.existsWithoutInteraction(account: KeychainStore.providerAccount(provider.id))
+            {
+                notice = String(
+                    localized: "百炼版本已变更。为避免复用不兼容的凭证，请输入新版本专属 API Key 后再保存。",
+                    locale: AppLanguage.saved.locale
+                )
+                return false
+            }
             if providers[index].baseURL != provider.baseURL,
                providers[index].endpointURLs == provider.endpointURLs
             {
                 providerToSave.endpointURLs = [:]
             }
+            if let message = BailianEndpointPolicy.validationMessage(for: providerToSave) {
+                notice = mhLocalized(message)
+                return false
+            }
             providers[index] = providerToSave
         } else {
+            if let message = BailianEndpointPolicy.validationMessage(for: providerToSave) {
+                notice = mhLocalized(message)
+                return false
+            }
             providers.append(providerToSave)
         }
-        let replacementKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         if !replacementKey.isEmpty {
             do {
                 try KeychainStore.save(
@@ -730,6 +824,40 @@ final class AppModel: ObservableObject {
         case .value(let stored): stored
         case .notFound, .interactionRequired, .failure: ""
         }
+    }
+
+    func providerCredentialValidationMessage(
+        for provider: ProviderConfig,
+        enteredAPIKey: String
+    ) -> String? {
+        guard provider.kind.isBailian else { return nil }
+        let replacement = enteredAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = replacement.isEmpty
+            ? providerAPIKeyWithoutInteraction(provider)
+            : replacement
+        return ProviderCredentialPolicy.validationMessage(
+            for: provider.kind,
+            apiKey: key
+        )
+    }
+
+    func providerCredentialRequiresReplacement(
+        from previousKind: ProviderKind,
+        to provider: ProviderConfig,
+        enteredAPIKey: String
+    ) -> Bool {
+        guard previousKind != provider.kind,
+              provider.kind.isBailian,
+              enteredAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              KeychainStore.existsWithoutInteraction(
+                  account: KeychainStore.providerAccount(provider.id)
+              )
+        else { return false }
+        return !ProviderCredentialPolicy.canReuseCredential(
+            from: previousKind,
+            to: provider.kind,
+            apiKey: providerAPIKeyWithoutInteraction(provider)
+        )
     }
 
     func fetchProviderModelCatalog(
@@ -973,6 +1101,17 @@ final class AppModel: ObservableObject {
                     continue
                 }
                 catalogProvider.endpointURLs[catalogKey] = suggestion.exactURL.absoluteString
+            }
+            if let rawEndpoint = catalogProvider.endpointURLs[catalogKey],
+               let endpoint = URL(string: rawEndpoint),
+               !ProviderModelCatalogPricingPolicy.shouldFetch(
+                   provider: catalogProvider,
+                   endpoint: endpoint
+               )
+            {
+                missingPriceSource += 1
+                modelPriceRefreshProgress?.completed += 1
+                continue
             }
             let apiKey = providerAPIKeyWithoutInteraction(snapshot)
             if snapshot.kind.needsAPIKey && apiKey.isEmpty {
@@ -1883,7 +2022,7 @@ final class AppModel: ObservableObject {
                 return ModelHealthRecord(
                     providerID: target.provider.id,
                     model: target.model,
-                    status: .unavailable,
+                    status: error.isCredentialIssue ? .configurationRequired : .unavailable,
                     latencyMilliseconds: milliseconds(from: started.duration(to: .now)),
                     detail: error.localizedDescription
                 )
@@ -1973,7 +2112,7 @@ final class AppModel: ObservableObject {
                 return ModelHealthRecord(
                     providerID: target.provider.id,
                     model: target.model,
-                    status: .unavailable,
+                    status: error.isCredentialIssue ? .configurationRequired : .unavailable,
                     latencyMilliseconds: milliseconds(from: started.duration(to: .now)),
                     detail: error.localizedDescription
                 )
@@ -2010,24 +2149,45 @@ final class AppModel: ObservableObject {
     }
 
     func runConsole(model: String, prompt: String) async {
+        await runConsole(model: model, prompt: prompt, operation: .chat)
+    }
+
+    func runConsole(
+        model: String,
+        prompt: String,
+        operation: ConsoleOperation
+    ) async {
         consoleIsRunning = true
         defer { consoleIsRunning = false }
         if isReviewDemoMode {
             try? await Task.sleep(for: .milliseconds(250))
-            let response: [String: Any] = [
-                "id": "modelhub-review-demo",
-                "object": "chat.completion",
-                "model": model,
-                "choices": [[
-                    "index": 0,
-                    "message": [
-                        "role": "assistant",
-                        "content": String(localized: "这是由 ModelHub 在本机生成的审核演示响应；没有访问任何模型供应商，也不会产生费用。", locale: AppLanguage.saved.locale)
-                    ],
-                    "finish_reason": "stop"
-                ]],
-                "usage": ["prompt_tokens": 8, "completion_tokens": 18, "total_tokens": 26]
-            ]
+            let response: [String: Any]
+            switch operation {
+            case .chat:
+                response = [
+                    "id": "modelhub-review-demo",
+                    "object": "chat.completion",
+                    "model": model,
+                    "choices": [[
+                        "index": 0,
+                        "message": [
+                            "role": "assistant",
+                            "content": String(localized: "这是由 ModelHub 在本机生成的审核演示响应；没有访问任何模型供应商，也不会产生费用。", locale: AppLanguage.saved.locale)
+                        ],
+                        "finish_reason": "stop"
+                    ]],
+                    "usage": ["prompt_tokens": 8, "completion_tokens": 18, "total_tokens": 26]
+                ]
+            case .musicGeneration:
+                response = [
+                    "id": "modelhub-review-music",
+                    "object": "music.generation",
+                    "model": model,
+                    "status": "completed",
+                    "demo": true,
+                    "message": "本机合成的音乐协议演示响应；未访问上游，也不会产生费用。"
+                ]
+            }
             let data = try? JSONSerialization.data(withJSONObject: response, options: [.prettyPrinted, .sortedKeys])
             consoleOutput = "HTTP 200 · REVIEW DEMO\n\n" + (data.flatMap { String(data: $0, encoding: .utf8) } ?? "{}")
             record(model: model, provider: "Review Demo", statusCode: 200, latency: 250, detail: "本机合成响应（未访问上游）")
@@ -2038,16 +2198,30 @@ final class AppModel: ObservableObject {
             return
         }
 
-        guard let url = URL(string: "\(endpointURL)/chat/completions") else { return }
+        let path = operation == .musicGeneration
+            ? "/music/generations"
+            : "/chat/completions"
+        guard let url = URL(string: endpointURL + path) else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(gatewayToken)", forHTTPHeaderField: "Authorization")
-        let object: [String: Any] = [
-            "model": model,
-            "messages": [["role": "user", "content": prompt]],
-            "stream": false
-        ]
+        let object: [String: Any]
+        switch operation {
+        case .chat:
+            object = [
+                "model": model,
+                "messages": [["role": "user", "content": prompt]],
+                "stream": false
+            ]
+        case .musicGeneration:
+            object = [
+                "model": model,
+                "prompt": prompt,
+                "duration": 30,
+                "instrumental": true
+            ]
+        }
         request.httpBody = try? JSONSerialization.data(withJSONObject: object)
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -2282,30 +2456,15 @@ final class AppModel: ObservableObject {
         if request.method == "POST" && request.path == "/v1/responses" {
             return await responsesCompletion(request)
         }
-        if request.method == "POST" && request.path == "/v1/images/generations" {
-            return await nativeCompletion(request, operation: .imageGeneration)
-        }
-        if request.method == "POST"
-            && (request.path == "/v1/videos/generations" || request.path == "/v1/videos")
-        {
-            return await nativeCompletion(request, operation: .videoGeneration)
-        }
-        if request.method == "POST" && request.path == "/v1/audio/speech" {
-            return await nativeCompletion(request, operation: .speech)
-        }
-        if request.method == "POST" && request.path == "/v1/audio/transcriptions" {
-            return await nativeCompletion(request, operation: .transcription)
-        }
-        if request.method == "POST" && request.path == "/v1/embeddings" {
-            return await nativeCompletion(request, operation: .embeddings)
-        }
-        if request.method == "POST" && request.path == "/v1/rerank" {
-            return await nativeCompletion(request, operation: .reranking)
-        }
-        if request.method == "GET",
-           let taskID = videoTaskID(from: request.path)
-        {
-            return await nativeCompletion(request, operation: .videoTask, taskID: taskID)
+        if let nativeRoute = NativeGatewayRoute.match(
+            method: request.method,
+            path: request.path
+        ) {
+            return await nativeCompletion(
+                request,
+                operation: nativeRoute.operation,
+                taskID: nativeRoute.taskID
+            )
         }
         return .json(statusCode: 404, object: Self.errorObject("not_found", "接口不存在"))
     }
@@ -2606,13 +2765,13 @@ final class AppModel: ObservableObject {
             return ["GET", "OPTIONS"]
         case "/v1/native":
             return ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-        case "/v1/chat/completions", "/v1/responses", "/v1/images/generations", "/v1/videos/generations",
+        case "/v1/chat/completions", "/v1/responses", "/v1/images/generations", "/v1/music/generations", "/v1/videos/generations",
              "/v1/audio/speech", "/v1/audio/transcriptions", "/v1/embeddings", "/v1/rerank":
             return ["POST", "OPTIONS"]
         case "/v1/videos":
             return ["POST", "OPTIONS"]
         default:
-            return videoTaskID(from: path) == nil ? nil : ["GET", "OPTIONS"]
+            return NativeGatewayRoute.allowedMethods(for: path)
         }
     }
 
@@ -2735,9 +2894,9 @@ final class AppModel: ObservableObject {
                 case .invalidRequest:
                     status = nil
                     responseStatus = 400
-                case .missingAPIKey:
+                case .missingAPIKey, .credentialMismatch:
                     status = .configurationRequired
-                    responseStatus = 502
+                    responseStatus = error.isInvalidClientRequest ? 400 : 502
                 case .invalidBaseURL, .nonHTTPResponse:
                     status = .unavailable
                     responseStatus = 502
@@ -2987,9 +3146,10 @@ final class AppModel: ObservableObject {
         operation: NativeAPIOperation,
         taskID: String? = nil
     ) async -> HTTPResponse {
+        let isTaskQuery = operation == .videoTask || operation == .musicTask
         guard let requestedModel = requestModel(from: request), !requestedModel.isEmpty else {
-            let hint = operation == .videoTask
-                ? "查询视频任务时请通过 ?model=供应商/模型 指定模型"
+            let hint = isTaskQuery
+                ? "查询生成任务时请通过 ?model=供应商/模型 指定模型"
                 : "请求 JSON 缺少 model"
             return .json(statusCode: 400, object: Self.errorObject("invalid_request", hint))
         }
@@ -3088,7 +3248,7 @@ final class AppModel: ObservableObject {
                     latency: latency,
                     detail: "\(operation.modelProtocol.displayName)上游响应"
                 )
-                if operation != .videoTask {
+                if !isTaskQuery {
                     let health = ModelHealthRecord(
                         providerID: provider.id,
                         model: target.model,
@@ -3119,9 +3279,9 @@ final class AppModel: ObservableObject {
                 case .invalidRequest:
                     status = nil
                     responseStatus = 400
-                case .missingAPIKey:
+                case .missingAPIKey, .credentialMismatch:
                     status = .configurationRequired
-                    responseStatus = 502
+                    responseStatus = error.isInvalidClientRequest ? 400 : 502
                 case .invalidBaseURL, .nonHTTPResponse:
                     status = .unavailable
                     responseStatus = 502
@@ -3141,7 +3301,7 @@ final class AppModel: ObservableObject {
                     responseBody: Data(),
                     contextCharactersSaved: 0
                 )
-                if operation != .videoTask, let status {
+                if !isTaskQuery, let status {
                     updateModelHealth(
                         providerID: provider.id,
                         model: target.model,
@@ -3180,7 +3340,7 @@ final class AppModel: ObservableObject {
                     responseBody: Data(),
                     contextCharactersSaved: 0
                 )
-                if operation != .videoTask {
+                if !isTaskQuery {
                     updateModelHealth(
                         providerID: provider.id,
                         model: target.model,
@@ -3365,14 +3525,14 @@ final class AppModel: ObservableObject {
                 contextCharactersSaved: 0
             )
             switch error {
-            case .missingAPIKey:
+            case .missingAPIKey, .credentialMismatch:
                 updateModelHealth(
                     providerID: provider.id,
                     model: targetModel,
                     status: .configurationRequired,
                     latency: milliseconds(from: started.duration(to: .now)),
                     statusCode: nil,
-                    detail: "原生供应商专用调用缺少密钥，已隔离"
+                    detail: "原生供应商专用调用凭证不可用，已隔离 · \(error.localizedDescription)"
                 )
             case .invalidBaseURL, .nonHTTPResponse:
                 updateModelHealth(
@@ -3470,6 +3630,13 @@ final class AppModel: ObservableObject {
             if !taskID.isEmpty { return taskID }
         }
         return nil
+    }
+
+    private func musicTaskID(from path: String) -> String? {
+        let prefix = "/v1/music/"
+        guard path.hasPrefix(prefix) else { return nil }
+        let taskID = String(path.dropFirst(prefix.count))
+        return taskID.isEmpty || taskID == "generations" ? nil : taskID
     }
 
     private func quarantinedTargets(for requestedModel: String) -> [String] {
@@ -3632,7 +3799,10 @@ final class AppModel: ObservableObject {
     }
 
     private func isMeteredDataPlaneRequest(_ request: HTTPRequest) -> Bool {
-        guard request.method != "GET" || videoTaskID(from: request.path) != nil else {
+        guard request.method != "GET"
+                || videoTaskID(from: request.path) != nil
+                || musicTaskID(from: request.path) != nil
+        else {
             return false
         }
         return request.path.hasPrefix("/v1/")
@@ -4119,9 +4289,16 @@ final class AppModel: ObservableObject {
             && zip(storedProviderKinds, decoded.providers).contains {
                 $0 != $1.kind.rawValue
             }
+        var didMigrateConnectionPresets = false
         var didMigrateBaseURLs = false
         var didMigrateCatalogURLs = false
         for index in decoded.providers.indices {
+            if let migratedProvider = ProviderConnectionPresetMigration.migratedProvider(
+                decoded.providers[index]
+            ) {
+                decoded.providers[index] = migratedProvider
+                didMigrateConnectionPresets = true
+            }
             if let migratedProvider = ProviderBaseURLMigration.migratedProvider(
                 decoded.providers[index]
             ) {
@@ -4143,16 +4320,34 @@ final class AppModel: ObservableObject {
         decoded.modelHealth = normalizedHealth
         configuration = decoded
         rebuildHealthIndex()
+        if didMigrateConnectionPresets {
+            savePreConnectionPresetMigrationBackup(data)
+        }
         if didMigrateBaseURLs {
             savePreBaseURLMigrationBackup(data)
         }
         if didMigrateCatalogURLs {
             savePreCatalogURLMigrationBackup(data)
         }
-        if didMigrateHealth || didMigrateProviderKinds || didMigrateBaseURLs
-            || didMigrateCatalogURLs || !hadRoutingSettings
+        if didMigrateHealth || didMigrateProviderKinds || didMigrateConnectionPresets
+            || didMigrateBaseURLs || didMigrateCatalogURLs || !hadRoutingSettings
         {
             persistConfiguration()
+        }
+    }
+
+    private func savePreConnectionPresetMigrationBackup(_ data: Data) {
+        let backupURL = configurationURL.deletingLastPathComponent()
+            .appending(path: "Backups/configuration-before-provider-preset-migration.json")
+        guard !FileManager.default.fileExists(atPath: backupURL.path) else { return }
+        do {
+            try FileManager.default.createDirectory(
+                at: backupURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try data.write(to: backupURL, options: .atomic)
+        } catch {
+            notice = L10n.format("供应商连接预设迁移前配置备份失败：%@", error.localizedDescription)
         }
     }
 

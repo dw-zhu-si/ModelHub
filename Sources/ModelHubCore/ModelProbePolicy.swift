@@ -2,6 +2,7 @@ import Foundation
 
 public enum ModelNativeProtocol: String, Codable, Equatable, Sendable {
     case imageGeneration
+    case musicGeneration
     case videoGeneration
     case speech
     case transcription
@@ -12,6 +13,7 @@ public enum ModelNativeProtocol: String, Codable, Equatable, Sendable {
     public var displayName: String {
         switch self {
         case .imageGeneration: "图像生成"
+        case .musicGeneration: "音乐生成"
         case .videoGeneration: "视频生成"
         case .speech: "语音合成"
         case .transcription: "语音转录"
@@ -89,6 +91,7 @@ public enum ModelProbePolicy {
     public static func nativeOperation(for nativeProtocol: ModelNativeProtocol) -> NativeAPIOperation? {
         switch nativeProtocol {
         case .imageGeneration: .imageGeneration
+        case .musicGeneration: .musicGeneration
         case .videoGeneration: .videoGeneration
         case .speech: .speech
         case .transcription: .transcription
@@ -121,6 +124,14 @@ public enum ModelProbePolicy {
         switch nativeProtocol {
         case .imageGeneration:
             object = ["prompt": "ModelHub connection test", "n": 1]
+        case .musicGeneration:
+            // This minimal body is sent only after explicit confirmation that
+            // the provider may bill a real protocol probe.
+            object = [
+                "prompt": "ModelHub connection test",
+                "duration": 5,
+                "instrumental": true
+            ]
         case .videoGeneration:
             // Use the documented Seedance 2.0 minimum that is accepted across the
             // standard and fast variants. Keep resolution and audio at their
@@ -157,8 +168,10 @@ public enum ModelProbePolicy {
     ) -> String {
         if nativeProtocol == .providerNative {
             let hostname = URL(string: provider.baseURL)?.host?.lowercased() ?? ""
-            let isBailian = provider.kind == .qwen
-                && (hostname == "dashscope.aliyuncs.com" || provider.name.contains("百炼"))
+            let isBailian = provider.kind.isBailian
+                && (hostname == BailianEndpointPolicy.payAsYouGoHost
+                    || hostname == BailianEndpointPolicy.tokenPlanHost
+                    || provider.name.contains("百炼"))
             if isBailian {
                 return "百炼部署/工作流模型需要部署代码、素材或专用参数；不会作为聊天模型请求，请在 API 调试中按供应商文档验证。"
             }
@@ -218,6 +231,26 @@ public enum ModelProbePolicy {
         let providerName = provider.name.lowercased()
         let name = model.lowercased()
 
+        // Token Plan exposes its own product-scoped model capabilities. Never
+        // derive a pay-as-you-go DashScope native endpoint for it. Models that
+        // look like native generation models stay quarantined until the user
+        // configures and verifies the provider-specific endpoint explicitly.
+        if provider.kind.isBailianTokenPlan,
+           isLikelyNativeGenerationModel(name)
+        {
+            return .providerNative
+        }
+
+        let musicEndpointKeys = [
+            ProviderEndpointRecord.key(for: .musicGeneration, model: model),
+            ProviderEndpointRecord.key(for: .musicGeneration)
+        ]
+        if isMusicModel(name),
+           musicEndpointKeys.contains(where: { provider.endpointURLs[$0]?.isEmpty == false })
+        {
+            return .musicGeneration
+        }
+
         if isBailian(provider), name == "wanx-v1" {
             return .imageGeneration
         }
@@ -245,6 +278,9 @@ public enum ModelProbePolicy {
         if isVideoModel(name) {
             return .videoGeneration
         }
+        if isMusicModel(name) {
+            return .musicGeneration
+        }
         return nil
     }
 
@@ -255,8 +291,10 @@ public enum ModelProbePolicy {
         let providerName = provider.name.lowercased()
         let hostname = URL(string: provider.baseURL)?.host?.lowercased() ?? ""
         let isYunwu = providerName.contains("云雾") || hostname.contains("yunwu.ai")
-        let isBailian = providerName.contains("百炼")
-            || hostname.contains("dashscope.aliyuncs.com")
+        let isBailian = provider.kind.isBailian
+            || providerName.contains("百炼")
+            || hostname == BailianEndpointPolicy.payAsYouGoHost
+            || hostname == BailianEndpointPolicy.tokenPlanHost
 
         if isYunwu {
             let exactPrefixes = [
@@ -287,10 +325,25 @@ public enum ModelProbePolicy {
 
     private static func isBailian(_ provider: ProviderConfig) -> Bool {
         let hostname = URL(string: provider.baseURL)?.host?.lowercased() ?? ""
-        return provider.kind == .qwen && (
+        return provider.kind.isBailian && (
             provider.name.lowercased().contains("百炼")
-                || hostname == "dashscope.aliyuncs.com"
+                || hostname == BailianEndpointPolicy.payAsYouGoHost
+                || hostname == BailianEndpointPolicy.tokenPlanHost
         )
+    }
+
+    private static func isLikelyNativeGenerationModel(_ name: String) -> Bool {
+        isSpeechModel(name)
+            || isImageModel(name)
+            || isVideoModel(name)
+            || isMusicModel(name)
+            || name.contains("embedding")
+            || name.contains("rerank")
+            || name.contains("whisper")
+            || name.contains("transcrib")
+            || name.contains("voice-design")
+            || name.contains("voice-clone")
+            || name.contains("realtime")
     }
 
     private static func isSpeechModel(_ name: String) -> Bool {
@@ -315,6 +368,14 @@ public enum ModelProbePolicy {
             return true
         }
         return false
+    }
+
+    private static func isMusicModel(_ name: String) -> Bool {
+        let markers = [
+            "music", "suno", "udio", "song", "musicgen", "ace-step",
+            "audio-generation"
+        ]
+        return markers.contains { name.contains($0) }
     }
 
     private static func transcriptionProbePayload(model: String) -> ModelProbePayload {

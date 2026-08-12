@@ -53,8 +53,10 @@ public enum MCPActionTool: String, CaseIterable, Sendable {
     case generateText = "generate_text"
     case generateImage = "generate_image"
     case generateVideo = "generate_video"
+    case generateMusic = "generate_music"
     case generateSpeech = "generate_speech"
     case getVideoTask = "get_video_task"
+    case getMusicTask = "get_music_task"
     case createEmbeddings = "create_embeddings"
     case rerankDocuments = "rerank_documents"
 }
@@ -113,7 +115,7 @@ public enum MCPActionValidationError: Error, Equatable, LocalizedError {
 
 public enum LocalAgentProtocols {
     public static let mcpProtocolVersion = "2025-06-18"
-    public static let serverVersion = "1.9.0"
+    public static let serverVersion = "1.9.1"
 
     public static func mcp(
         requestBody: Data,
@@ -133,7 +135,7 @@ public enum LocalAgentProtocols {
                 "protocolVersion": mcpProtocolVersion,
                 "capabilities": ["tools": ["listChanged": false]],
                 "serverInfo": ["name": "ModelHub", "version": serverVersion],
-                "instructions": "提供本机状态、可用模型、聚合用量、任务上下文，以及受隔离与计费确认保护的文字、图片、视频、语音、向量和重排调用；不会返回密钥。"
+                "instructions": "提供本机状态、可用模型、聚合用量、任务上下文，以及受隔离与计费确认保护的文字、图片、视频、音乐、语音、向量和重排调用；不会返回密钥。"
             ])
         case "tools/list":
             return jsonRPCResult(id: id, result: ["tools": mcpTools()])
@@ -293,6 +295,31 @@ public enum LocalAgentProtocols {
             try copyOptionalString("aspect_ratio", from: arguments, to: &object, maximumLength: 100)
             return try postRequest(path: "/v1/videos/generations", object: object)
 
+        case .generateMusic:
+            try requireBillableConfirmation(arguments)
+            try rejectUnsupportedFields(
+                arguments,
+                allowed: [
+                    "model", "prompt", "lyrics", "style", "title",
+                    "duration_seconds", "instrumental", "confirm_billable"
+                ]
+            )
+            var object: [String: Any] = [
+                "model": try requiredString("model", in: arguments, maximumLength: 1_000),
+                "prompt": try requiredString("prompt", in: arguments, maximumLength: 20_000),
+                "duration": try optionalInteger(
+                    "duration_seconds",
+                    in: arguments,
+                    defaultValue: 30,
+                    range: 1...600
+                )
+            ]
+            try copyOptionalString("lyrics", from: arguments, to: &object, maximumLength: 50_000)
+            try copyOptionalString("style", from: arguments, to: &object, maximumLength: 2_000)
+            try copyOptionalString("title", from: arguments, to: &object, maximumLength: 500)
+            try copyOptionalBoolean("instrumental", from: arguments, to: &object)
+            return try postRequest(path: "/v1/music/generations", object: object)
+
         case .generateSpeech:
             try requireBillableConfirmation(arguments)
             try rejectUnsupportedFields(
@@ -313,20 +340,10 @@ public enum LocalAgentProtocols {
             return try postRequest(path: "/v1/audio/speech", object: object)
 
         case .getVideoTask:
-            try rejectUnsupportedFields(arguments, allowed: ["model", "task_id"])
-            let model = try requiredString("model", in: arguments, maximumLength: 1_000)
-            let taskID = try requiredString("task_id", in: arguments, maximumLength: 2_000)
-            let allowedTaskIDCharacters = CharacterSet.alphanumerics.union(
-                CharacterSet(charactersIn: "-_.:")
-            )
-            guard taskID.unicodeScalars.allSatisfy(allowedTaskIDCharacters.contains) else {
-                throw MCPActionValidationError.invalidValue("task_id")
-            }
-            return MCPGatewayRequest(
-                method: "GET",
-                path: "/v1/videos/\(taskID)",
-                queryItems: ["model": model]
-            )
+            return try taskRequest(arguments, pathPrefix: "/v1/videos/")
+
+        case .getMusicTask:
+            return try taskRequest(arguments, pathPrefix: "/v1/music/")
 
         case .createEmbeddings:
             try requireBillableConfirmation(arguments)
@@ -420,6 +437,9 @@ public enum LocalAgentProtocols {
         ])
     }
 
+    // MCP tool definitions follow the 2025-06-18 tools contract, including
+    // inputSchema and advisory annotations:
+    // https://modelcontextprotocol.io/specification/2025-06-18/server/tools
     private static func mcpTools() -> [[String: Any]] {
         [
             tool("modelhub_status", "读取 ModelHub 本机状态"),
@@ -463,6 +483,21 @@ public enum LocalAgentProtocols {
                 required: ["model", "prompt", "confirm_billable"]
             ),
             actionTool(
+                .generateMusic,
+                description: "通过 ModelHub 原生音乐协议创建音乐任务；保留供应商扩展参数，隔离模型不会被调用，且必须确认可能计费。",
+                properties: [
+                    "model": stringProperty("支持音乐生成且当前可用的模型"),
+                    "prompt": stringProperty("音乐描述", maximumLength: 20_000),
+                    "lyrics": stringProperty("可选歌词", maximumLength: 50_000),
+                    "style": stringProperty("可选曲风、流派或编曲描述", maximumLength: 2_000),
+                    "title": stringProperty("可选标题", maximumLength: 500),
+                    "duration_seconds": integerProperty("期望时长（秒）", minimum: 1, maximum: 600),
+                    "instrumental": booleanProperty("是否生成纯音乐"),
+                    "confirm_billable": booleanProperty("确认用户已明确授权本次可能计费的请求")
+                ],
+                required: ["model", "prompt", "confirm_billable"]
+            ),
+            actionTool(
                 .generateSpeech,
                 description: "通过 ModelHub 原生语音协议生成语音；必须显式提供供应商支持的 voice，并确认可能计费。",
                 properties: [
@@ -480,6 +515,16 @@ public enum LocalAgentProtocols {
                 properties: [
                     "model": stringProperty("创建任务时使用的模型或路由"),
                     "task_id": stringProperty("视频任务 ID")
+                ],
+                required: ["model", "task_id"],
+                readOnly: true
+            ),
+            actionTool(
+                .getMusicTask,
+                description: "查询已创建音乐任务的状态，不创建新任务。",
+                properties: [
+                    "model": stringProperty("创建任务时使用的模型或路由"),
+                    "task_id": stringProperty("音乐任务 ID")
                 ],
                 required: ["model", "task_id"],
                 readOnly: true
@@ -650,6 +695,38 @@ public enum LocalAgentProtocols {
             throw MCPActionValidationError.invalidValue(name)
         }
         object[name] = trimmed
+    }
+
+    private static func copyOptionalBoolean(
+        _ name: String,
+        from arguments: [String: Any],
+        to object: inout [String: Any]
+    ) throws {
+        guard let raw = arguments[name] else { return }
+        guard let value = raw as? Bool else {
+            throw MCPActionValidationError.invalidValue(name)
+        }
+        object[name] = value
+    }
+
+    private static func taskRequest(
+        _ arguments: [String: Any],
+        pathPrefix: String
+    ) throws -> MCPGatewayRequest {
+        try rejectUnsupportedFields(arguments, allowed: ["model", "task_id"])
+        let model = try requiredString("model", in: arguments, maximumLength: 1_000)
+        let taskID = try requiredString("task_id", in: arguments, maximumLength: 2_000)
+        let allowedTaskIDCharacters = CharacterSet.alphanumerics.union(
+            CharacterSet(charactersIn: "-_.:")
+        )
+        guard taskID.unicodeScalars.allSatisfy(allowedTaskIDCharacters.contains) else {
+            throw MCPActionValidationError.invalidValue("task_id")
+        }
+        return MCPGatewayRequest(
+            method: "GET",
+            path: pathPrefix + taskID,
+            queryItems: ["model": model]
+        )
     }
 
     private static func toolOutput(

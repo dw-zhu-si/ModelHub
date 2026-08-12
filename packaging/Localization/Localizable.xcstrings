@@ -1,6 +1,150 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "切换百炼类型时会自动应用对应的 Base URL 与聊天端点；仅在已保存密钥与目标计费体系明确兼容时复用，否则必须输入目标类型的专属 API Key。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "عند تبديل نوع Model Studio، يتم تطبيق Base URL ونقطة الدردشة المطابقتين تلقائيًا. يُعاد استخدام المفتاح المحفوظ فقط عندما يكون متوافقًا بوضوح مع نظام الفوترة الهدف؛ وإلا يجب إدخال مفتاح API المخصص للنوع الهدف." } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Beim Wechsel des Model-Studio-Typs werden die passende Base URL und der Chat-Endpunkt automatisch angewendet. Ein gespeicherter Schlüssel wird nur wiederverwendet, wenn er eindeutig mit dem Ziel-Abrechnungssystem kompatibel ist; andernfalls ist der dedizierte API-Schlüssel des Zieltyps erforderlich." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Switching the Model Studio type automatically applies its Base URL and chat endpoint. A saved key is reused only when it is clearly compatible with the target billing system; otherwise, enter the target type’s dedicated API key." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Al cambiar el tipo de Model Studio se aplican automáticamente su Base URL y el endpoint de chat. Una clave guardada solo se reutiliza si es claramente compatible con el sistema de facturación de destino; de lo contrario, introduzca la clave API dedicada del tipo de destino." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le changement de type Model Studio applique automatiquement sa Base URL et son point de terminaison de chat. Une clé enregistrée n’est réutilisée que si elle est clairement compatible avec le système de facturation cible ; sinon, saisissez la clé API dédiée au type cible." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Model Studio の種類を切り替えると、対応する Base URL とチャットエンドポイントが自動適用されます。保存済みキーは対象の課金体系と明確に互換性がある場合のみ再利用され、それ以外は対象種類専用の API Key が必要です。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Model Studio 유형을 전환하면 해당 Base URL과 채팅 엔드포인트가 자동 적용됩니다. 저장된 키는 대상 과금 체계와 명확히 호환되는 경우에만 재사용되며, 그렇지 않으면 대상 유형의 전용 API Key를 입력해야 합니다." } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Ao trocar o tipo do Model Studio, a Base URL e o endpoint de chat correspondentes são aplicados automaticamente. Uma chave salva só é reutilizada quando é claramente compatível com o sistema de cobrança de destino; caso contrário, informe a chave de API dedicada do tipo de destino." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "При смене типа Model Studio автоматически применяются соответствующие Base URL и конечная точка чата. Сохраненный ключ используется повторно только при однозначной совместимости с целевой системой оплаты; иначе требуется выделенный API-ключ целевого типа." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "切换百炼类型时会自动应用对应的 Base URL 与聊天端点；仅在已保存密钥与目标计费体系明确兼容时复用，否则必须输入目标类型的专属 API Key。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "切換百鍊類型時會自動套用對應的 Base URL 與聊天端點；僅在已儲存金鑰與目標計費體系明確相容時重用，否則必須輸入目標類型的專屬 API Key。" } }
+      }
+    },
+    "MiniMax 中国站" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax الصين" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax China" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax China" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax China" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax Chine" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax 中国サイト" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax 중국 사이트" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax China" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax Китай" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax 中国站" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax 中國站" } }
+      }
+    },
+    "MiniMax 中国站账户可用模型" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "النماذج المتاحة لحساب MiniMax الصين" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Für das MiniMax-China-Konto verfügbare Modelle" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Models available to the MiniMax China account" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Modelos disponibles para la cuenta de MiniMax China" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Modèles disponibles pour le compte MiniMax Chine" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax 中国アカウントで利用可能なモデル" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax 중국 계정에서 사용 가능한 모델" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Modelos disponíveis para a conta MiniMax China" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Модели, доступные для учетной записи MiniMax Китай" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax 中国站账户可用模型" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax 中國站帳戶可用模型" } }
+      }
+    },
+    "MiniMax 国际站" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax الدولي" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax International" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax International" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax Internacional" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax International" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax 国際サイト" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax 국제 사이트" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax Internacional" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax Международный" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax 国际站" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "MiniMax 國際站" } }
+      }
+    },
+    "企业业务空间按量付费版；使用 API Keys 页面生成的按量付费 API Key（新版通常以 sk-ws 开头），可使用页面展示的共享或业务空间专属 Base URL。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إصدار مساحة عمل المؤسسة بنظام الدفع حسب الاستخدام؛ استخدم مفتاح API للدفع حسب الاستخدام الذي تم إنشاؤه في صفحة API Keys (تبدأ المفاتيح الجديدة عادةً بـ sk-ws)، مع عنوان Base URL المشترك أو الخاص بمساحة العمل المعروض هناك." } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Pay-as-you-go für Unternehmens-Arbeitsbereiche: Verwenden Sie den auf der Seite „API Keys“ erstellten Pay-as-you-go-API-Schlüssel (neue Schlüssel beginnen meist mit sk-ws) sowie die dort angezeigte gemeinsame oder arbeitsbereichsspezifische Base URL." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enterprise workspace pay-as-you-go: use the pay-as-you-go API key created on the API Keys page (new keys usually start with sk-ws) with the shared or workspace-specific Base URL shown there." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Pago por uso del espacio de trabajo empresarial: use la clave API de pago por uso creada en la página API Keys (las claves nuevas suelen empezar por sk-ws) con la Base URL compartida o específica del espacio de trabajo que se muestra allí." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Paiement à l’usage pour l’espace de travail d’entreprise : utilisez la clé API créée dans la page API Keys (les nouvelles clés commencent généralement par sk-ws) avec la Base URL partagée ou propre à l’espace de travail qui y est affichée." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "企業ワークスペースの従量課金版です。API Keys ページで作成した従量課金 API Key（新しいキーは通常 sk-ws で始まります）と、同ページに表示される共有またはワークスペース専用の Base URL を使用します。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "기업 워크스페이스 종량제입니다. API Keys 페이지에서 생성한 종량제 API Key(새 키는 보통 sk-ws로 시작)와 해당 페이지에 표시된 공유 또는 워크스페이스 전용 Base URL을 사용합니다." } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Pagamento conforme o uso do espaço de trabalho empresarial: use a chave de API criada na página API Keys (as novas chaves geralmente começam com sk-ws) com a Base URL compartilhada ou específica do espaço de trabalho exibida ali." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Корпоративное рабочее пространство с оплатой по мере использования: применяйте API-ключ со страницы API Keys (новые ключи обычно начинаются с sk-ws) вместе с указанным там общим или выделенным для рабочего пространства Base URL." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "企业业务空间按量付费版；使用 API Keys 页面生成的按量付费 API Key（新版通常以 sk-ws 开头），可使用页面展示的共享或业务空间专属 Base URL。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "企業業務空間按量付費版；使用 API Keys 頁面產生的按量付費 API Key（新版通常以 sk-ws 開頭），可使用頁面顯示的共用或業務空間專屬 Base URL。" } }
+      }
+    },
+    "阿里云百炼企业版（业务空间/按量付费）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio للمؤسسات (مساحة عمل/دفع حسب الاستخدام)" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio Enterprise (Arbeitsbereich/Pay-as-you-go)" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio Enterprise (Workspace/Pay-as-you-go)" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio Enterprise (espacio de trabajo/pago por uso)" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio Entreprise (espace de travail/paiement à l’usage)" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio エンタープライズ（ワークスペース／従量課金）" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio 기업용(워크스페이스/종량제)" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio Enterprise (espaço de trabalho/pagamento conforme o uso)" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio Enterprise (рабочее пространство/оплата по мере использования)" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "阿里云百炼企业版（业务空间/按量付费）" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "阿里雲百鍊企業版（業務空間／按量付費）" } }
+      }
+    },
+    "阿里云百炼 Token Plan 团队版" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "خطة Alibaba Cloud Model Studio Token Plan للفرق" } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio Token Plan Team" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio Token Plan Team" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio Token Plan para equipos" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio Token Plan Équipe" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio Token Plan チーム版" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio Token Plan 팀 버전" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio Token Plan para equipes" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Alibaba Cloud Model Studio Token Plan для команд" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "阿里云百炼 Token Plan 团队版" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "阿里雲百鍊 Token Plan 團隊版" } }
+      }
+    },
+    "Token Plan 个人版；必须使用个人版专属 API Key，不能与按量付费、Coding Plan 或团队版混用。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "الإصدار الشخصي من Token Plan؛ يجب استخدام مفتاح API الشخصي المخصص، ولا يمكن خلطه مع الدفع حسب الاستخدام أو Coding Plan أو إصدار الفريق." } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan Personal: Verwenden Sie den dafür vorgesehenen API-Schlüssel; er darf nicht mit Pay-as-you-go, Coding Plan oder der Team-Version gemischt werden." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan Personal: use its dedicated API key; it cannot be mixed with pay-as-you-go, Coding Plan, or the Team edition." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan Personal: use su clave API dedicada; no se puede combinar con pago por uso, Coding Plan ni la edición para equipos." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan Personnel : utilisez sa clé API dédiée ; elle ne peut pas être mélangée avec le paiement à l’usage, Coding Plan ou l’édition Équipe." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan 個人版では専用 API Key を使用してください。従量課金、Coding Plan、チーム版のキーとは併用できません。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan 개인 버전은 전용 API Key를 사용해야 하며 종량제, Coding Plan 또는 팀 버전과 혼용할 수 없습니다." } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan Pessoal: use a chave de API dedicada; ela não pode ser combinada com pagamento conforme o uso, Coding Plan ou a edição para equipes." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan Personal: используйте выделенный API-ключ; его нельзя смешивать с оплатой по мере использования, Coding Plan или командной версией." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan 个人版；必须使用个人版专属 API Key，不能与按量付费、Coding Plan 或团队版混用。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan 個人版；必須使用個人版專屬 API Key，不能與按量付費、Coding Plan 或團隊版混用。" } }
+      }
+    },
+    "Token Plan 团队版；必须使用分配席位后生成的团队版专属 API Key，不能与企业业务空间按量付费 Key 混用。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : { "stringUnit" : { "state" : "translated", "value" : "إصدار Token Plan للفرق؛ يجب استخدام مفتاح API المخصص للفريق الذي تم إنشاؤه بعد تعيين المقعد، ولا يمكن خلطه مع مفتاح الدفع حسب الاستخدام لمساحة عمل المؤسسة." } },
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan Team: Verwenden Sie den nach der Sitzplatzzuweisung erzeugten Team-API-Schlüssel; er darf nicht mit einem Pay-as-you-go-Schlüssel für Unternehmens-Arbeitsbereiche gemischt werden." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan Team: use the dedicated team API key generated after assigning a seat; it cannot be mixed with an enterprise workspace pay-as-you-go key." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan para equipos: use la clave API de equipo generada tras asignar una plaza; no se puede combinar con una clave de pago por uso del espacio empresarial." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan Équipe : utilisez la clé API d’équipe générée après l’attribution d’un siège ; elle ne peut pas être mélangée avec une clé de paiement à l’usage d’un espace de travail d’entreprise." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan チーム版では、シート割り当て後に生成した専用 API Key を使用してください。企業ワークスペースの従量課金 Key とは併用できません。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan 팀 버전은 좌석 할당 후 생성된 팀 전용 API Key를 사용해야 하며 기업 워크스페이스 종량제 Key와 혼용할 수 없습니다." } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan para equipes: use a chave de API da equipe gerada após atribuir um assento; ela não pode ser combinada com uma chave de pagamento conforme o uso do espaço empresarial." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan Team: используйте командный API-ключ, созданный после назначения места; его нельзя смешивать с ключом корпоративного рабочего пространства с оплатой по мере использования." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan 团队版；必须使用分配席位后生成的团队版专属 API Key，不能与企业业务空间按量付费 Key 混用。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Token Plan 團隊版；必須使用分配席位後產生的團隊版專屬 API Key，不能與企業業務空間按量付費 Key 混用。" } }
+      }
+    },
     "；目录同时提供可自动同步的 Token 价格。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -566,6 +710,77 @@
         }
       }
     },
+    "%@ API Key 无效、已过期，或与当前 Base URL 不匹配" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ مفتاح API غير صالح، أو منتهي الصلاحية، أو لا يتطابق مع عنوان URL الأساسي الحالي"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ API-Schlüssel ist ungültig, abgelaufen oder stimmt nicht mit der aktuellen Basis-URL überein"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ API Key is invalid, expired, or does not match the current Base URL"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ La clave API no es válida, ha caducado o no coincide con la URL base actual"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ La clé API n'est pas valide, a expiré ou ne correspond pas à l'URL de base actuelle"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ API キーが無効であるか、期限切れであるか、現在のベース URL と一致しません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ API 키가 유효하지 않거나 만료되었거나 현재 기본 URL과 일치하지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ A chave de API é inválida, expirou ou não corresponde ao URL base atual"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Ключ API недействителен, срок его действия истек или не соответствует текущему базовому URL-адресу."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ API Key 无效、已过期，或与当前 Base URL 不匹配"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ API Key 無效、已過期，或與當前 Base URL 不匹配"
+          }
+        }
+      }
+    },
     "%@，隔离原因：%@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -633,6 +848,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@，隔離原因：%@"
+          }
+        }
+      }
+    },
+    "%@不支持该模型，或 Base URL 与此版本的 API Key 不匹配" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@النموذج غير مدعوم، أو أن عنوان URL الأساسي لا يتطابق مع هذا الإصدار من مفتاح API"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@Das Modell wird nicht unterstützt oder die Basis-URL stimmt nicht mit dieser Version des API-Schlüssels überein"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@The model is not supported, or the Base URL does not match this version of the API Key"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@El modelo no es compatible o la URL base no coincide con esta versión de la clave API"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@Le modèle n'est pas pris en charge ou l'URL de base ne correspond pas à cette version de la clé API"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@モデルがサポートされていないか、ベース URL がこのバージョンの API キーと一致しません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@모델이 지원되지 않거나 기본 URL이 이 API 키 버전과 일치하지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@O modelo não é compatível ou o URL base não corresponde a esta versão da chave de API"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@Модель не поддерживается, или базовый URL-адрес не соответствует этой версии ключа API."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@不支持该模型，或 Base URL 与此版本的 API Key 不匹配"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@不支持該模型，或 Base URL 與此版本的 API Key 不匹配"
           }
         }
       }
@@ -3757,7 +4043,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CSV import accepts only UTF-8 .csv files. Required: model (or 模型名称). Optional: endpoint, protocol-specific endpoints, input_price, output_price, and price_source. Prices are USD per million tokens."
+            "value" : "CSV only accepts UTF-8 encoded .csv files. Required columns: model (also supports \"model name\"); optional columns: endpoint, each protocol endpoint, input_price, output_price, price_source. The price unit is USD/million Tokens."
           }
         },
         "es" : {
@@ -3899,7 +4185,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CSV supports UTF-8, UTF-16, and Excel separator declarations. Required: model (also model_id or 模型名称). Optional: endpoint, protocol endpoints, input_price, output_price, request_price, and price_source. Token prices use USD per million tokens; request_price uses USD per request."
+            "value" : "CSV supports UTF-8, UTF-16 and Excel delimiter declarations. Required columns: model (model_id, model name is also supported); optional columns: endpoint, each protocol endpoint, input_price, output_price, request_price, price_source. Token price unit is USD/million Token, request_price is USD/time."
           }
         },
         "es" : {
@@ -4680,7 +4966,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The CSV header must include a model or 模型名称 column"
+            "value" : "CSV header must contain model or model name column"
           }
         },
         "es" : {
@@ -5719,6 +6005,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "messages 必須是非空數組"
+          }
+        }
+      }
+    },
+    "MiniMax 账户可用模型" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الموديلات المتوفرة مع حساب MiniMax"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modelle mit MiniMax-Konto verfügbar"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Models available with MiniMax account"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modelos disponibles con cuenta MiniMax"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modèles disponibles avec compte MiniMax"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MiniMaxアカウントで利用可能なモデル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MiniMax 계정으로 사용 가능한 모델"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modelos disponíveis com conta MiniMax"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Модели доступны с учетной записью MiniMax"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MiniMax 账户可用模型"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MiniMax 賬戶可用模型"
           }
         }
       }
@@ -7068,6 +7425,77 @@
         }
       }
     },
+    "Token Plan Base URL 必须包含 /compatible-mode/v1；ModelHub 不会自动补全路径。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يجب أن يحتوي عنوان URL الأساسي لخطة الرمز المميز على /compatible-mode/v1؛ لن يقوم ModelHub بإكمال المسار تلقائيًا."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Basis-URL des Token-Plans muss /kompatibler-mode/v1 enthalten; ModelHub vervollständigt den Pfad nicht automatisch."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Token Plan Base URL must contain /compatible-mode/v1; ModelHub will not automatically complete the path."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La URL base del plan de token debe contener /compatible-mode/v1; ModelHub no completará automáticamente la ruta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'URL de base du plan de jeton doit contenir /compatible-mode/v1 ; ModelHub ne terminera pas automatiquement le chemin."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "トークン プランのベース URL には /compatibility-mode/v1 が含まれている必要があります。 ModelHub はパスを自動的に完成しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "토큰 계획 기본 URL에는 /호환 모드/v1이 포함되어야 합니다. ModelHub는 자동으로 경로를 완성하지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O URL base do plano de token deve conter /compatível-modo/v1; ModelHub não completará automaticamente o caminho."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Базовый URL-адрес плана токена должен содержать /совместимый-режим/v1; ModelHub не будет автоматически завершать путь."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Token Plan Base URL 必须包含 /compatible-mode/v1；ModelHub 不会自动补全路径。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Token Plan Base URL 必須包含 /compatible-mode/v1；ModelHub 不會自動補全路徑。"
+          }
+        }
+      }
+    },
     "tool_choice 格式不受支持" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7698,7 +8126,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "上下文最佳化"
+            "value" : "上下文優化"
           }
         }
       }
@@ -8688,6 +9116,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不限預算"
+          }
+        }
+      }
+    },
+    "个人开发者 Token Plan；必须使用个人版专属 API Key，不能与企业版或按量版混用。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خطة الرمز المميز للمطور الشخصي؛ يجب أن يستخدم مفتاح API الحصري للإصدار الشخصي ولا يمكن مزجه مع إصدار المؤسسة أو الإصدار المدفوع."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Persönlicher Entwickler-Token-Plan; muss den API-Schlüssel exklusiv für die persönliche Version verwenden und kann nicht mit der Unternehmensversion oder der kostenpflichtigen Version gemischt werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Personal developer Token Plan; must use the API Key exclusive to the personal version and cannot be mixed with the enterprise version or the paid version."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plan de tokens de desarrollador personal; debe utilizar la clave API exclusiva de la versión personal y no se puede combinar con la versión empresarial ni con la versión paga."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plan de jetons de développeur personnel ; doit utiliser la clé API exclusive à la version personnelle et ne peut être mélangée avec la version entreprise ou la version payante."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "個人開発者トークンプラン;個人版専用の API キーを使用する必要があり、エンタープライズ版や有料版と混在させることはできません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "개인 개발자 토큰 계획; 반드시 개인용 API Key를 사용해야 하며, 기업용, 유료버전과 혼용할 수 없습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plano de token de desenvolvedor pessoal; deve utilizar a API Key exclusiva da versão pessoal e não pode ser mesclada com a versão empresarial ou paga."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "План токенов персонального разработчика; должен использовать ключ API исключительно для личной версии и не может смешиваться с корпоративной или платной версией."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "个人开发者 Token Plan；必须使用个人版专属 API Key，不能与企业版或按量版混用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "個人開發者 Token Plan；必須使用個人版專屬 API Key，不能與企業版或按量版混用。"
           }
         }
       }
@@ -13773,7 +14272,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "相容 API Base URL"
+            "value" : "兼容 API Base URL"
           }
         }
       }
@@ -13985,6 +14484,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "內置 · 不可刪除"
+          }
+        }
+      }
+    },
+    "内置供应商会自动带出已核验的完整名录地址；通用兼容类型才需要手工填写。运行时不会使用 Base URL 猜测路径。凭证通过请求头发送，拉取结果需预览确认后才会合并。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سيقوم المورد المدمج تلقائيًا بإخراج عنوان الدليل الكامل الذي تم التحقق منه؛ فقط النوع المتوافق العالمي يحتاج إلى ملؤه يدويًا. لا يستخدم وقت التشغيل عنوان URL الأساسي لتخمين المسار. يتم إرسال بيانات الاعتماد من خلال رأس الطلب، ويجب معاينة نتائج السحب وتأكيدها قبل دمجها."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der integrierte Anbieter zeigt automatisch die verifizierte vollständige Verzeichnisadresse an; Nur der universell kompatible Typ muss manuell ausgefüllt werden. Die Laufzeit verwendet die Basis-URL nicht, um den Pfad zu erraten. Die Anmeldeinformationen werden über den Anforderungsheader gesendet und die Pull-Ergebnisse müssen in der Vorschau angezeigt und bestätigt werden, bevor sie zusammengeführt werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The built-in supplier will automatically bring out the verified complete directory address; only the universal compatible type needs to be filled in manually. The runtime does not use the Base URL to guess the path. The credentials are sent through the request header, and the pull results need to be previewed and confirmed before they are merged."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El proveedor integrado mostrará automáticamente la dirección del directorio completa verificada; solo es necesario completar manualmente el tipo compatible universal. El tiempo de ejecución no utiliza la URL base para adivinar la ruta. Las credenciales se envían a través del encabezado de la solicitud y es necesario obtener una vista previa de los resultados de la extracción y confirmarlos antes de fusionarlos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le fournisseur intégré fera automatiquement apparaître l'adresse complète du répertoire vérifiée ; seul le type universel compatible doit être rempli manuellement. Le moteur d'exécution n'utilise pas l'URL de base pour deviner le chemin. Les informations d'identification sont envoyées via l'en-tête de la demande et les résultats de l'extraction doivent être prévisualisés et confirmés avant d'être fusionnés."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "組み込みのサプライヤーは、検証された完全なディレクトリ アドレスを自動的に取得します。ユニバーサル互換タイプのみを手動で入力する必要があります。ランタイムはパスを推測するためにベース URL を使用しません。資格情報はリクエスト ヘッダーを通じて送信され、プル結果はマージされる前にプレビューして確認する必要があります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "내장된 공급자는 확인된 전체 디렉터리 주소를 자동으로 가져옵니다. 범용 호환 유형만 수동으로 입력해야 합니다. 런타임은 경로를 추측하기 위해 기본 URL을 사용하지 않습니다. 자격 증명은 요청 헤더를 통해 전송되며, 가져오기 결과를 병합하기 전에 미리 보고 확인해야 합니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O fornecedor integrado exibirá automaticamente o endereço completo do diretório verificado; apenas o tipo universal compatível precisa ser preenchido manualmente. O tempo de execução não usa o URL base para adivinhar o caminho. As credenciais são enviadas por meio do cabeçalho da solicitação e os resultados do pull precisam ser visualizados e confirmados antes de serem mesclados."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Встроенный поставщик автоматически выдаст проверенный полный адрес каталога; только универсальный совместимый тип необходимо заполнять вручную. Среда выполнения не использует базовый URL-адрес для определения пути. Учетные данные отправляются через заголовок запроса, а результаты извлечения необходимо просмотреть и подтвердить перед их объединением."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "内置供应商会自动带出已核验的完整名录地址；通用兼容类型才需要手工填写。运行时不会使用 Base URL 猜测路径。凭证通过请求头发送，拉取结果需预览确认后才会合并。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "內置供應商會自動帶出已核驗的完整名錄地址；通用兼容類型才需要手工填寫。運行時不會使用 Base URL 猜測路徑。憑證通過請求頭髮送，拉取結果需預覽確認後才會合併。"
           }
         }
       }
@@ -15048,6 +15618,77 @@
         }
       }
     },
+    "切换百炼版本时会自动应用该版本的 Base URL 与聊天端点；API Key 仍需按版本分别保存，旧凭证不会复用。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عند تبديل إصدار Bailian، سيتم تطبيق عنوان URL الأساسي ونقطة نهاية الدردشة لهذا الإصدار تلقائيًا؛ لا يزال يتعين حفظ مفتاح API بشكل منفصل حسب الإصدار، ولن يتم إعادة استخدام بيانات الاعتماد القديمة."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beim Wechsel der Bailian-Version werden die Basis-URL und der Chat-Endpunkt dieser Version automatisch angewendet; Der API-Schlüssel muss weiterhin separat nach Version gespeichert werden und die alten Anmeldeinformationen werden nicht wiederverwendet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When switching the Bailian version, the Base URL and chat endpoint of that version will be automatically applied; the API Key still needs to be saved separately by version, and the old credentials will not be reused."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al cambiar la versión Bailian, la URL base y el punto final de chat de esa versión se aplicarán automáticamente; la clave API aún debe guardarse por separado por versión y las credenciales antiguas no se reutilizarán."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lors du changement de version Bailian, l'URL de base et le point de terminaison de discussion de cette version seront automatiquement appliqués ; la clé API doit toujours être enregistrée séparément par version et les anciennes informations d'identification ne seront pas réutilisées."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian バージョンを切り替えると、そのバージョンのベース URL とチャット エンドポイントが自動的に適用されます。 API キーはバージョンごとに個別に保存する必要があり、古い認証情報は再利用されません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian 버전을 전환하면 해당 버전의 기본 URL과 채팅 엔드포인트가 자동으로 적용됩니다. API Key는 버전별로 별도로 저장해야 하며 이전 자격 증명은 재사용되지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ao mudar a versão Bailian, o URL base e o endpoint de chat dessa versão serão aplicados automaticamente; a chave API ainda precisa ser salva separadamente por versão e as credenciais antigas não serão reutilizadas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "При переключении версии Bailian базовый URL-адрес и конечная точка чата этой версии будут автоматически применены; Ключ API по-прежнему необходимо сохранять отдельно по версии, а старые учетные данные не будут использоваться повторно."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换百炼版本时会自动应用该版本的 Base URL 与聊天端点；API Key 仍需按版本分别保存，旧凭证不会复用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切換百鍊版本時會自動應用該版本的 Base URL 與聊天端點；API Key 仍需按版本分別保存，舊憑證不會復用。"
+          }
+        }
+      }
+    },
     "创建任务时使用的模型或路由" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -16099,6 +16740,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "包含 %lld 個原生驗證（可能計費）"
+          }
+        }
+      }
+    },
+    "协议" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اتفاق"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vereinbarung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agreement"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acuerdo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accord"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同意書"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "계약"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acordo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Соглашение"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "协议"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "協議"
           }
         }
       }
@@ -17656,6 +18368,219 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "可能會"
+          }
+        }
+      }
+    },
+    "可选曲风、流派或编曲描述" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وصف النوع أو النوع أو الترتيب الاختياري"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Optionale Genre-, Genre- oder Arrangementbeschreibung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Optional genre, genre or arrangement description"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descripción opcional del género, género o arreglo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Description facultative du genre, du genre ou de l'arrangement"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オプションのジャンル、ジャンルまたはアレンジメントの説明"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "선택적 장르, 장르 또는 편곡 설명"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descrição opcional de gênero, gênero ou arranjo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дополнительное описание жанра, жанра или аранжировки"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可选曲风、流派或编曲描述"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可選曲風、流派或編曲描述"
+          }
+        }
+      }
+    },
+    "可选标题" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عنوان اختياري"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Optionaler Titel"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Optional title"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Título opcional"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Titre facultatif"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "任意のタイトル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "선택적 제목"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Título opcional"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Необязательное название"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可选标题"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可選標題"
+          }
+        }
+      }
+    },
+    "可选歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "كلمات اختيارية"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "optionale Liedtexte"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "optional lyrics"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "letras opcionales"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "paroles facultatives"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オプションの歌詞"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "선택적 가사"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "letras opcionais"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "дополнительные тексты песен"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可选歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可選歌詞"
           }
         }
       }
@@ -19490,6 +20415,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "響應成功，但沒有解析到模型名稱"
+          }
+        }
+      }
+    },
+    "团队/企业 Token Plan；必须使用企业版专属 API Key，不能与个人版或按量版混用。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خطة الرمز المميز للفريق/المؤسسة؛ يجب أن يستخدم مفتاح API الحصري لـ Enterprise Edition ولا يمكن مزجه مع الإصدار الشخصي أو إصدار الدفع حسب الاستخدام."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Team-/Unternehmens-Token-Plan; muss den exklusiven API-Schlüssel der Enterprise Edition verwenden und kann nicht mit der Personal Edition oder der Pay-as-You-Go Edition kombiniert werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Team/Enterprise Token Plan; must use the Enterprise Edition exclusive API Key and cannot be mixed with the Personal Edition or Pay-as-You-Go Edition."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plan de tokens de equipo/empresa; debe utilizar la clave API exclusiva de Enterprise Edition y no se puede combinar con la edición personal o la edición Pay-as-You-Go."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plan de jetons d’équipe/entreprise ; doit utiliser la clé API exclusive de l'édition Enterprise et ne peut pas être mélangée avec l'édition personnelle ou l'édition Pay-as-You-Go."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "チーム/エンタープライズトークンプラン; Enterprise Edition 専用の API キーを使用する必要があり、Personal Edition または Pay-as-You-Go Edition と混合することはできません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "팀/기업 토큰 계획; Enterprise Edition 독점 API 키를 사용해야 하며 Personal Edition 또는 Pay-as-You-Go Edition과 혼합할 수 없습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plano de token de equipe/empresa; deve usar a chave de API exclusiva da Enterprise Edition e não pode ser combinada com a Personal Edition ou a Pay-as-You-Go Edition."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "План токенов команды/предприятия; должен использовать эксклюзивный API-ключ Enterprise Edition и не может смешиваться с Personal Edition или Pay-as-You-Go."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "团队/企业 Token Plan；必须使用企业版专属 API Key，不能与个人版或按量版混用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "團隊/企業 Token Plan；必須使用企業版專屬 API Key，不能與個人版或按量版混用。"
           }
         }
       }
@@ -25285,6 +26281,77 @@
         }
       }
     },
+    "已内置该供应商的官方连接预设；通常只需填写 API Key 即可拉取模型并使用支持的协议。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم تضمين الإعدادات المسبقة الرسمية للاتصال بالبائع؛ عادةً ما يؤدي مجرد ملء مفتاح API إلى سحب النموذج واستخدام البروتوكولات المدعومة."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die offiziellen Verbindungsvoreinstellungen des Anbieters sind integriert; Normalerweise genügt die Eingabe des API-Schlüssels, um das Modell abzurufen und die unterstützten Protokolle zu verwenden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The vendor's official connection presets are built in; usually just filling in the API Key will pull the model and use the supported protocols."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los ajustes preestablecidos de conexión oficiales del proveedor están integrados; Por lo general, simplemente completar la clave API extraerá el modelo y utilizará los protocolos admitidos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les préréglages de connexion officiels du fournisseur sont intégrés ; généralement, le simple fait de remplir la clé API extraira le modèle et utilisera les protocoles pris en charge."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ベンダーの公式接続プリセットが組み込まれています。通常、API キーを入力するだけでモデルが取得され、サポートされているプロトコルが使用されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "공급업체의 공식 연결 사전 설정이 내장되어 있습니다. 일반적으로 API 키만 입력하면 모델을 가져오고 지원되는 프로토콜을 사용합니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As predefinições de conexão oficiais do fornecedor estão integradas; normalmente, apenas preencher a chave de API puxará o modelo e usará os protocolos suportados."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Встроены официальные настройки подключения производителя; обычно простое введение ключа API позволяет получить модель и использовать поддерживаемые протоколы."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已内置该供应商的官方连接预设；通常只需填写 API Key 即可拉取模型并使用支持的协议。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已內置該供應商的官方連接預設；通常只需填寫 API Key 即可拉取模型並使用支持的協議。"
+          }
+        }
+      }
+    },
     "已启用" : {
       "localizations" : {
         "ar" : {
@@ -25775,6 +26842,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已知價格估算"
+          }
+        }
+      }
+    },
+    "已自动填入该供应商可确定的 Base URL 与请求端点；由于官方未提供可仅凭该 API Key 读取的唯一模型名录，模型 ID 仍需手工添加。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم ملء عنوان URL الأساسي ونقطة نهاية الطلب التي يمكن للمورد تحديدها تلقائيًا؛ نظرًا لأن المسؤول لا يوفر دليل نموذج فريدًا يمكن قراءته فقط باستخدام مفتاح API هذا، فلا يزال يتعين إضافة معرف النموذج يدويًا."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die vom Lieferanten bestimmbare Basis-URL und der Anforderungsendpunkt wurden automatisch ausgefüllt; Da der Beamte kein eindeutiges Modellverzeichnis bereitstellt, das nur mit diesem API-Schlüssel gelesen werden kann, muss die Modell-ID dennoch manuell hinzugefügt werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The base URL and request endpoint that can be determined by the supplier have been automatically filled in; since the official does not provide a unique model directory that can be read only with this API Key, the model ID still needs to be added manually."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La URL base y el punto final de solicitud que puede determinar el proveedor se han completado automáticamente; Dado que el funcionario no proporciona un directorio de modelo único que pueda leerse solo con esta clave API, la identificación del modelo aún debe agregarse manualmente."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'URL de base et le point de terminaison de la demande qui peuvent être déterminés par le fournisseur ont été automatiquement renseignés ; Étant donné que le responsable ne fournit pas de répertoire de modèle unique pouvant être lu uniquement avec cette clé API, l'ID du modèle doit toujours être ajouté manuellement."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サプライヤーが決定できるベース URL とリクエスト エンドポイントは自動的に入力されます。公式では、この API キーでのみ読み取り可能な固有のモデル ディレクトリが提供されていないため、モデル ID を手動で追加する必要があります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "공급자가 결정할 수 있는 기본 URL과 요청 엔드포인트가 자동으로 채워졌습니다. 공식에서는 이 API 키로만 읽을 수 있는 고유한 모델 디렉토리를 제공하지 않으므로 모델 ID를 수동으로 추가해야 합니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A URL base e o endpoint da solicitação que podem ser determinados pelo fornecedor foram preenchidos automaticamente; como o oficial não fornece um diretório de modelo exclusivo que possa ser lido somente com esta chave de API, o ID do modelo ainda precisa ser adicionado manualmente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Базовый URL-адрес и конечная точка запроса, которые может определить поставщик, заполняются автоматически; поскольку официальный представитель не предоставляет уникальный каталог модели, который можно прочитать только с помощью этого ключа API, идентификатор модели все равно необходимо добавлять вручную."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已自动填入该供应商可确定的 Base URL 与请求端点；由于官方未提供可仅凭该 API Key 读取的唯一模型名录，模型 ID 仍需手工添加。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已自動填入該供應商可確定的 Base URL 與請求端點；由於官方未提供可僅憑該 API Key 讀取的唯一模型名錄，模型 ID 仍需手工添加。"
           }
         }
       }
@@ -26482,6 +27620,77 @@
         }
       }
     },
+    "当前地址属于百炼 Token Plan，请将供应商类型改为“百炼个人版”或“百炼企业版（团队版）”。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "العنوان الحالي ينتمي إلى Bailian Token Plan، يرجى تغيير نوع المورد إلى \"Bailian Personal Edition\" أو \"Bailian Enterprise Edition (Team Edition)\"."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die aktuelle Adresse gehört zum Bailian Token Plan. Bitte ändern Sie den Lieferantentyp in „Bailian Personal Edition“ oder „Bailian Enterprise Edition (Team Edition)“."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The current address belongs to Bailian Token Plan, please change the supplier type to \"Bailian Personal Edition\" or \"Bailian Enterprise Edition (Team Edition)\"."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La dirección actual pertenece al Plan Bailian Token. Cambie el tipo de proveedor a \"Bailian Personal Edition\" o \"Bailian Enterprise Edition (Team Edition)\"."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'adresse actuelle appartient au Bailian Token Plan, veuillez changer le type de fournisseur en « Bailian Personal Edition » ou « Bailian Enterprise Edition (Team Edition) »."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "現在のアドレスは Bailian トークン プランに属しています。サプライヤー タイプを「Bailian Personal Edition」または「Bailian Enterprise Edition (Team Edition)」に変更してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "현재 주소는 Bailian Token Plan에 속해 있습니다. 공급업체 유형을 \"Bailian Personal Edition\" 또는 \"Bailian Enterprise Edition(Team Edition)\"으로 변경하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O endereço atual pertence ao Bailian Token Plan, altere o tipo de fornecedor para \"Bailian Personal Edition\" ou \"Bailian Enterprise Edition (Team Edition)\"."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Текущий адрес принадлежит плану Bailian Token Plan, измените тип поставщика на «Bailian Personal Edition» или «Bailian Enterprise Edition (Team Edition)»."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前地址属于百炼 Token Plan，请将供应商类型改为“百炼个人版”或“百炼企业版（团队版）”。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "當前地址屬於百鍊 Token Plan，請將供應商類型改為“百鍊個人版”或“百鍊企業版（團隊版）”。"
+          }
+        }
+      }
+    },
     "当前密钥不会显示。输入新密钥并保存即可覆盖；留空会保留原密钥。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -26690,6 +27899,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "當前版本尚未適配此模型協議"
+          }
+        }
+      }
+    },
+    "当前聊天端点属于百炼 Token Plan，请选择个人版或企业版，不能沿用按量版类型。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تنتمي نقطة نهاية الدردشة الحالية إلى خطة Bailian Token Plan. الرجاء اختيار الإصدار الشخصي أو إصدار المؤسسة. لا يمكنك الاستمرار في استخدام نوع الإصدار المدفوع."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der aktuelle Chat-Endpunkt gehört zum Bailian Token Plan. Bitte wählen Sie die persönliche Version oder die Enterprise-Version. Sie können die kostenpflichtige Version nicht weiter verwenden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The current chat endpoint belongs to Bailian Token Plan. Please choose the personal version or the enterprise version. You cannot continue to use the paid version type."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El punto final del chat actual pertenece al Plan Bailian Token. Elija la versión personal o la versión empresarial. No puede seguir utilizando el tipo de versión paga."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le point de terminaison de discussion actuel appartient au Bailian Token Plan. Veuillez choisir la version personnelle ou la version entreprise. Vous ne pouvez pas continuer à utiliser le type de version payante."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "現在のチャット エンドポイントは Bailian Token Plan に属しています。個人版またはエンタープライズ版を選択してください。有料版タイプを継続してご利用いただくことはできません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "현재 채팅 엔드포인트는 Bailian Token Plan에 속합니다. 개인용 버전과 기업용 버전을 선택해주세요. 유료 버전 유형을 계속 사용할 수 없습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O endpoint de bate-papo atual pertence ao Bailian Token Plan. Escolha a versão pessoal ou a versão empresarial. Você não pode continuar usando o tipo de versão paga."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Текущая конечная точка чата принадлежит плану Bailian Token Plan. Пожалуйста, выберите личную версию или корпоративную версию. Вы не можете продолжать использовать платную версию."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前聊天端点属于百炼 Token Plan，请选择个人版或企业版，不能沿用按量版类型。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "當前聊天端點屬於百鍊 Token Plan，請選擇個人版或企業版，不能沿用按量版類型。"
           }
         }
       }
@@ -27325,6 +28605,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "恢復上次導入前配置"
+          }
+        }
+      }
+    },
+    "恢复官方 URL" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "استعادة عنوان URL الرسمي"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offizielle URL wiederherstellen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore official URL"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurar URL oficial"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurer l'URL officielle"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公式URLを復元する"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "공식 URL 복원"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurar URL oficial"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Восстановить официальный URL"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复官方 URL"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢復官方 URL"
           }
         }
       }
@@ -28532,6 +29883,148 @@
         }
       }
     },
+    "按量付费版使用 DashScope API Key 与 dashscope.aliyuncs.com 端点。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يستخدم إصدار الدفع أولاً بأول مفتاح DashScope API ونقطة نهاية Dashscope.aliyuncs.com."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Pay-as-you-go-Version verwendet den DashScope-API-Schlüssel und den Endpunkt dashscope.aliyuncs.com."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pay-as-you-go version uses DashScope API Key and dashscope.aliyuncs.com endpoint."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La versión de pago por uso utiliza la clave API de DashScope y el punto final dashscope.aliyuncs.com."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La version payante utilise la clé API DashScope et le point de terminaison dashscope.aliyuncs.com."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "従量課金制バージョンでは、DashScope API キーと dashscope.aliyuncs.com エンドポイントを使用します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "종량제 버전은 DashScope API 키와 dashscope.aliyuncs.com 엔드포인트를 사용합니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A versão pré-paga usa a chave de API DashScope e o endpoint dashscope.aliyuncs.com."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Версия с оплатой по мере использования использует ключ DashScope API и конечную точку Dashscope.alyuncs.com."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按量付费版使用 DashScope API Key 与 dashscope.aliyuncs.com 端点。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按量付費版使用 DashScope API Key 與 dashscope.aliyuncs.com 端點。"
+          }
+        }
+      }
+    },
+    "按量付费版使用 DashScope API Key 与对应地域或业务空间端点。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يستخدم إصدار الدفع أولاً بأول مفتاح DashScope API والمنطقة المقابلة أو نقطة نهاية مساحة العمل."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Pay-as-you-go-Version verwendet den DashScope-API-Schlüssel und den entsprechenden Regions- oder Business-Space-Endpunkt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pay-as-you-go version uses the DashScope API Key and the corresponding region or business space endpoint."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La versión de pago por uso utiliza la clave API de DashScope y el punto final de región o espacio empresarial correspondiente."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La version payante utilise la clé API DashScope et le point de terminaison de la région ou de l'espace commercial correspondant."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "従量課金制バージョンでは、DashScope API キーと、対応するリージョンまたはビジネス スペース エンドポイントを使用します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "종량제 버전은 DashScope API 키와 해당 지역 또는 비즈니스 공간 엔드포인트를 사용합니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A versão pré-paga usa a chave de API DashScope e a região correspondente ou endpoint de espaço de negócios."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Версия с оплатой по факту использования использует ключ API DashScope и соответствующую конечную точку региона или бизнес-пространства."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按量付费版使用 DashScope API Key 与对应地域或业务空间端点。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按量付費版使用 DashScope API Key 與對應地域或業務空間端點。"
+          }
+        }
+      }
+    },
     "接口不存在" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -28810,6 +30303,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "提供本機狀態、可用模型、聚合用量、任務上下文，以及受隔離與計費確認保護的文字、圖片、視頻、語音、向量和重排調用；不會返回密鑰。"
+          }
+        }
+      }
+    },
+    "提供本机状态、可用模型、聚合用量、任务上下文，以及受隔离与计费确认保护的文字、图片、视频、音乐、语音、向量和重排调用；不会返回密钥。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يوفر الحالة الأصلية والنماذج المتاحة والاستخدام الإجمالي وسياق المهمة والنص والصورة والفيديو والموسيقى والكلام والمتجهات ومكالمات إعادة التدفق المحمية بواسطة الحجر الصحي وتأكيد الفواتير؛ يتم إرجاع أية مفاتيح."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bietet nativen Status, verfügbare Modelle, aggregierte Nutzung, Aufgabenkontext sowie Text-, Bild-, Video-, Musik-, Sprach-, Vektor- und Reflow-Aufrufe, geschützt durch Quarantäne und Abrechnungsbestätigung; Es werden keine Schlüssel zurückgegeben."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Provides native state, available models, aggregate usage, task context, and text, image, video, music, speech, vector, and reflow calls protected by quarantine and billing confirmation; no keys are returned."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proporciona estado nativo, modelos disponibles, uso agregado, contexto de tareas y llamadas de texto, imágenes, videos, música, voz, vectores y redistribución protegidas por cuarentena y confirmación de facturación; no se devuelven llaves."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fournit l'état natif, les modèles disponibles, l'utilisation globale, le contexte de la tâche et les appels de texte, d'image, de vidéo, de musique, de parole, de vecteur et de redistribution protégés par une quarantaine et une confirmation de facturation ; aucune clé n'est rendue."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ネイティブ状態、利用可能なモデル、集計された使用状況、タスク コンテキスト、および隔離と請求確認によって保護されたテキスト、画像、ビデオ、音楽、音声、ベクター、およびリフロー呼び出しを提供します。キーは返されません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "격리 및 청구 확인을 통해 보호되는 기본 상태, 사용 가능한 모델, 집계 사용량, 작업 컨텍스트, 텍스트, 이미지, 비디오, 음악, 음성, 벡터 및 리플로우 호출을 제공합니다. 키가 반환되지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fornece estado nativo, modelos disponíveis, uso agregado, contexto de tarefa e chamadas de texto, imagem, vídeo, música, fala, vetor e refluxo protegidas por quarentena e confirmação de cobrança; nenhuma chave é devolvida."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Предоставляет исходное состояние, доступные модели, совокупное использование, контекст задачи, а также текстовые, изображения, видео, музыку, речь, векторные вызовы и вызовы перекомпоновки, защищенные карантином и подтверждением выставления счетов; ключи не возвращаются."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提供本机状态、可用模型、聚合用量、任务上下文，以及受隔离与计费确认保护的文字、图片、视频、音乐、语音、向量和重排调用；不会返回密钥。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提供本機狀態、可用模型、聚合用量、任務上下文，以及受隔離與計費確認保護的文字、圖片、視頻、音樂、語音、向量和重排調用；不會返回密鑰。"
           }
         }
       }
@@ -29381,6 +30945,77 @@
         }
       }
     },
+    "支持音乐生成且当前可用的模型" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "النماذج التي تدعم توليد الموسيقى والمتوفرة حاليًا"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modelle, die die Musikgenerierung unterstützen und derzeit verfügbar sind"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Models that support music generation and are currently available"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modelos que admiten la generación de música y que están disponibles actualmente."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modèles prenant en charge la génération de musique et actuellement disponibles"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "現在発売されている音楽生成対応モデル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음악 생성을 지원하며 현재 사용 가능한 모델"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modelos que suportam geração de música e estão disponíveis atualmente"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Модели, поддерживающие генерацию музыки и доступные в настоящее время"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "支持音乐生成且当前可用的模型"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "支持音樂生成且當前可用的模型"
+          }
+        }
+      }
+    },
     "政策来源 URL 或核实说明" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -29732,6 +31367,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文字"
+          }
+        }
+      }
+    },
+    "文字聊天" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "دردشة نصية"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text-Chat"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "text chat"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "chat de texto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "discussion textuelle"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "テキストチャット"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "문자 채팅"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bate-papo por texto"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "текстовый чат"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文字聊天"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文字聊天"
           }
         }
       }
@@ -30869,6 +32575,77 @@
         }
       }
     },
+    "是否生成纯音乐" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سواء لتوليد الموسيقى النقية"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ob reine Musik erzeugt werden soll"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Whether to generate pure music"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ya sea para generar música pura"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "S'il faut générer de la musique pure"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "純粋な音楽を生成するかどうか"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "순수한 음악을 생성할지 여부"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seja para gerar música pura"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Создавать ли чистую музыку"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "是否生成纯音乐"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "是否生成純音樂"
+          }
+        }
+      }
+    },
     "显式请求端点" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -31712,6 +33489,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "服務設置"
+          }
+        }
+      }
+    },
+    "期望时长（秒）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المدة المتوقعة (ثواني)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erwartete Dauer (Sekunden)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expected duration (seconds)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duración esperada (segundos)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durée prévue (secondes)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "予想される継続時間 (秒)"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "예상 기간(초)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duração esperada (segundos)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ожидаемая продолжительность (секунды)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "期望时长（秒）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "期望時長（秒）"
           }
         }
       }
@@ -33696,6 +35544,77 @@
         }
       }
     },
+    "本机合成的音乐协议演示响应；未访问上游，也不会产生费用。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الاستجابة التجريبية لبروتوكول الموسيقى المركب محليًا؛ لا تتم زيارة المنبع ولا يتم فرض أي رسوم."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo-Antwort des nativ synthetisierten Musikprotokolls; Es wird kein Upstream besucht und es fallen keine Gebühren an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Natively synthesized music protocol demo response; no upstream is visited and no charges are incurred."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Respuesta de demostración de protocolo de música sintetizada de forma nativa; no se visita aguas arriba y no se incurre en cargos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réponse de démonstration du protocole musical synthétisé de manière native ; aucun amont n'est visité et aucun frais n'est engagé."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ネイティブに合成された音楽プロトコルのデモ応答。アップストリームは訪問されず、料金は発生しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기본적으로 합성된 음악 프로토콜 데모 응답; 업스트림을 방문하지 않으며 비용도 발생하지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resposta de demonstração de protocolo de música sintetizada nativamente; nenhum upstream é visitado e nenhuma cobrança é incorrida."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Демонстрационный ответ музыкального протокола, синтезированный в собственном исполнении; восходящий поток не посещается и никаких затрат не взимается."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本机合成的音乐协议演示响应；未访问上游，也不会产生费用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本機合成的音樂協議演示響應；未訪問上游，也不會產生費用。"
+          }
+        }
+      }
+    },
     "本机时间" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -34261,6 +36180,77 @@
         }
       }
     },
+    "查询已创建音乐任务的状态，不创建新任务。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الاستعلام عن حالة المهام الموسيقية التي تم إنشاؤها وعدم إنشاء مهام جديدة."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fragen Sie den Status erstellter Musikaufgaben ab und erstellen Sie keine neuen Aufgaben."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Query the status of created music tasks and do not create new tasks."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consulta el estado de las tareas musicales creadas y no creas nuevas tareas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interrogez l’état des tâches musicales créées et ne créez pas de nouvelles tâches."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作成された音楽タスクのステータスを照会します。新しいタスクは作成しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "생성된 음악 작업의 상태를 쿼리하고 새 작업을 생성하지 마세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consulte o status das tarefas musicais criadas e não crie novas tarefas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запрашивайте статус созданных музыкальных задач и не создавайте новые задачи."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查询已创建音乐任务的状态，不创建新任务。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查詢已創建音樂任務的狀態，不創建新任務。"
+          }
+        }
+      }
+    },
     "查询文本" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -34328,6 +36318,148 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查詢文本"
+          }
+        }
+      }
+    },
+    "查询生成任务时请通过 ?model=供应商/模型 指定模型" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عند الاستعلام عن مهمة الإنشاء، يرجى تحديد النموذج من خلال ?model=supplier/model"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geben Sie beim Abfragen der Generierungsaufgabe das Modell über ?model=supplier/model an"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When querying the generation task, please specify the model through ?model=supplier/model"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al consultar la tarea de generación, especifique el modelo mediante ?model=supplier/model"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lors de l'interrogation de la tâche de génération, veuillez spécifier le modèle via ?model=supplier/model"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "生成タスクをクエリするときは、?model=supplier/model を通じてモデルを指定してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "생성 작업을 쿼리할 때 ?model=supplier/model을 통해 모델을 지정하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ao consultar a tarefa de geração, especifique o modelo por meio de ?model=supplier/model"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "При запросе задачи генерации укажите модель через ?model=supplier/model."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查询生成任务时请通过 ?model=供应商/模型 指定模型"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查詢生成任務時請通過 ?model=供應商/模型 指定模型"
+          }
+        }
+      }
+    },
+    "查询生成任务需要 task_id" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تتطلب مهمة إنشاء الاستعلام Task_id"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Aufgabe zur Abfragegenerierung erfordert task_id"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Query generation task requires task_id"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La tarea de generación de consultas requiere task_id"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La tâche de génération de requête nécessite task_id"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "クエリ生成タスクには task_id が必要です"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "쿼리 생성 작업에는 task_id가 필요합니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A tarefa de geração de consulta requer task_id"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для задачи создания запроса требуется идентификатор Task_id"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查询生成任务需要 task_id"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查詢生成任務需要 task_id"
           }
         }
       }
@@ -34470,6 +36602,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查詢視頻任務需要 task_id"
+          }
+        }
+      }
+    },
+    "查询音乐任务需要保存精确的 musicTask 端点" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يتطلب الاستعلام عن مهام الموسيقى حفظ نقطة نهاية مهمة الموسيقى المحددة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Abfragen von Musikaufgaben erfordert das Speichern des genauen musicTask-Endpunkts"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Querying music tasks requires saving the exact musicTask endpoint"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consultar tareas musicales requiere guardar el punto final exacto de musicTask"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'interrogation de tâches musicales nécessite d'enregistrer le point de terminaison exact de musicTask"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音楽タスクをクエリするには、正確な musicTask エンドポイントを保存する必要があります"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음악 작업을 쿼리하려면 정확한 musicTask 엔드포인트를 저장해야 합니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consultar tarefas musicais requer salvar o endpoint musicTask exato"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для запроса музыкальных задач необходимо сохранить точную конечную точку musicTask."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查询音乐任务需要保存精确的 musicTask 端点"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查詢音樂任務需要保存精確的 musicTask 端點"
           }
         }
       }
@@ -35889,6 +38092,77 @@
         }
       }
     },
+    "模型端点模板需要模型名称" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يتطلب قالب نقطة نهاية النموذج اسم النموذج"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Modellendpunktvorlage erfordert einen Modellnamen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Model endpoint template requires model name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La plantilla de punto final del modelo requiere el nombre del modelo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le modèle de point de terminaison du modèle nécessite le nom du modèle"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "モデル エンドポイント テンプレートにはモデル名が必要です"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모델 엔드포인트 템플릿에는 모델 이름이 필요합니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O modelo de endpoint do modelo requer o nome do modelo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для шаблона конечной точки модели требуется имя модели."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型端点模板需要模型名称"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型端點模板需要模型名稱"
+          }
+        }
+      }
+    },
     "模型路由" : {
       "localizations" : {
         "ar" : {
@@ -36379,7 +38653,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在重新擷取已設定的模型目錄"
+            "value" : "正在重新拉取已配置的模型名錄"
           }
         }
       }
@@ -36450,6 +38724,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此供應商無需 API Key"
+          }
+        }
+      }
+    },
+    "此操作由你明确触发：会填写官方 Base URL，并用该版本的通用聊天端点替换旧聊天端点；不会复制或更换钥匙串中的 API Key。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يتم تشغيل هذا الإجراء بشكل صريح بواسطتك: تتم تعبئة عنوان URL الأساسي الرسمي ويتم استبدال نقطة نهاية الدردشة القديمة بهذا الإصدار من نقطة نهاية الدردشة العامة؛ لا يتم نسخ أو استبدال مفتاح API الموجود في سلسلة المفاتيح."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Aktion wird explizit von Ihnen ausgelöst: Die offizielle Basis-URL wird ausgefüllt und der alte Chat-Endpunkt wird durch diese Version des universellen Chat-Endpunkts ersetzt; Der API-Schlüssel im Schlüsselbund wird nicht kopiert oder ersetzt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This action is explicitly triggered by you: the official Base URL is filled in and the old chat endpoint is replaced with that version of the universal chat endpoint; the API Key in the keychain is not copied or replaced."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta acción la activa explícitamente usted: la URL base oficial se completa y el punto final de chat antiguo se reemplaza con esa versión del punto final de chat universal; la clave API en el llavero no se copia ni reemplaza."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette action est explicitement déclenchée par vous : l'URL de base officielle est renseignée et l'ancien point de terminaison de chat est remplacé par cette version du point de terminaison de chat universel ; la clé API du trousseau n'est ni copiée ni remplacée."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このアクションはユーザーによって明示的にトリガーされます。公式のベース URL が入力され、古いチャット エンドポイントがそのバージョンのユニバーサル チャット エンドポイントに置き換えられます。キーチェーン内の API キーはコピーまたは置換されません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 작업은 귀하에 의해 명시적으로 트리거됩니다. 공식 기본 URL이 채워지고 이전 채팅 엔드포인트가 해당 버전의 범용 채팅 엔드포인트로 대체됩니다. 키체인의 API 키는 복사되거나 교체되지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta ação é acionada explicitamente por você: o URL base oficial é preenchido e o endpoint de chat antigo é substituído por essa versão do endpoint de chat universal; a chave de API nas chaves não é copiada ou substituída."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это действие явно инициируется вами: заполняется официальный базовый URL-адрес и старая конечная точка чата заменяется этой версией универсальной конечной точки чата; Ключ API в связке ключей не копируется и не заменяется."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此操作由你明确触发：会填写官方 Base URL，并用该版本的通用聊天端点替换旧聊天端点；不会复制或更换钥匙串中的 API Key。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此操作由你明確觸發：會填寫官方 Base URL，並用該版本的通用聊天端點替換舊聊天端點；不會複製或更換鑰匙串中的 API Key。"
           }
         }
       }
@@ -36804,6 +39149,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "每行格式：端點類型|模型名稱 = 完整 URL。運行時只使用這裡或 Base URL 保存的完整地址，不補全任何路徑；視頻任務端點可使用 {task_id}。"
+          }
+        }
+      }
+    },
+    "每行格式：端点类型|模型名称 = 完整 URL。运行时只使用这里或 Base URL 保存的完整地址，不补全任何路径；视频和音乐任务端点可使用 {task_id}。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التنسيق لكل سطر: نوع نقطة النهاية | اسم النموذج = URL الكامل. يتم استخدام العنوان الكامل المحفوظ هنا أو في عنوان URL الأساسي فقط في وقت التشغيل دون إكمال أي مسار؛ يمكن لنقاط نهاية مهمة الفيديو والموسيقى استخدام {task_id}."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Format pro Zeile: Endpunkttyp | Modellname = vollständige URL. Zur Laufzeit wird nur die hier oder in der Basis-URL gespeicherte vollständige Adresse ohne Pfadvervollständigung verwendet; Endpunkte für Video- und Musikaufgaben können {task_id} verwenden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Format per line: endpoint type | model name = full URL. Only the full address saved here or in the Base URL is used at runtime without any path completion; video and music task endpoints can use {task_id}."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formato por línea: tipo de punto final | nombre del modelo = URL completa. Sólo la dirección completa guardada aquí o en la URL base se utiliza en tiempo de ejecución sin completar ninguna ruta; Los puntos finales de tareas de vídeo y música pueden utilizar {task_id}."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Format par ligne : type de point de terminaison | nom du modèle = URL complète. Seule l'adresse complète enregistrée ici ou dans l'URL de base est utilisée au moment de l'exécution sans aucune complétion de chemin ; les points de terminaison des tâches vidéo et musicales peuvent utiliser {task_id}."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "行ごとの形式: エンドポイント タイプ |モデル名 = 完全な URL。ここまたはベース URL に保存された完全なアドレスのみが、パスの補完なしで実行時に使用されます。ビデオと音楽のタスク エンドポイントは {task_id} を使用できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "줄당 형식: 끝점 유형 | 모델명 = 전체 URL. 런타임 시 경로 완성 없이 여기에 저장된 전체 주소 또는 기본 URL만 사용됩니다. 비디오 및 음악 작업 엔드포인트는 {task_id}를 사용할 수 있습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formato por linha: tipo de endpoint | nome do modelo = URL completo. Somente o endereço completo salvo aqui ou na URL base é usado em tempo de execução sem qualquer conclusão de caminho; Os endpoints de tarefas de vídeo e música podem usar {task_id}."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Формат каждой строки: тип конечной точки | название модели = полный URL. Во время выполнения используется только полный адрес, сохраненный здесь или в базовом URL-адресе, без завершения пути; Конечные точки задач видео и музыки могут использовать {task_id}."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每行格式：端点类型|模型名称 = 完整 URL。运行时只使用这里或 Base URL 保存的完整地址，不补全任何路径；视频和音乐任务端点可使用 {task_id}。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每行格式：端點類型|模型名稱 = 完整 URL。運行時只使用這裡或 Base URL 保存的完整地址，不補全任何路徑；視頻和音樂任務端點可使用 {task_id}。"
           }
         }
       }
@@ -37860,7 +40276,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "測試前已重新擷取 %d 個模型目錄項目。"
+            "value" : "測試前已重新拉取 %d 個模型名錄項。"
           }
         }
       }
@@ -38002,7 +40418,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "測試前模型目錄擷取失敗，繼續使用已儲存的模型：%@"
+            "value" : "測試前模型名錄拉取失敗，繼續使用已保存模型：%@"
           }
         }
       }
@@ -38853,6 +41269,77 @@
         }
       }
     },
+    "温暖、轻快的钢琴与弦乐，适合清晨。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البيانو والأوتار الدافئة والمتجددة الهواء، مثالية للصباح الباكر."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warmes, luftiges Klavier und Streicher, perfekt für den frühen Morgen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warm, airy piano and strings, perfect for the early morning."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Piano y cuerdas cálidos y aireados, perfectos para temprano en la mañana."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Piano et cordes chaleureux et aérés, parfaits pour le petit matin."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暖かく軽やかなピアノとストリングスが早朝にぴったりです。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "따뜻하고 바람이 잘 통하는 피아노와 현악기는 이른 아침에 딱 맞습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Piano e cordas quentes e arejados, perfeitos para o início da manhã."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Теплое, воздушное фортепиано и струнные, идеальное для раннего утра."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "温暖、轻快的钢琴与弦乐，适合清晨。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "溫暖、輕快的鋼琴與弦樂，適合清晨。"
+          }
+        }
+      }
+    },
     "港币（HKD）" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -39479,13 +41966,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "熔断冷却：%arg 秒"
+            "value" : "熔断冷却：%1$arg 秒"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "熔斷冷卻：%arg 秒"
+            "value" : "熔斷冷卻：%1$arg 秒"
           }
         }
       }
@@ -40548,6 +43035,219 @@
         }
       }
     },
+    "百炼 Base URL 必须是完整的 HTTPS 地址。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يجب أن يكون عنوان URL الأساسي لـ Bailian عنوان HTTPS كاملاً."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Bailian-Basis-URL muss eine vollständige HTTPS-Adresse sein."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian Base URL must be a complete HTTPS address."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La URL base de Bailian debe ser una dirección HTTPS completa."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'URL de base Bailian doit être une adresse HTTPS complète."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian ベース URL は完全な HTTPS アドレスである必要があります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian 기본 URL은 완전한 HTTPS 주소여야 합니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O URL base Bailian deve ser um endereço HTTPS completo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Базовый URL-адрес Bailian должен быть полным адресом HTTPS."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百炼 Base URL 必须是完整的 HTTPS 地址。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百鍊 Base URL 必須是完整的 HTTPS 地址。"
+          }
+        }
+      }
+    },
+    "百炼个人版/企业版的聊天端点必须属于 Token Plan 官方 /compatible-mode/v1 路径。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يجب أن تنتمي نقطة نهاية الدردشة الخاصة بإصدار Bailian Personal Edition/Enterprise Edition إلى مسار Token Plan الرسمي /compatible-mode/v1."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Chat-Endpunkt der Bailian Personal Edition/Enterprise Edition muss zum offiziellen Token-Plan-Pfad /Compatible-Mode/v1 gehören."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The chat endpoint of Bailian Personal Edition/Enterprise Edition must belong to the Token Plan official /compatible-mode/v1 path."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El punto final de chat de Bailian Personal Edition/Enterprise Edition debe pertenecer a la ruta oficial /compatible-mode/v1 del Plan Token."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le point de terminaison de discussion de Bailian Personal Edition/Enterprise Edition doit appartenir au chemin officiel /compatible-mode/v1 du plan de jetons."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian Personal Edition/Enterprise Edition のチャット エンドポイントは、トークン プランの公式 /compatibility-mode/v1 パスに属している必要があります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian Personal Edition/Enterprise Edition의 채팅 엔드포인트는 토큰 계획 공식 /호환 모드/v1 경로에 속해야 합니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O ponto final do bate-papo do Bailian Personal Edition/Enterprise Edition deve pertencer ao caminho oficial do Token Plan/compatível-modo/v1."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Конечная точка чата Bailian Personal Edition/Enterprise Edition должна принадлежать официальному пути /совместимого режима/v1 плана Token Plan."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百炼个人版/企业版的聊天端点必须属于 Token Plan 官方 /compatible-mode/v1 路径。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百鍊個人版/企業版的聊天端點必須屬於 Token Plan 官方 /compatible-mode/v1 路徑。"
+          }
+        }
+      }
+    },
+    "百炼个人版和企业版必须使用 Token Plan 官方 Base URL；按量版 DashScope 地址与其 API Key 不兼容。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يجب أن يستخدم إصدار Bailian الشخصي وإصدار المؤسسة عنوان URL الأساسي الرسمي لـ Token Plan؛ عنوان DashScope الخاص بالإصدار المجمع غير متوافق مع مفتاح API الخاص به."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die persönliche Bailian-Version und die Unternehmensversion müssen die offizielle Basis-URL des Token-Plans verwenden. Die DashScope-Adresse der Volume-Version ist nicht mit ihrem API-Schlüssel kompatibel."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian personal version and enterprise version must use the Token Plan official Base URL; the DashScope address of the volume version is incompatible with its API Key."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La versión personal y empresarial de Bailian debe utilizar la URL base oficial del Plan Token; la dirección DashScope de la versión del volumen es incompatible con su clave API."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La version personnelle et la version entreprise de Bailian doivent utiliser l'URL de base officielle du plan de jetons ; l'adresse DashScope de la version en volume est incompatible avec sa clé API."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian 個人バージョンとエンタープライズ バージョンは、トークン プランの公式ベース URL を使用する必要があります。ボリューム バージョンの DashScope アドレスは、その API キーと互換性がありません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian 개인 버전과 기업 버전은 Token Plan 공식 기본 URL을 사용해야 합니다. 볼륨 버전의 DashScope 주소가 해당 API 키와 호환되지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A versão pessoal e a versão empresarial do Bailian devem usar o URL base oficial do Token Plan; o endereço DashScope da versão do volume é incompatível com sua chave API."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Персональная и корпоративная версии Bailian должны использовать официальный базовый URL-адрес Token Plan; адрес DashScope версии тома несовместим с ее ключом API."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百炼个人版和企业版必须使用 Token Plan 官方 Base URL；按量版 DashScope 地址与其 API Key 不兼容。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百鍊個人版和企業版必須使用 Token Plan 官方 Base URL；按量版 DashScope 地址與其 API Key 不兼容。"
+          }
+        }
+      }
+    },
     "百炼北京地域可部署的基础模型；不代表全部按量付费或语音模型" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -40615,6 +43315,361 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "百鍊北京地域可部署的基礎模型；不代表全部按量付費或語音模型"
+          }
+        }
+      }
+    },
+    "百炼按量版必须使用 dashscope.aliyuncs.com；如果这是 Token Plan，请选择个人版或企业版。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يجب أن يستخدم الإصدار المعتمد على وحدة التخزين Bailian Dashscope.aliyuncs.com؛ إذا كانت هذه خطة رمزية، فيرجى اختيار الإصدار الشخصي أو إصدار المؤسسة."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die volumenbasierte Bailian-Version muss dashscope.aliyuncs.com verwenden; Wenn es sich um einen Token-Plan handelt, wählen Sie bitte die Privat- oder Unternehmensversion."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Bailian volume-based version must use dashscope.aliyuncs.com; if this is a Token Plan, please choose the personal or enterprise version."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La versión basada en volumen de Bailian debe usar dashscope.aliyuncs.com; Si se trata de un plan Token, elija la versión personal o empresarial."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La version basée sur le volume Bailian doit utiliser dashscope.aliyuncs.com ; s'il s'agit d'un plan Token, veuillez choisir la version personnelle ou entreprise."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian ボリュームベースのバージョンでは、dashscope.aliyuncs.com を使用する必要があります。これがトークン プランの場合は、個人バージョンまたはエンタープライズ バージョンを選択してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian 볼륨 기반 버전은 dashscope.aliyuncs.com을 사용해야 합니다. 토큰 플랜인 경우 개인용 또는 기업용 버전을 선택하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A versão baseada em volume Bailian deve usar dashscope.aliyuncs.com; se este for um Plano Token, escolha a versão pessoal ou empresarial."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Версия на основе тома Bailian должна использовать Dashscope.aliyuncs.com; если это план токенов, выберите личную или корпоративную версию."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百炼按量版必须使用 dashscope.aliyuncs.com；如果这是 Token Plan，请选择个人版或企业版。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百鍊按量版必須使用 dashscope.aliyuncs.com；如果這是 Token Plan，請選擇個人版或企業版。"
+          }
+        }
+      }
+    },
+    "百炼按量版的聊天端点必须属于 dashscope.aliyuncs.com。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يجب أن تنتمي نقطة نهاية الدردشة الخاصة بإصدار Bailian Pay-as-you-go إلى Dashscope.aliyuncs.com."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Chat-Endpunkt der Bailian Pay-as-you-go-Version muss zu dashscope.aliyuncs.com gehören."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The chat endpoint of Bailian Pay-as-you-go version must belong to dashscope.aliyuncs.com."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El punto final de chat de la versión Bailian Pay-as-you-go debe pertenecer a dashscope.aliyuncs.com."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le point de terminaison de discussion de la version Bailian Pay-as-you-go doit appartenir à dashscope.aliyuncs.com."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian 従量課金制バージョンのチャット エンドポイントは、dashscope.aliyuncs.com に属している必要があります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian 종량제 버전의 채팅 엔드포인트는 dashscope.aliyuncs.com에 속해야 합니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O ponto final do bate-papo da versão pré-paga do Bailian deve pertencer a dashscope.aliyuncs.com."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Конечная точка чата версии Bailian с оплатой по факту должна принадлежать Dashscope.alyuncs.com."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百炼按量版的聊天端点必须属于 dashscope.aliyuncs.com。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百鍊按量版的聊天端點必須屬於 dashscope.aliyuncs.com。"
+          }
+        }
+      }
+    },
+    "百炼显式请求端点必须是完整的 HTTPS 地址。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يجب أن تكون نقطة نهاية الطلب الصريح لـ Bailian عنوان HTTPS كاملاً."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Endpunkt der expliziten Bailian-Anfrage muss eine vollständige HTTPS-Adresse sein."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian explicit request endpoint must be a complete HTTPS address."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El punto final de solicitud explícita de Bailian debe ser una dirección HTTPS completa."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le point de terminaison de la demande explicite Bailian doit être une adresse HTTPS complète."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian の明示的リクエスト エンドポイントは、完全な HTTPS アドレスである必要があります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian 명시적 요청 엔드포인트는 완전한 HTTPS 주소여야 합니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O endpoint de solicitação explícita Bailian deve ser um endereço HTTPS completo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Конечная точка явного запроса Bailian должна быть полным адресом HTTPS."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百炼显式请求端点必须是完整的 HTTPS 地址。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百鍊顯式請求端點必須是完整的 HTTPS 地址。"
+          }
+        }
+      }
+    },
+    "百炼版本已变更。为避免复用不兼容的凭证，请输入新版本专属 API Key 后再保存。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم تغيير نسخة Bailian. لتجنب إعادة استخدام بيانات الاعتماد غير المتوافقة، يرجى إدخال مفتاح API الخاص بالإصدار الجديد قبل الحفظ."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Bailian-Version wurde geändert. Um die Wiederverwendung inkompatibler Anmeldeinformationen zu vermeiden, geben Sie vor dem Speichern bitte den für die neue Version spezifischen API-Schlüssel ein."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Bailian version has been changed. To avoid reusing incompatible credentials, please enter the API Key specific to the new version before saving."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se ha cambiado la versión bailiana. Para evitar reutilizar credenciales incompatibles, ingrese la clave API específica de la nueva versión antes de guardar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La version Bailian a été modifiée. Pour éviter de réutiliser des informations d'identification incompatibles, veuillez saisir la clé API spécifique à la nouvelle version avant de sauvegarder."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian バージョンが変更されました。互換性のない認証情報の再利用を避けるため、保存する前に新しいバージョンに固有の API キーを入力してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian 버전이 변경되었습니다. 호환되지 않는 자격 증명을 재사용하지 않으려면 저장하기 전에 새 버전에 맞는 API 키를 입력하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A versão Bailian foi alterada. Para evitar a reutilização de credenciais incompatíveis, insira a chave API específica para a nova versão antes de salvar."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Байлианская версия была изменена. Чтобы избежать повторного использования несовместимых учетных данных, перед сохранением введите ключ API, соответствующий новой версии."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百炼版本已变更。为避免复用不兼容的凭证，请输入新版本专属 API Key 后再保存。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百鍊版本已變更。為避免復用不兼容的憑證，請輸入新版本專屬 API Key 後再保存。"
+          }
+        }
+      }
+    },
+    "百炼版本已变更。请输入新版本专属 API Key；原凭证不会被自动复用。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم تغيير نسخة Bailian. الرجاء إدخال مفتاح API الحصري للإصدار الجديد؛ ولن يتم إعادة استخدام الشهادة الأصلية تلقائيًا."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Bailian-Version wurde geändert. Bitte geben Sie den exklusiven API-Schlüssel der neuen Version ein. Das Originalzertifikat wird nicht automatisch wiederverwendet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Bailian version has been changed. Please enter the new version's exclusive API Key; the original certificate will not be automatically reused."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se ha cambiado la versión bailiana. Ingrese la clave API exclusiva de la nueva versión; el certificado original no se reutilizará automáticamente."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La version Bailian a été modifiée. Veuillez saisir la clé API exclusive de la nouvelle version ; le certificat original ne sera pas automatiquement réutilisé."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian バージョンが変更されました。新しいバージョンの専用 API キーを入力してください。元の証明書は自動的に再利用されません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bailian 버전이 변경되었습니다. 새 버전의 전용 API 키를 입력하세요. 원본 인증서는 자동으로 재사용되지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A versão Bailian foi alterada. Por favor insira a chave API exclusiva da nova versão; o certificado original não será reutilizado automaticamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Байлианская версия была изменена. Пожалуйста, введите эксклюзивный ключ API новой версии; исходный сертификат не будет автоматически повторно использоваться."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百炼版本已变更。请输入新版本专属 API Key；原凭证不会被自动复用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百鍊版本已變更。請輸入新版本專屬 API Key；原憑證不會被自動復用。"
           }
         }
       }
@@ -40689,6 +43744,77 @@
         }
       }
     },
+    "确认并发送" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تأكيد وإرسال"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bestätigen und senden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm and send"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirmar y enviar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirmer et envoyer"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "確認して送信"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "확인하고 보내세요"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirme e envie"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подтвердить и отправить"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "确认并发送"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "確認併發送"
+          }
+        }
+      }
+    },
     "确认用户已明确授权本次可能计费的请求" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -40756,6 +43882,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "確認用戶已明確授權本次可能計費的請求"
+          }
+        }
+      }
+    },
+    "确认音乐生成" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تأكيد توليد الموسيقى"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bestätigen Sie die Musikgenerierung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm music generation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirmar generación musical"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirmer la génération de musique"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音楽の生成を確認する"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음악 생성 확인"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirme a geração da música"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подтвердить создание музыки"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "确认音乐生成"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "確認音樂生成"
           }
         }
       }
@@ -50231,7 +53428,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "遠端模型目錄必須使用 HTTPS；HTTP 僅允許本機回環位址"
+            "value" : "遠程模型名錄必須使用 HTTPS；HTTP 只允許本機回環地址"
           }
         }
       }
@@ -51008,6 +54205,77 @@
         }
       }
     },
+    "通用兼容协议没有唯一官方地址，需要手动填写完整 Base URL、模型目录和适用端点；ModelHub 不会猜测路径。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا يحتوي بروتوكول التوافق العالمي على عنوان رسمي فريد ويتطلب إكمالًا يدويًا لعنوان URL الأساسي الكامل ودليل النموذج ونقاط النهاية القابلة للتطبيق؛ لن يخمن ModelHub المسار."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Universal Compatibility Protocol hat keine eindeutige offizielle Adresse und erfordert die manuelle Vervollständigung der vollständigen Basis-URL, des Modellverzeichnisses und der entsprechenden Endpunkte; ModelHub errät den Pfad nicht."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Universal Compatibility Protocol does not have a unique official address and requires manual completion of the complete Base URL, model directory, and applicable endpoints; ModelHub will not guess the path."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El Protocolo de compatibilidad universal no tiene una dirección oficial única y requiere completar manualmente la URL base completa, el directorio de modelos y los puntos finales aplicables; ModelHub no adivinará el camino."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le protocole de compatibilité universelle n'a pas d'adresse officielle unique et nécessite la saisie manuelle de l'URL de base complète, du répertoire de modèles et des points de terminaison applicables ; ModelHub ne devinera pas le chemin."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Universal Compatibility Protocol には固有の公式アドレスがなく、完全なベース URL、モデル ディレクトリ、および該当するエンドポイントを手動で入力する必要があります。 ModelHub はパスを推測しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Universal Compatibility Protocol에는 고유한 공식 주소가 없으며 전체 기본 URL, 모델 디렉터리 및 적용 가능한 엔드포인트를 수동으로 완료해야 합니다. ModelHub는 경로를 추측하지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Protocolo de Compatibilidade Universal não possui um endereço oficial exclusivo e exige o preenchimento manual do URL base completo, do diretório do modelo e dos endpoints aplicáveis; ModelHub não adivinhará o caminho."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Протокол универсальной совместимости не имеет уникального официального адреса и требует ручного заполнения полного базового URL-адреса, каталога модели и применимых конечных точек; ModelHub не угадает путь."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通用兼容协议没有唯一官方地址，需要手动填写完整 Base URL、模型目录和适用端点；ModelHub 不会猜测路径。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通用兼容協議沒有唯一官方地址，需要手動填寫完整 Base URL、模型目錄和適用端點；ModelHub 不會猜測路徑。"
+          }
+        }
+      }
+    },
     "通过 API 调试台或外部客户端发送请求后，路由日志会出现在这里。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -51434,6 +54702,77 @@
         }
       }
     },
+    "通过 ModelHub 原生音乐协议创建音乐任务；保留供应商扩展参数，隔离模型不会被调用，且必须确认可能计费。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يتم إنشاء مهام الموسيقى عبر بروتوكول الموسيقى الأصلي ModelHub؛ يتم الاحتفاظ بمعلمات ملحق البائع، ولا يتم استدعاء النماذج المعزولة، ويجب تأكيدها لإعداد الفواتير المحتملة."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Musikaufgaben werden über das native Musikprotokoll ModelHub erstellt; Anbietererweiterungsparameter bleiben erhalten, isolierte Modelle werden nicht aufgerufen und müssen für eine mögliche Abrechnung bestätigt werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Music tasks are created via the ModelHub native music protocol; vendor extension parameters are preserved, isolated models are not called, and must be confirmed for possible billing."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las tareas musicales se crean a través del protocolo de música nativo ModelHub; Los parámetros de extensión del proveedor se conservan, los modelos aislados no se llaman y deben confirmarse para una posible facturación."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les tâches musicales sont créées via le protocole musical natif ModelHub ; les paramètres d'extension du fournisseur sont conservés, les modèles isolés ne sont pas appelés et doivent être confirmés pour une éventuelle facturation."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音楽タスクは、ModelHub ネイティブ音楽プロトコルを介して作成されます。ベンダー拡張パラメータは保持され、分離されたモデルは呼び出されないため、請求の可能性について確認する必要があります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음악 작업은 ModelHub 기본 음악 프로토콜을 통해 생성됩니다. 공급업체 확장 매개변수는 유지되고 격리된 모델은 호출되지 않으며 가능한 청구를 위해 확인되어야 합니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As tarefas musicais são criadas por meio do protocolo de música nativo ModelHub; os parâmetros de extensão do fornecedor são preservados, os modelos isolados não são chamados e devem ser confirmados para possível faturamento."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Музыкальные задачи создаются через собственный музыкальный протокол ModelHub; Параметры расширения поставщика сохраняются, изолированные модели не вызываются и должны быть подтверждены для возможного выставления счетов."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通过 ModelHub 原生音乐协议创建音乐任务；保留供应商扩展参数，隔离模型不会被调用，且必须确认可能计费。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通過 ModelHub 原生音樂協議創建音樂任務；保留供應商擴展參數，隔離模型不會被調用，且必須確認可能計費。"
+          }
+        }
+      }
+    },
     "通过 ModelHub 可用路由生成短文本。只有用户明确授权可能计费的调用后，才可将 confirm_billable 设为 true。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -51787,6 +55126,77 @@
         }
       }
     },
+    "采用此版本的官方 Base URL 与聊天端点" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اعتمد عنوان URL الأساسي الرسمي ونقطة نهاية الدردشة لهذا الإصدار"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übernehmen Sie die offizielle Basis-URL und den Chat-Endpunkt dieser Version"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adopt the official Base URL and chat endpoint of this version"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adopte la URL base oficial y el punto final de chat de esta versión."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adoptez l'URL de base officielle et le point de terminaison de discussion de cette version"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このバージョンの公式ベース URL とチャット エンドポイントを採用"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 버전의 공식 기본 URL과 채팅 엔드포인트를 채택하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adote o URL base oficial e o endpoint de bate-papo desta versão"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Примите официальный базовый URL-адрес и конечную точку чата этой версии."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "采用此版本的官方 Base URL 与聊天端点"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "採用此版本的官方 Base URL 與聊天端點"
+          }
+        }
+      }
+    },
     "重排" : {
       "localizations" : {
         "ar" : {
@@ -51994,7 +55404,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "重新擷取 %@ 的模型目錄"
+            "value" : "重新拉取 %@ 的模型名錄"
           }
         }
       }
@@ -52489,6 +55899,77 @@
         }
       }
     },
+    "阿里云百炼" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "علي بابا كلاود بيليان"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nube de Alibaba Bailian"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アリババクラウドバイリアン"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "알리바바 클라우드 바이리안"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Nuvem Bailian"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阿里云百炼"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阿里雲百鍊"
+          }
+        }
+      }
+    },
     "阿里云百炼 / Qwen" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -52556,6 +56037,219 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "阿里雲百鍊 / Qwen"
+          }
+        }
+      }
+    },
+    "阿里云百炼（按量版）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "علي بابا كلاود بيليان (النسخة المقاسة)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian (gemessene Version)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian (measured version)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian (versión medida)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian (version mesurée)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian（測定版）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian(측정 버전)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian (versão medida)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian (мерная версия)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阿里云百炼（按量版）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阿里雲百鍊（按量版）"
+          }
+        }
+      }
+    },
+    "阿里云百炼个人版" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الإصدار الشخصي من Alibaba Cloud Bailian"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian Personal Edition"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian Personal Edition"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edición personal de Alibaba Cloud Bailian"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian édition personnelle"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian パーソナルエディション"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian 개인용 에디션"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian Edição Pessoal"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian Персональная версия"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阿里云百炼个人版"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阿里雲百鍊個人版"
+          }
+        }
+      }
+    },
+    "阿里云百炼企业版（团队版）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إصدار Alibaba Cloud Bailian Enterprise (إصدار الفريق)"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian Enterprise Edition (Team Edition)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian Enterprise Edition (Team Edition)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian Enterprise Edition (edición de equipo)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian Enterprise Edition (édition équipe)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian エンタープライズ エディション (チーム エディション)"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian Enterprise Edition(팀판)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian Enterprise Edition (edição de equipe)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Bailian Enterprise Edition (командная версия)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阿里云百炼企业版（团队版）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阿里雲百鍊企業版（團隊版）"
           }
         }
       }
@@ -53760,6 +57454,432 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "音樂"
+          }
+        }
+      }
+    },
+    "音乐任务 ID" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "معرف مهمة الموسيقى"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Musikaufgaben-ID"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Music task ID"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ID de tarea musical"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ID de tâche musicale"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音楽タスクID"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음악 작업 ID"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ID da tarefa musical"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Идентификатор музыкальной задачи"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音乐任务 ID"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音樂任務 ID"
+          }
+        }
+      }
+    },
+    "音乐任务端点" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نقطة نهاية مهمة الموسيقى"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Endpunkt der Musikaufgabe"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Music task endpoint"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Punto final de la tarea musical"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Point de terminaison de la tâche musicale"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音楽タスクのエンドポイント"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음악 작업 엔드포인트"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ponto final da tarefa musical"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Конечная точка музыкальной задачи"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音乐任务端点"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音樂任務端點"
+          }
+        }
+      }
+    },
+    "音乐描述" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وصف الموسيقى"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Musikbeschreibung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "music description"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "descripción de la música"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "description de la musique"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音楽の説明"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음악 설명"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "descrição da música"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "описание музыки"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音乐描述"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音樂描述"
+          }
+        }
+      }
+    },
+    "音乐生成" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جيل الموسيقى"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Musikgeneration"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "music generation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "generacion musical"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "génération de musique"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音楽の生成"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음악 세대"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "geração musical"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "поколение музыки"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音乐生成"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音樂生成"
+          }
+        }
+      }
+    },
+    "音乐生成可能产生供应商费用。只有确认当前模型、精确端点和费用后才会发送请求；隔离模型仍会被网关拒绝。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قد يتم تطبيق رسوم البائع على توليد الموسيقى. لن يتم إرسال الطلب إلا بعد التأكد من النموذج الحالي ونقطة النهاية الدقيقة والتكلفة؛ ستظل البوابة مرفوضة من النماذج المعزولة."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für die Musikgenerierung können Anbietergebühren anfallen. Die Anfrage wird erst nach Bestätigung des aktuellen Modells, des genauen Endpunkts und der Kosten gesendet; Isolierte Modelle werden weiterhin vom Gateway abgelehnt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vendor fees may apply for music generation. The request will only be sent after confirming the current model, precise endpoint, and cost; isolated models will still be rejected by the gateway."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es posible que se apliquen tarifas de proveedor para la generación de música. La solicitud sólo se enviará después de confirmar el modelo actual, el punto final preciso y el costo; Los modelos aislados seguirán siendo rechazados por la puerta de enlace."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Des frais de fournisseur peuvent s'appliquer pour la production de musique. La demande ne sera envoyée qu'après confirmation du modèle actuel, du point final précis et du coût ; les modèles isolés seront toujours rejetés par la passerelle."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音楽の生成にはベンダー手数料が適用される場合があります。リクエストは、現在のモデル、正確なエンドポイント、コストを確認した後にのみ送信されます。分離されたモデルは依然としてゲートウェイによって拒否されます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음악 생성에는 공급업체 수수료가 적용될 수 있습니다. 요청은 현재 모델, 정확한 엔드포인트 및 비용을 확인한 후에만 전송됩니다. 격리된 모델은 여전히 ​​게이트웨이에 의해 거부됩니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Taxas de fornecedor podem ser aplicadas para geração de música. A solicitação só será enviada após a confirmação do modelo atual, endpoint preciso e custo; modelos isolados ainda serão rejeitados pelo gateway."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "За создание музыки может взиматься плата поставщика. Запрос будет отправлен только после подтверждения текущей модели, точной конечной точки и стоимости; изолированные модели по-прежнему будут отклонены шлюзом."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音乐生成可能产生供应商费用。只有确认当前模型、精确端点和费用后才会发送请求；隔离模型仍会被网关拒绝。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音樂生成可能產生供應商費用。只有確認當前模型、精確端點和費用後才會發送請求；隔離模型仍會被網關拒絕。"
+          }
+        }
+      }
+    },
+    "音乐端点" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نقطة نهاية الموسيقى"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Musik-Endpunkt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "music endpoint"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "punto final de la música"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "point final de musique"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音楽エンドポイント"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "음악 엔드포인트"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ponto final da música"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "конечная точка музыки"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音乐端点"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音樂端點"
           }
         }
       }

@@ -51,6 +51,28 @@ final class ProviderModelCSVTests: XCTestCase {
         )
     }
 
+    func testImportsExactMusicGenerationAndTaskEndpoints() throws {
+        let csv = """
+        model,music_endpoint,music_task_endpoint
+        musicgen-large,https://music.example.com/v2/generations,https://music.example.com/v2/tasks/{task_id}
+        """
+
+        let result = try ProviderModelCSVImporter.parse(Data(csv.utf8))
+
+        XCTAssertEqual(
+            result.endpointURLs[
+                ProviderEndpointRecord.key(for: .musicGeneration, model: "musicgen-large")
+            ],
+            "https://music.example.com/v2/generations"
+        )
+        XCTAssertEqual(
+            result.endpointURLs[
+                ProviderEndpointRecord.key(for: .musicTask, model: "musicgen-large")
+            ],
+            "https://music.example.com/v2/tasks/{task_id}"
+        )
+    }
+
     func testSupportsUTF16CSVWithByteOrderMark() throws {
         let csv = "model_id,input_price_usd_per_1m_tokens\nalpha,0.25\n"
         var data = Data([0xFF, 0xFE])

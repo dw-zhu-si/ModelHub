@@ -8,7 +8,7 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if model.isReviewDemoMode {
+            if model.isReviewDemoMode && !model.isProviderLayoutStressDemo {
                 ReviewDemoBanner()
             }
             NavigationSplitView {
@@ -27,6 +27,7 @@ struct ContentView: View {
 
                     SidebarServiceSummary()
                 }
+                .frame(maxHeight: .infinity, alignment: .top)
                 .background(MHDesign.sidebarSurface)
                 .safeAreaPadding(.top, 28)
                 .navigationSplitViewColumnWidth(
@@ -49,7 +50,11 @@ struct ContentView: View {
                     }
                 }
                 .safeAreaPadding(.top, 18)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity,
+                    alignment: .topLeading
+                )
                 .mhPageBackground()
                 .groupBoxStyle(MHGroupBoxStyle())
                 .toolbar {
@@ -518,65 +523,93 @@ struct ProvidersView: View {
                 }
                 Spacer()
             } else {
-                HSplitView {
-                    List(selection: $selectedProviderID) {
-                        ForEach(model.providers) { provider in
-                            ProviderRow(
-                                provider: provider,
-                                summary: model.healthSummary(for: provider),
-                                hasAPIKey: model.hasAPIKey(for: provider),
-                                isSelected: selectedProviderID == provider.id,
-                                isHotRefreshing: model.isHotRefreshingProviderCatalog(provider.id)
-                            ) {
-                                editingProvider = provider
-                            } refresh: {
-                                Task {
-                                    await model.hotRefreshProviderCatalog(providerID: provider.id)
+                GeometryReader { splitProxy in
+                    HSplitView {
+                        ScrollViewReader { providerListProxy in
+                            List(selection: $selectedProviderID) {
+                                ForEach(model.providers) { provider in
+                                    ProviderRow(
+                                        provider: provider,
+                                        summary: model.healthSummary(for: provider),
+                                        hasAPIKey: model.hasAPIKey(for: provider),
+                                        credentialIssue: model.providerCredentialValidationMessage(
+                                            for: provider,
+                                            enteredAPIKey: ""
+                                        ),
+                                        isSelected: selectedProviderID == provider.id,
+                                        isHotRefreshing: model.isHotRefreshingProviderCatalog(provider.id)
+                                    ) {
+                                        editingProvider = provider
+                                    } refresh: {
+                                        Task {
+                                            await model.hotRefreshProviderCatalog(providerID: provider.id)
+                                        }
+                                    } test: {
+                                        pendingTestScope = .provider(provider)
+                                    } delete: {
+                                        providerToDelete = provider
+                                    }
+                                    .tag(provider.id)
+                                    .id(provider.id)
                                 }
-                            } test: {
-                                pendingTestScope = .provider(provider)
-                            } delete: {
-                                providerToDelete = provider
                             }
-                            .tag(provider.id)
+                            .listStyle(.sidebar)
+                            .scrollContentBackground(.hidden)
+                            .contentMargins(.bottom, 16, for: .scrollContent)
+                            .background(MHDesign.surface.opacity(0.72))
+                            .task(id: selectedProviderID) {
+                                guard let selectedProviderID else { return }
+                                try? await Task.sleep(for: .milliseconds(60))
+                                providerListProxy.scrollTo(selectedProviderID, anchor: .center)
+                            }
+                        }
+                        .frame(minWidth: 300, idealWidth: 336, maxWidth: 390)
+                        .frame(maxHeight: .infinity, alignment: .top)
+
+                        if let provider = selectedProvider {
+                            ProviderModelBrowser(
+                                provider: provider,
+                                edit: { editingProvider = provider },
+                                testAll: { pendingTestScope = .provider(provider) }
+                            )
+                            .id(provider.id)
+                            .frame(minWidth: 460)
+                        } else {
+                            ContentUnavailableView(
+                                "选择供应商",
+                                systemImage: "square.stack.3d.up",
+                                description: Text("选择左侧供应商后查看模型状态。")
+                            )
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
                     }
-                    .listStyle(.sidebar)
-                    .scrollContentBackground(.hidden)
-                    .background(MHDesign.surface.opacity(0.72))
-                    .frame(minWidth: 310, idealWidth: 352, maxWidth: 430)
-
-                    if let provider = selectedProvider {
-                        ProviderModelBrowser(
-                            provider: provider,
-                            edit: { editingProvider = provider },
-                            testAll: { pendingTestScope = .provider(provider) }
-                        )
-                        .id(provider.id)
-                        .frame(minWidth: 460)
-                    } else {
-                        ContentUnavailableView(
-                            "选择供应商",
-                            systemImage: "square.stack.3d.up",
-                            description: Text("选择左侧供应商后查看模型状态。")
-                        )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(
+                        width: splitProxy.size.width,
+                        height: splitProxy.size.height,
+                        alignment: .top
+                    )
+                    .background(MHDesign.elevatedSurface.opacity(0.96))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(MHDesign.border)
+                            .allowsHitTesting(false)
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .shadow(color: .black.opacity(0.065), radius: 18, y: 7)
                 }
-                .background(MHDesign.elevatedSurface.opacity(0.96))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(MHDesign.border)
-                        .allowsHitTesting(false)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .shadow(color: .black.opacity(0.065), radius: 18, y: 7)
                 .padding(.horizontal, MHDesign.pagePadding)
                 .padding(.bottom, MHDesign.pagePadding)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onAppear {
             if selectedProviderID == nil {
+                #if DEBUG
+                if ProcessInfo.processInfo.environment["MODELHUB_VISUAL_STRESS"] == "1" {
+                    selectedProviderID = model.providers.last?.id
+                    return
+                }
+                #endif
                 selectedProviderID = model.providers.first?.id
             }
         }
@@ -718,6 +751,7 @@ private struct ProviderRow: View {
     let provider: ProviderConfig
     let summary: ModelHealthSummary
     let hasAPIKey: Bool
+    let credentialIssue: String?
     let isSelected: Bool
     let isHotRefreshing: Bool
     let edit: () -> Void
@@ -749,17 +783,24 @@ private struct ProviderRow: View {
                     .foregroundStyle(isSelected ? Color.white.opacity(0.76) : Color.secondary)
                 Label(
                     provider.kind.needsAPIKey
-                        ? (hasAPIKey ? "密钥已保存" : "缺少密钥")
+                        ? (credentialIssue == nil
+                            ? (hasAPIKey ? "密钥已保存" : "缺少密钥")
+                            : "凭证类型不匹配")
                         : "无需密钥",
-                    systemImage: hasAPIKey || !provider.kind.needsAPIKey
-                        ? "key.fill"
-                        : "key.slash"
+                    systemImage: credentialIssue == nil
+                        ? (hasAPIKey || !provider.kind.needsAPIKey
+                            ? "key.fill"
+                            : "key.slash")
+                        : "exclamationmark.key.fill"
                 )
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(
                     isSelected
                         ? Color.white.opacity(0.84)
-                        : (hasAPIKey || !provider.kind.needsAPIKey ? Color.green : Color.orange)
+                        : (credentialIssue == nil
+                            && (hasAPIKey || !provider.kind.needsAPIKey)
+                                ? Color.green
+                                : Color.orange)
                 )
                 HStack(spacing: 6) {
                     AvailabilityCountBadge(
@@ -808,8 +849,9 @@ private struct ProviderRow: View {
                 Button(action: refresh) {
                     Label("热更新模型", systemImage: "arrow.triangle.2.circlepath")
                 }
-                .disabled(isHotRefreshing)
+                .disabled(isHotRefreshing || credentialIssue != nil)
                 Button("测试全部模型", action: test)
+                    .disabled(credentialIssue != nil)
                 Button("删除", role: .destructive, action: delete)
             } label: {
                 Image(systemName: "ellipsis.circle")
@@ -909,42 +951,18 @@ private struct ProviderModelBrowser: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(provider.name)
-                            .font(.system(size: 22, weight: .semibold, design: .rounded))
-                        Text("\(summary.total) 个模型 · 聊天模型在线检测；生成模型未通过原生验证时保持隔离")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 18) {
+                        providerIdentity
+                            .frame(minWidth: 220, maxWidth: .infinity, alignment: .leading)
+                        providerActions
+                            .fixedSize(horizontal: true, vertical: false)
                     }
-                    Spacer()
-                    Button {
-                        Task {
-                            await model.hotRefreshProviderCatalog(providerID: provider.id)
-                        }
-                    } label: {
-                        if model.isHotRefreshingProviderCatalog(provider.id) {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Label("热更新模型", systemImage: "arrow.triangle.2.circlepath")
-                        }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        providerIdentity
+                        providerActions
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(
-                        model.isHotRefreshingProviderCatalog(provider.id)
-                            || model.isTestingModels
-                    )
-                    .help("从已保存的精确模型目录增量合并，不重启服务；新增模型保持隔离，现有状态不变。")
-                    Button("编辑与密钥", action: edit)
-                        .buttonStyle(.bordered)
-                    Button {
-                        testAll()
-                    } label: {
-                        Label("测试全部", systemImage: "checkmark.arrow.trianglehead.counterclockwise")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(model.isTestingModels || provider.models.isEmpty)
                 }
 
                 HStack(spacing: 12) {
@@ -1062,9 +1080,60 @@ private struct ProviderModelBrowser: View {
             Button("取消", role: .cancel) { pendingNativeTest = nil }
         } message: {
             if let request = pendingNativeTest {
-                Text("将向 \(provider.name) 的 \(request.protocol.displayName) 原生接口发送一次最小真实请求。视频、图像或语音供应商可能按请求计费。")
+                Text("将向 \(provider.name) 的 \(request.protocol.displayName) 原生接口发送一次最小真实请求。视频、图像、音乐或语音供应商可能按请求计费。")
             }
         }
+    }
+
+    private var providerIdentity: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(provider.name)
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+                .help(provider.name)
+            Text("\(summary.total) 个模型 · 聊天模型在线检测；生成模型未通过原生验证时保持隔离")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var providerActions: some View {
+        HStack(spacing: 8) {
+            Button {
+                Task {
+                    await model.hotRefreshProviderCatalog(providerID: provider.id)
+                }
+            } label: {
+                if model.isHotRefreshingProviderCatalog(provider.id) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(minWidth: 16)
+                } else {
+                    Label("热更新模型", systemImage: "arrow.triangle.2.circlepath")
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(
+                model.isHotRefreshingProviderCatalog(provider.id)
+                    || model.isTestingModels
+            )
+            .help("从已保存的精确模型目录增量合并，不重启服务；新增模型保持隔离，现有状态不变。")
+
+            Button("编辑与密钥", action: edit)
+                .buttonStyle(.bordered)
+
+            Button {
+                testAll()
+            } label: {
+                Label("测试全部", systemImage: "checkmark.arrow.trianglehead.counterclockwise")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(model.isTestingModels || provider.models.isEmpty)
+        }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func beginTest(modelName: String) {
@@ -1234,12 +1303,18 @@ private struct ModelHealthRow: View {
         case .missingCredential:
             return mhLocalized("缺少 API Key，未向供应商发起请求")
         case .invalidCredential:
+            if let edition = bailianEditionName {
+                return L10n.format("%@ API Key 无效、已过期，或与当前 Base URL 不匹配", edition)
+            }
             return mhLocalized("API Key 无效或已过期")
         case .insufficientPermission:
             return mhLocalized("当前凭证无权访问此模型")
         case .invalidRequest:
             return mhLocalized("请求格式、参数或模型能力不匹配")
         case .endpointOrModelNotFound:
+            if let edition = bailianEditionName {
+                return L10n.format("%@不支持该模型，或 Base URL 与此版本的 API Key 不匹配", edition)
+            }
             return mhLocalized("上游未找到该模型，或精确调用端点不匹配")
         case .requestTimedOut:
             return mhLocalized("上游请求超时，请检查网络或稍后重试")
@@ -1256,6 +1331,13 @@ private struct ModelHealthRow: View {
         case .unknownFailure:
             return mhLocalized("最近一次验证失败，请查看技术详情并重新测试")
         }
+    }
+
+    private var bailianEditionName: String? {
+        guard let kind = appModel.providers.first(where: { $0.id == providerID })?.kind,
+              kind.isBailian
+        else { return nil }
+        return mhLocalized(kind.displayName)
     }
 
     private func quarantineHelpText(reason: String) -> String {
@@ -1328,6 +1410,7 @@ private extension ModelNativeProtocol {
     var icon: String {
         switch self {
         case .imageGeneration: "photo"
+        case .musicGeneration: "music.note"
         case .videoGeneration: "video"
         case .speech: "waveform"
         case .transcription: "captions.bubble"
@@ -1432,6 +1515,21 @@ private struct ProviderEditorNotice: View {
     }
 }
 
+enum ProviderEditorValidation {
+    static func isSavable(
+        provider: ProviderConfig,
+        endpointsText: String,
+        requiresBailianReplacementKey: Bool
+    ) -> Bool {
+        guard let baseURL = URLComponents(string: provider.baseURL) else { return false }
+        return !provider.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && ProviderEndpointSecurity.isSafeConfigurationURL(baseURL)
+            && (try? ProviderEndpointEditorCodec.records(from: endpointsText)) != nil
+            && BailianEndpointPolicy.validationMessage(for: provider) == nil
+            && !requiresBailianReplacementKey
+    }
+}
+
 struct ProviderEditorView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -1453,13 +1551,18 @@ struct ProviderEditorView: View {
     @State private var pendingImport: ProviderModelImportPreview?
     @State private var showingDeleteKeyConfirmation = false
     @State private var pendingNativeProtocol: ModelNativeProtocol?
+    private let initialKind: ProviderKind
 
     init(provider: ProviderConfig?) {
-        let initial = provider ?? ProviderConfig(
+        var initial = provider ?? ProviderConfig(
             name: "通用兼容供应商",
             kind: .unifiedCompatible,
             baseURL: ""
         )
+        if let preset = ProviderConnectionPresets.preset(for: initial.kind) {
+            initial = preset.applying(to: initial, mode: .fillMissing)
+        }
+        initialKind = initial.kind
         _provider = State(initialValue: initial)
         _apiKey = State(initialValue: "")
         _modelsText = State(initialValue: initial.models.joined(separator: "\n"))
@@ -1495,9 +1598,13 @@ struct ProviderEditorView: View {
                             color: provider.enabled ? .green : .secondary
                         )
                         ProviderEditorBadge(
-                            icon: hasStoredAPIKey ? "key.fill" : "key.slash",
+                            icon: credentialValidationMessage == nil
+                                ? (hasStoredAPIKey ? "key.fill" : "key.slash")
+                                : "exclamationmark.key.fill",
                             text: credentialStatusText,
-                            color: hasStoredAPIKey ? .green : .orange
+                            color: credentialValidationMessage == nil && hasStoredAPIKey
+                                ? .green
+                                : .orange
                         )
                         ProviderEditorBadge(
                             icon: "square.stack.3d.up.fill",
@@ -1539,15 +1646,71 @@ struct ProviderEditorView: View {
                         }
                     }
                     .onChange(of: provider.kind) { oldValue, newValue in
-                        if provider.name == oldValue.displayName || provider.name.isEmpty {
+                        let defaultNames = [
+                            oldValue.displayName,
+                            "阿里云百炼",
+                            "阿里云百炼 / Qwen",
+                            "阿里云百炼企业版（团队版）",
+                            "MiniMax",
+                        ]
+                        if defaultNames.contains(provider.name) || provider.name.isEmpty {
                             provider.name = newValue.displayName
                         }
+                        applyConnectionPreset(newValue, mode: .replaceURLs)
                     }
                     TextField("Base URL", text: $provider.baseURL)
                         .font(.system(.body, design: .monospaced))
-                    Text("Base URL 始终按原样保存；切换供应商类型不会自动填写、补版本或追加路径。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if ProviderConnectionPresets.preset(for: provider.kind) != nil {
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Label(
+                                hasPresetModelCatalog
+                                    ? "已内置该供应商的官方连接预设；通常只需填写 API Key 即可拉取模型并使用支持的协议。"
+                                    : "已自动填入该供应商可确定的 Base URL 与请求端点；由于官方未提供可仅凭该 API Key 读取的唯一模型名录，模型 ID 仍需手工添加。",
+                                systemImage: "checkmark.shield.fill"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                            Spacer()
+                            Button("恢复官方 URL") {
+                                applyConnectionPreset(provider.kind, mode: .replaceURLs)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    } else {
+                        Text("通用兼容协议没有唯一官方地址，需要手动填写完整 Base URL、模型目录和适用端点；ModelHub 不会猜测路径。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let description = provider.kind.bailianEditionDescription,
+                       let recommendedURL = provider.kind.recommendedBaseURL
+                    {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label(mhLocalized(provider.kind.displayName), systemImage: "building.2.crop.circle")
+                                .font(.subheadline.weight(.semibold))
+                            Text(mhLocalized(description))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(recommendedURL)
+                                .font(.system(.caption, design: .monospaced))
+                                .textSelection(.enabled)
+                            Text("切换百炼类型时会自动应用对应的 Base URL 与聊天端点；仅在已保存密钥与目标计费体系明确兼容时复用，否则必须输入目标类型的专属 API Key。")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            if let message = bailianBaseURLValidationMessage {
+                                Label(mhLocalized(message), systemImage: "exclamationmark.triangle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(12)
+                        .background(MHDesign.insetSurface, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(MHDesign.border)
+                        }
+                    }
                     Toggle("启用此供应商", isOn: $provider.enabled)
                 } header: {
                     ProviderEditorSectionHeader(icon: "slider.horizontal.3", title: "基本信息")
@@ -1579,6 +1742,16 @@ struct ProviderEditorView: View {
                     )
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if requiresBailianReplacementKey {
+                        Label(
+                            credentialValidationMessage
+                                ?? "百炼版本已变更。请输入新版本专属 API Key；原凭证不会被自动复用。",
+                            systemImage: "key.horizontal.fill"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
                     if provider.kind == .anthropic {
                         TextField("API 版本（可选）", text: $provider.apiVersion)
                     }
@@ -1652,7 +1825,7 @@ struct ProviderEditorView: View {
                                     isError: catalogResultIsError
                                 )
                             }
-                        Text("必须填写供应商明确提供的完整名录地址；不会使用 Base URL，也不会自动补全 /v1/models 等路径。凭证通过请求头发送，拉取结果需预览确认后才会合并。")
+                        Text("内置供应商会自动带出已核验的完整名录地址；通用兼容类型才需要手工填写。运行时不会使用 Base URL 猜测路径。凭证通过请求头发送，拉取结果需预览确认后才会合并。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Text("CSV 支持 UTF-8、UTF-16 与 Excel 分隔符声明。必填列：model（也支持 model_id、模型名称）；可选列：endpoint、各协议端点、input_price、output_price、request_price、price_source。Token 价格单位为美元/百万 Token，request_price 为美元/次。")
@@ -1695,6 +1868,7 @@ struct ProviderEditorView: View {
                                     in: .whitespacesAndNewlines
                                 ).isEmpty
                                 || parsedModels.isEmpty
+                                || pricingAvailabilityReason != nil
                         )
                     }
                     if !pricingResultText.isEmpty {
@@ -1706,6 +1880,12 @@ struct ProviderEditorView: View {
                     Text("自动价格只读取供应商自身模型目录明确返回的机器可读金额与单位；不会抓取第三方价格、不会猜价。所有模型都可以在下方手动配置。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if let reason = pricingAvailabilityReason {
+                        Label(mhLocalized(reason), systemImage: "info.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
 
                     LazyVStack(spacing: 8) {
                         ForEach(filteredPricingModels, id: \.self) { modelName in
@@ -1737,7 +1917,7 @@ struct ProviderEditorView: View {
                         .padding(8)
                         .background(MHDesign.insetSurface, in: RoundedRectangle(cornerRadius: 10))
                         .overlay { RoundedRectangle(cornerRadius: 10).stroke(MHDesign.border) }
-                    Text("每行格式：端点类型|模型名称 = 完整 URL。运行时只使用这里或 Base URL 保存的完整地址，不补全任何路径；视频任务端点可使用 {task_id}。")
+                    Text("每行格式：端点类型|模型名称 = 完整 URL。运行时只使用这里或 Base URL 保存的完整地址，不补全任何路径；视频和音乐任务端点可使用 {task_id}。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if !endpointValidationMessage.isEmpty {
@@ -1884,7 +2064,7 @@ struct ProviderEditorView: View {
             Button("取消", role: .cancel) { pendingNativeProtocol = nil }
         } message: {
             if let nativeProtocol = pendingNativeProtocol {
-                Text("将向 \(provider.name) 的 \(nativeProtocol.displayName) 原生接口发送一次最小真实请求。视频、图像或语音供应商可能按请求计费。")
+                Text("将向 \(provider.name) 的 \(nativeProtocol.displayName) 原生接口发送一次最小真实请求。视频、图像、音乐或语音供应商可能按请求计费。")
             }
         }
     }
@@ -2147,6 +2327,19 @@ struct ProviderEditorView: View {
             pricingResultIsError = true
             return
         }
+        guard let endpoint = URL(string: modelCatalogURL) else {
+            pricingResultText = "模型名录 URL 无效。"
+            pricingResultIsError = true
+            return
+        }
+        if case .unavailable(let reason) = ProviderModelCatalogPricingPolicy.availability(
+            provider: provider,
+            endpoint: endpoint
+        ) {
+            pricingResultText = reason
+            pricingResultIsError = false
+            return
+        }
         provider.models = parsedModels
         Task {
             isRefreshingProviderPrices = true
@@ -2210,7 +2403,17 @@ struct ProviderEditorView: View {
 
     private var credentialStatusText: String {
         if !provider.kind.needsAPIKey { return String(localized: "此供应商无需 API Key", locale: AppLanguage.saved.locale) }
+        if credentialValidationMessage != nil {
+            return mhLocalized("凭证类型不匹配")
+        }
         return mhLocalized(hasStoredAPIKey ? "钥匙串中已保存 API Key" : "尚未保存 API Key")
+    }
+
+    private var credentialValidationMessage: String? {
+        model.providerCredentialValidationMessage(
+            for: provider,
+            enteredAPIKey: apiKey
+        )
     }
 
     private var parsedModels: [String] {
@@ -2221,10 +2424,72 @@ struct ProviderEditorView: View {
     }
 
     private var isValid: Bool {
-        !provider.name.trimmingCharacters(in: .whitespaces).isEmpty
-            && URL(string: provider.baseURL)?.scheme != nil
-            && !parsedModels.isEmpty
-            && (try? ProviderEndpointEditorCodec.records(from: endpointsText)) != nil
+        var draft = provider
+        draft.endpointURLs = [:]
+        return ProviderEditorValidation.isSavable(
+            provider: draft,
+            endpointsText: endpointsText,
+            requiresBailianReplacementKey: requiresBailianReplacementKey
+        )
+    }
+
+    private var hasPresetModelCatalog: Bool {
+        ProviderConnectionPresets.preset(for: provider.kind)?.endpointURLs[
+            ProviderEndpointRecord.key(for: .modelCatalog)
+        ] != nil
+    }
+
+    private var requiresBailianReplacementKey: Bool {
+        credentialValidationMessage != nil
+            || model.providerCredentialRequiresReplacement(
+                from: initialKind,
+                to: provider,
+                enteredAPIKey: apiKey
+            )
+    }
+
+    private var pricingAvailabilityReason: String? {
+        guard let endpoint = URL(
+            string: modelCatalogURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        ) else { return nil }
+        if case .unavailable(let reason) = ProviderModelCatalogPricingPolicy.availability(
+            provider: provider,
+            endpoint: endpoint
+        ) {
+            return reason
+        }
+        return nil
+    }
+
+    private var bailianBaseURLValidationMessage: String? {
+        var baseOnly = provider
+        baseOnly.endpointURLs = [:]
+        return BailianEndpointPolicy.validationMessage(for: baseOnly)
+    }
+
+    private func applyConnectionPreset(
+        _ kind: ProviderKind,
+        mode: ProviderConnectionPresetApplicationMode
+    ) {
+        guard let preset = ProviderConnectionPresets.preset(for: kind) else {
+            if mode == .replaceURLs {
+                provider.baseURL = ""
+                provider.endpointURLs = [:]
+                modelCatalogURL = ""
+                endpointsText = ""
+            }
+            endpointValidationMessage = ""
+            catalogResultText = ""
+            return
+        }
+        provider = preset.applying(to: provider, mode: mode)
+        let catalogKey = ProviderEndpointRecord.key(for: .modelCatalog)
+        modelCatalogURL = provider.endpointURLs[catalogKey] ?? ""
+        endpointsText = ProviderEndpointEditorCodec.text(
+            from: provider.endpointURLs.filter { $0.key != catalogKey }
+        )
+        endpointValidationMessage = ""
+        catalogResultText = ""
     }
 
     @discardableResult
@@ -3060,6 +3325,8 @@ struct ConsoleView: View {
     @EnvironmentObject private var model: AppModel
     @State private var selectedModel = ""
     @State private var prompt = "请用一句话介绍你自己。"
+    @State private var operation: ConsoleOperation = .chat
+    @State private var confirmsMusicGeneration = false
 
     private var availableModels: [String] {
         let aliases = model.routes.filter(\.enabled).map(\.alias)
@@ -3074,6 +3341,13 @@ struct ConsoleView: View {
             PageHeader(title: "API 调试", subtitle: "从应用内部调用同一个本地 HTTP 接口，验证完整路由链路。")
 
             HStack(spacing: 14) {
+                Picker("协议", selection: $operation) {
+                    ForEach(ConsoleOperation.allCases) { operation in
+                        Text(operation.title).tag(operation)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 220)
                 Picker("模型", selection: $selectedModel) {
                     Text("请选择").tag("")
                     ForEach(availableModels, id: \.self) { model in
@@ -3083,7 +3357,17 @@ struct ConsoleView: View {
                 .frame(maxWidth: 420)
                 Spacer()
                 Button {
-                    Task { await model.runConsole(model: selectedModel, prompt: prompt) }
+                    if operation == .musicGeneration {
+                        confirmsMusicGeneration = true
+                    } else {
+                        Task {
+                            await model.runConsole(
+                                model: selectedModel,
+                                prompt: prompt,
+                                operation: operation
+                            )
+                        }
+                    }
                 } label: {
                     if model.consoleIsRunning {
                         ProgressView()
@@ -3098,7 +3382,7 @@ struct ConsoleView: View {
             }
             .mhSurface(.secondary, padding: 16)
 
-            GroupBox("用户消息") {
+            GroupBox(operation == .musicGeneration ? "音乐描述" : "用户消息") {
                 TextEditor(text: $prompt)
                     .font(.body)
                     .frame(minHeight: 110)
@@ -3125,6 +3409,25 @@ struct ConsoleView: View {
         }
         .onChange(of: availableModels) { _, models in
             if !models.contains(selectedModel) { selectedModel = models.first ?? "" }
+        }
+        .onChange(of: operation) { _, newValue in
+            prompt = newValue == .musicGeneration
+                ? "温暖、轻快的钢琴与弦乐，适合清晨。"
+                : "请用一句话介绍你自己。"
+        }
+        .alert("确认音乐生成", isPresented: $confirmsMusicGeneration) {
+            Button("取消", role: .cancel) {}
+            Button("确认并发送") {
+                Task {
+                    await model.runConsole(
+                        model: selectedModel,
+                        prompt: prompt,
+                        operation: operation
+                    )
+                }
+            }
+        } message: {
+            Text("音乐生成可能产生供应商费用。只有确认当前模型、精确端点和费用后才会发送请求；隔离模型仍会被网关拒绝。")
         }
     }
 }
