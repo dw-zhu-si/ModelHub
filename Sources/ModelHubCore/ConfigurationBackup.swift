@@ -50,6 +50,7 @@ public enum ConfigurationBackup {
         configuration: AppConfiguration,
         appVersion: String
     ) throws -> Data {
+        let configuration = try validated(configuration)
         let envelope = ConfigurationBackupEnvelope(
             appVersion: appVersion,
             configuration: configuration
@@ -85,6 +86,28 @@ public enum ConfigurationBackup {
         guard envelope.schemaVersion == 1 else {
             throw ConfigurationBackupError.unsupportedVersion(envelope.schemaVersion)
         }
-        return envelope
+        return ConfigurationBackupEnvelope(
+            schemaVersion: envelope.schemaVersion,
+            exportedAt: envelope.exportedAt,
+            appVersion: envelope.appVersion,
+            configuration: try validated(envelope.configuration)
+        )
+    }
+
+    private static func validated(_ configuration: AppConfiguration) throws -> AppConfiguration {
+        var copy = configuration
+        if let settings = configuration.operational.modelProxy {
+            // Reject invalid untrusted metadata before normalization. Normalizing first could
+            // silently discard a credential-bearing or otherwise malformed subscription.
+            guard settings.validationMessage == nil else {
+                throw ConfigurationBackupError.invalidData
+            }
+            let sanitized = settings.sanitized
+            guard sanitized.validationMessage == nil else {
+                throw ConfigurationBackupError.invalidData
+            }
+            copy.operational.modelProxy = sanitized
+        }
+        return copy
     }
 }

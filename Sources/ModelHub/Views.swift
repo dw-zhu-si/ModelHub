@@ -19,7 +19,7 @@ struct ContentView: View {
                         LazyVStack(alignment: .leading, spacing: 18) {
                             SidebarSection("工作台", items: [.overview, .providers, .routes, .analytics])
                             SidebarSection("开发与治理", items: [.operations, .governance, .console, .logs])
-                            SidebarSection("系统", items: [.settings])
+                            SidebarSection("系统", items: [.proxy, .settings])
                         }
                         .padding(.horizontal, 10)
                         .padding(.bottom, 12)
@@ -46,6 +46,7 @@ struct ContentView: View {
                     case .governance: GovernanceView()
                     case .console: ConsoleView()
                     case .logs: LogsView()
+                    case .proxy: ProxySubscriptionsView()
                     case .settings: SettingsView()
                     }
                 }
@@ -655,7 +656,7 @@ struct ProvidersView: View {
         ) { scope in
             Button(
                 L10n.format(
-                    "零费用检测 %lld 个模型",
+                    "检测 %lld 个模型（文字请求可能计费）",
                     Int64(scope.modelCount(in: model.providers))
                 )
             ) {
@@ -692,7 +693,7 @@ struct ProvidersView: View {
         } message: { scope in
             Text(
                 L10n.format(
-                    "将检查 %lld 个模型。零费用检测不会创建生成任务；选择包含原生验证后，会对 %lld 个生成类模型各发送一次最小真实请求，可能逐模型计费。成功且响应包含有效任务标识后自动解封。最多并发 3 个。",
+                    "将检查 %lld 个模型。文字模型会各发送一次最多 1 token 的真实请求，供应商可能收费；此选项不会创建生成任务。选择包含原生验证后，还会对 %lld 个生成类模型各发送一次最小真实请求，可能逐模型计费。若供应商金丝雀遇到瞬态网络故障，系统会熔断并跳过其余模型，避免批量误隔离。成功且响应有效后才会解封。最多并发 3 个。",
                     Int64(scope.modelCount(in: model.providers)),
                     Int64(scope.nativeModelCount(in: model.providers))
                 )
@@ -894,6 +895,155 @@ private struct ModelTestProgressBanner: View {
     }
 }
 
+private struct TransientHealthRecoveryBanner: View {
+    let count: Int
+    let recover: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.orange)
+                .frame(width: 26)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.format("发现 %d 条可恢复的瞬态网络故障记录", count))
+                    .font(.subheadline.weight(.semibold))
+                Text("恢复后仅变为待验证并继续隔离；不会调用供应商，也不会直接标记为可用。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 12)
+            Button("恢复为待验证", action: recover)
+                .buttonStyle(.bordered)
+        }
+        .padding(12)
+        .background(.orange.opacity(0.075), in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(.orange.opacity(0.2))
+        }
+    }
+}
+
+private struct ProviderVerificationBlockerBanner: View {
+    let pendingCount: Int
+    let proxyGuidance: String
+    let actionTitle: String
+    let action: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "bolt.horizontal.circle.fill")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.orange)
+                .frame(width: 26)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.format(
+                    "本轮未完成真实可用性验证：%d 个模型仍为待验证",
+                    pendingCount
+                ))
+                .font(.subheadline.weight(.semibold))
+                Text("供应商金丝雀在重试后仍遇到瞬态 TLS/网络故障，系统已熔断并跳过后续请求，避免把整批模型误判为不可用。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(proxyGuidance)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 12)
+            Button(actionTitle, action: action)
+                .buttonStyle(.borderedProminent)
+        }
+        .padding(12)
+        .background(.orange.opacity(0.075), in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(.orange.opacity(0.2))
+        }
+        .accessibilityElement(children: .contain)
+    }
+}
+
+private struct ModelHealthActivityPanel: View {
+    let activities: [ModelHealthActivity]
+    let providers: [ProviderConfig]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("最近健康活动", systemImage: "waveform.path.ecg.rectangle")
+                .font(.subheadline.weight(.semibold))
+
+            ForEach(activities) { activity in
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: activity.kind == .probe
+                        ? "checkmark.arrow.trianglehead.counterclockwise"
+                        : "arrow.uturn.backward.circle")
+                        .foregroundStyle(activity.kind == .probe ? MHDesign.accent : .orange)
+                        .frame(width: 18)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(summary(for: activity))
+                            .font(.caption.weight(.medium))
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 6) {
+                            Text(activity.completedAt, style: .relative)
+                            Text("·")
+                            Text(L10n.format("关联 ID %@", String(activity.id.uuidString.prefix(8))))
+                            if let circuitProviders = circuitProviderNames(for: activity) {
+                                Text("·")
+                                Text(L10n.format("熔断：%@", circuitProviders))
+                            }
+                        }
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(12)
+        .background(MHDesign.surface.opacity(0.78), in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(MHDesign.border)
+        }
+    }
+
+    private func summary(for activity: ModelHealthActivity) -> String {
+        if activity.kind == .transientRecovery {
+            return L10n.format(
+                "恢复 %d 条为待验证，仍保持隔离",
+                activity.recoveredToUnknown
+            )
+        }
+        let state = activity.cancelled ? mhLocalized("已停止") : mhLocalized("已完成")
+        return L10n.format(
+            "%@ %d/%d · 可用 %d · 失败/隔离 %d · 未探测/需处理 %d · 重试 %d · 保留可用 %d · 瞬态故障 %d · 熔断跳过 %d",
+            state,
+            activity.completed,
+            activity.total,
+            activity.available,
+            activity.unavailable,
+            activity.skipped,
+            activity.retryAttempts,
+            activity.preservedAvailable,
+            activity.transientFailures,
+            activity.circuitSkipped
+        )
+    }
+
+    private func circuitProviderNames(for activity: ModelHealthActivity) -> String? {
+        let names = activity.circuitOpenedProviderIDs.compactMap { providerID in
+            providers.first { $0.id == providerID }?.name
+        }
+        return names.isEmpty ? nil : names.joined(separator: "、")
+    }
+}
+
 private enum ModelAvailabilityFilter: String, CaseIterable, Identifiable {
     case all
     case available
@@ -924,6 +1074,8 @@ private struct ProviderModelBrowser: View {
     @State private var query = ""
     @State private var filter: ModelAvailabilityFilter = .all
     @State private var pendingNativeTest: NativeTestRequest?
+    @State private var showingTransientRecoveryConfirmation = false
+    @State private var proxyAssignmentContext: ProxyAssignmentContext?
 
     private var summary: ModelHealthSummary {
         model.healthSummary(for: provider)
@@ -948,6 +1100,53 @@ private struct ProviderModelBrowser: View {
         }
     }
 
+    private var recoverableTransientHealthCount: Int {
+        model.recoverableTransientHealthCount(providerID: provider.id)
+    }
+
+    private var recentHealthActivities: [ModelHealthActivity] {
+        model.recentModelHealthActivities(providerID: provider.id, limit: 3)
+    }
+
+    private var circuitBlockingActivity: ModelHealthActivity? {
+        ModelTestCircuitDiagnostics.latestBlockingActivity(
+            providerID: provider.id,
+            activities: model.recentModelHealthActivities(providerID: provider.id, limit: 50)
+        )
+    }
+
+    private var pendingModelIDs: [String] {
+        provider.models.filter {
+            model.healthRecord(providerID: provider.id, model: $0)?.status == .unknown
+        }
+    }
+
+    private var pendingProxyAssignmentCount: Int {
+        pendingModelIDs.lazy.filter {
+            model.assignedProxyNodeID(providerID: provider.id, model: $0) != nil
+        }.count
+    }
+
+    private var proxyRecoveryGuidance: String {
+        if model.proxySubscriptionNodes.isEmpty {
+            return mhLocalized("当前没有可用订阅节点；请先进入“代理订阅”更新节点。")
+        }
+        if !model.modelProxyEnabled {
+            return mhLocalized("当前模型专用代理未启用。选择节点并应用后会同时启用，仅影响明确分配的模型。")
+        }
+        if pendingProxyAssignmentCount == 0 {
+            return mhLocalized("当前待验证模型未分配订阅节点，仍会走直连；请选择节点后再复验。")
+        }
+        if pendingProxyAssignmentCount < pendingModelIDs.count {
+            return L10n.format(
+                "已有 %d/%d 个待验证模型分配节点；可继续补充分配后分批复验。",
+                pendingProxyAssignmentCount,
+                pendingModelIDs.count
+            )
+        }
+        return mhLocalized("待验证模型已分配订阅节点；确认代理运行后可分批发起真实复验。")
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 16) {
@@ -963,6 +1162,40 @@ private struct ProviderModelBrowser: View {
                         providerIdentity
                         providerActions
                     }
+                }
+
+                if recoverableTransientHealthCount > 0 {
+                    TransientHealthRecoveryBanner(
+                        count: recoverableTransientHealthCount
+                    ) {
+                        showingTransientRecoveryConfirmation = true
+                    }
+                }
+
+                if summary.unknown > 0, circuitBlockingActivity != nil {
+                    ProviderVerificationBlockerBanner(
+                        pendingCount: summary.unknown,
+                        proxyGuidance: proxyRecoveryGuidance,
+                        actionTitle: model.proxySubscriptionNodes.isEmpty
+                            ? mhLocalized("前往代理订阅")
+                            : mhLocalized("选择节点并复验")
+                    ) {
+                        if model.proxySubscriptionNodes.isEmpty {
+                            model.selection = .proxy
+                        } else {
+                            proxyAssignmentContext = ProxyAssignmentContext(
+                                providerID: provider.id,
+                                scope: .pending
+                            )
+                        }
+                    }
+                }
+
+                if !recentHealthActivities.isEmpty {
+                    ModelHealthActivityPanel(
+                        activities: recentHealthActivities,
+                        providers: model.providers
+                    )
                 }
 
                 HStack(spacing: 12) {
@@ -1083,6 +1316,21 @@ private struct ProviderModelBrowser: View {
                 Text("将向 \(provider.name) 的 \(request.protocol.displayName) 原生接口发送一次最小真实请求。视频、图像、音乐或语音供应商可能按请求计费。")
             }
         }
+        .confirmationDialog(
+            "恢复瞬态网络故障记录？",
+            isPresented: $showingTransientRecoveryConfirmation
+        ) {
+            Button(L10n.format("恢复 %d 条为待验证", recoverableTransientHealthCount)) {
+                model.recoverTransientNetworkHealth(providerID: provider.id)
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("只会撤销由明确 URL 瞬态错误造成的旧隔离记录。恢复后的模型仍处于待验证和隔离状态；不会调用供应商，不会产生费用，也不会恢复路由。")
+        }
+        .sheet(item: $proxyAssignmentContext) { context in
+            ProxyNodeAssignmentView(context: context)
+                .environmentObject(model)
+        }
     }
 
     private var providerIdentity: some View {
@@ -1124,6 +1372,24 @@ private struct ProviderModelBrowser: View {
 
             Button("编辑与密钥", action: edit)
                 .buttonStyle(.bordered)
+
+            Button {
+                proxyAssignmentContext = ProxyAssignmentContext(
+                    providerID: provider.id,
+                    scope: .pending
+                )
+            } label: {
+                Label("代理复验待验证", systemImage: "network.badge.shield.half.filled")
+            }
+            .buttonStyle(.bordered)
+            .disabled(
+                summary.unknown == 0
+                    || model.proxySubscriptionNodes.isEmpty
+                    || model.isTestingModels
+            )
+            .help(model.proxySubscriptionNodes.isEmpty
+                ? "请先在“代理订阅”中成功读取节点。"
+                : "选择订阅节点，批量分配给待验证模型；只会批量复验文字模型。")
 
             Button {
                 testAll()
@@ -1299,6 +1565,11 @@ private struct ModelHealthRow: View {
         }
         switch cause {
         case .notVerified:
+            if let record,
+               ModelHealthRecoveryPolicy.isRecoveredPendingVerification(record)
+            {
+                return mhLocalized("瞬态网络故障记录已恢复，等待真实请求复验")
+            }
             return mhLocalized("尚未完成真实可用性验证")
         case .missingCredential:
             return mhLocalized("缺少 API Key，未向供应商发起请求")
@@ -1316,6 +1587,8 @@ private struct ModelHealthRow: View {
                 return L10n.format("%@不支持该模型，或 Base URL 与此版本的 API Key 不匹配", edition)
             }
             return mhLocalized("上游未找到该模型，或精确调用端点不匹配")
+        case .modelAccessNotConfigured:
+            return mhLocalized("官方能力目录确认支持；当前 API Key 所属地域、业务空间或推理端点未开放该模型")
         case .requestTimedOut:
             return mhLocalized("上游请求超时，请检查网络或稍后重试")
         case .rateLimitedOrOutOfQuota:
@@ -1448,6 +1721,7 @@ private struct ProviderModelImportPreview: Identifiable {
     let models: [String]
     let prices: [String: ProviderModelPrice]
     let endpointURLs: [String: String]
+    var capabilityDetails: [String: ModelCapabilityDetails] = [:]
     let description: String
     var preselectAll = true
 }
@@ -1651,6 +1925,7 @@ struct ProviderEditorView: View {
                             "阿里云百炼",
                             "阿里云百炼 / Qwen",
                             "阿里云百炼企业版（团队版）",
+                            "千问AI平台",
                             "MiniMax",
                         ]
                         if defaultNames.contains(provider.name) || provider.name.isEmpty {
@@ -1694,7 +1969,7 @@ struct ProviderEditorView: View {
                             Text(recommendedURL)
                                 .font(.system(.caption, design: .monospaced))
                                 .textSelection(.enabled)
-                            Text("切换百炼类型时会自动应用对应的 Base URL 与聊天端点；仅在已保存密钥与目标计费体系明确兼容时复用，否则必须输入目标类型的专属 API Key。")
+                            Text("切换千问AI平台类型时会自动应用对应的 Base URL 与聊天端点；仅在已保存密钥与目标计费体系明确兼容时复用，否则必须输入目标类型的专属 API Key。")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                             if let message = bailianBaseURLValidationMessage {
@@ -1745,7 +2020,7 @@ struct ProviderEditorView: View {
                     if requiresBailianReplacementKey {
                         Label(
                             credentialValidationMessage
-                                ?? "百炼版本已变更。请输入新版本专属 API Key；原凭证不会被自动复用。",
+                                ?? "千问AI平台版本已变更。请输入新版本专属 API Key；原凭证不会被自动复用。",
                             systemImage: "key.horizontal.fill"
                         )
                         .font(.caption)
@@ -2103,12 +2378,13 @@ struct ProviderEditorView: View {
                     provider: provider,
                     endpoint: result.endpoint
                 )
-                catalogResultText = "拉取到 \(result.models.count) 个模型、\(result.prices.count) 个价格 · \(result.durationMilliseconds) ms"
+                catalogResultText = "拉取到 \(result.models.count) 个模型、\(result.prices.count) 个价格、\(result.capabilityDetails.count) 组能力参数（\(result.pageCount) 页）· \(result.durationMilliseconds) ms"
                 catalogResultIsError = false
                 pendingImport = ProviderModelImportPreview(
                     models: result.models,
                     prices: result.prices,
                     endpointURLs: [:],
+                    capabilityDetails: result.capabilityDetails,
                     description: directlyCallable
                         ? "拉取只代表供应商列出了这些模型，不代表已经通过真实调用验证。"
                         : "这是可部署参考目录，不代表模型名可直接调用。已默认不勾选；只应导入你已部署并拿到调用代码的项目。",
@@ -2247,8 +2523,17 @@ struct ProviderEditorView: View {
                 to: &provider,
                 routes: &noRoutes
             )
+            let selectedDetails = preview.capabilityDetails.filter {
+                selectedIdentities.contains(
+                    $0.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                )
+            }
+            let capabilityCount = ProviderModelCapabilityUpdater.apply(
+                details: selectedDetails,
+                to: &provider
+            )
             endpointValidationMessage = ""
-            catalogResultText = "已合并 \(selected.count) 个选择项、\(priceCount) 个价格、\(selectedEndpoints.count) 个精确端点，共 \(merged.count) 个模型；保存后生效"
+            catalogResultText = "已合并 \(selected.count) 个选择项、\(priceCount) 个价格、\(capabilityCount) 组能力参数、\(selectedEndpoints.count) 个精确端点，共 \(merged.count) 个模型；保存后生效"
             catalogResultIsError = false
             return true
         } catch {
@@ -4296,6 +4581,8 @@ struct SettingsView: View {
     @State private var requireAuthentication = true
     @State private var startAutomatically = true
     @State private var showToken = false
+    @State private var modelProxy = ModelProxySettings()
+    @State private var showProxyModels = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -4350,6 +4637,43 @@ struct SettingsView: View {
                 Button("刷新登录项状态") { model.refreshLaunchAtLoginStatus() }
             }
 
+            Section("模型专用代理") {
+                Toggle("启用 ModelHub 自定义代理", isOn: $modelProxy.enabled)
+                Picker("代理类型", selection: $modelProxy.kind) {
+                    ForEach(ModelProxyKind.allCases, id: \.self) { kind in
+                        Text(kind.displayName).tag(kind)
+                    }
+                }
+                .disabled(!modelProxy.enabled)
+                TextField("代理主机", text: $modelProxy.host)
+                    .disabled(!modelProxy.enabled)
+                TextField("代理端口", value: $modelProxy.port, format: .number.grouping(.never))
+                    .disabled(!modelProxy.enabled)
+
+                HStack {
+                    Button("选择使用代理的模型") { showProxyModels = true }
+                        .disabled(!modelProxy.enabled)
+                    Text(L10n.format("已选择 %d 个精确模型", modelProxy.selections.count))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("保存代理设置") {
+                        _ = model.persistModelProxySettings(modelProxy)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(modelProxy.validationMessage != nil)
+                }
+
+                if let message = modelProxy.validationMessage {
+                    Label(mhLocalized(message), systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                } else {
+                    Text(mhLocalized("默认所有模型、模型目录与官方价格均直连；只有所选供应商下的精确模型 ID 会使用此代理。代理配置不接收或保存用户名、密码。"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("访问令牌") {
                 HStack {
                     Text(showToken ? model.gatewayToken : String(repeating: "•", count: 28))
@@ -4386,12 +4710,13 @@ struct SettingsView: View {
             Section {
                 HStack {
                     Button(model.isServerRunning ? "停止服务" : "启动服务") {
-                        save(restart: false)
+                        guard save(restart: false) else { return }
                         model.isServerRunning ? model.stopServer() : model.startServer()
                     }
                     Spacer()
                     Button("保存设置") { save(restart: true) }
                         .buttonStyle(.borderedProminent)
+                        .disabled(modelProxy.validationMessage != nil)
                 }
             }
             }
@@ -4404,11 +4729,20 @@ struct SettingsView: View {
         .onAppear {
             requireAuthentication = model.configuration.server.requireAuthentication
             startAutomatically = model.configuration.server.startAutomatically
+            modelProxy = model.configuration.operational.modelProxy ?? .init()
             model.refreshLaunchAtLoginStatus()
+        }
+        .sheet(isPresented: $showProxyModels) {
+            ModelProxySelectionView(
+                settings: $modelProxy,
+                providers: model.providers
+            )
         }
     }
 
-    private func save(restart: Bool) {
+    @discardableResult
+    private func save(restart: Bool) -> Bool {
+        guard model.persistModelProxySettings(modelProxy) else { return false }
         model.persistServerSettings(
             ServerSettings(
                 requireAuthentication: requireAuthentication,
@@ -4416,6 +4750,84 @@ struct SettingsView: View {
             ),
             restart: restart
         )
+        return true
+    }
+}
+
+private struct ModelProxySelectionView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var settings: ModelProxySettings
+    let providers: [ProviderConfig]
+    @State private var query = ""
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(filteredProviders, id: \.id) { provider in
+                    Section(provider.name) {
+                        ForEach(filteredModels(for: provider), id: \.self) { model in
+                            Button {
+                                settings.setSelected(
+                                    !settings.contains(providerID: provider.id, model: model),
+                                    providerID: provider.id,
+                                    model: model
+                                )
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(model)
+                                            .font(.system(.body, design: .monospaced))
+                                            .foregroundStyle(.primary)
+                                        Text(provider.kind.displayName)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: settings.contains(
+                                        providerID: provider.id,
+                                        model: model
+                                    ) ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(settings.contains(
+                                        providerID: provider.id,
+                                        model: model
+                                    ) ? Color.accentColor : Color.secondary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .searchable(
+                text: $query,
+                prompt: Text(mhLocalized("搜索供应商或精确模型 ID"))
+            )
+            .navigationTitle("选择代理模型")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("清除全部") { settings.selections.removeAll() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
+        .frame(minWidth: 620, minHeight: 620)
+    }
+
+    private var filteredProviders: [ProviderConfig] {
+        providers.filter { !filteredModels(for: $0).isEmpty }
+    }
+
+    private func filteredModels(for provider: ProviderConfig) -> [String] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return provider.models.sorted() }
+        if provider.name.localizedCaseInsensitiveContains(needle) {
+            return provider.models.sorted()
+        }
+        return provider.models.filter {
+            $0.localizedCaseInsensitiveContains(needle)
+        }.sorted()
     }
 }
 
@@ -4445,7 +4857,7 @@ private struct MHGroupBoxStyle: GroupBoxStyle {
     }
 }
 
-private struct PageHeader: View {
+struct PageHeader: View {
     let title: String
     let subtitle: String
     var trailing: AnyView? = nil
@@ -4482,6 +4894,7 @@ private struct PageHeader: View {
         case "访问与安全": "lock.shield.fill"
         case "API 调试": "terminal.fill"
         case "请求日志": "list.bullet.rectangle"
+        case "代理订阅": "network.badge.shield.half.filled"
         case "服务设置": "gearshape.fill"
         default: "circle.grid.2x2.fill"
         }

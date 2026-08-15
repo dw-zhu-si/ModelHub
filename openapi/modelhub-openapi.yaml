@@ -53,6 +53,32 @@ paths:
                 $ref: "#/components/schemas/ModelList"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /v1/models/{modelId}/capabilities:
+    get:
+      summary: 获取一个当前可用模型的能力与参数约束
+      description: >
+        只读取已保存的本机能力元数据，不调用上游、不产生费用。模型 ID 中的
+        斜杠必须进行 URL 编码。已隔离、不可用或当前令牌无权访问的模型统一返回
+        404，避免泄露受限模型目录。路由只有在全部可用目标约束完全一致时才返回
+        exact；否则 constraint_scope 为 provider_specific。
+      parameters:
+        - name: modelId
+          in: path
+          required: true
+          description: 模型 ID 或路由别名；斜杠需编码为 %2F
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 模型能力、模态及图片/视频/音频参数约束
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelCapabilities"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: 模型不存在、已隔离、不可用或当前令牌无权访问
   /v1/providers:
     get:
       summary: 获取供应商列表与原生透传标识
@@ -349,7 +375,7 @@ paths:
     post:
       summary: 语音合成
       description: >
-        通用兼容供应商使用 /v1/audio/speech；百炼按模型系列转发至
+        通用兼容供应商使用 /v1/audio/speech；千问AI平台按模型系列转发至
         SpeechSynthesizer 或 multimodal-generation 原生 HTTP 接口。
       requestBody:
         required: true
@@ -485,7 +511,8 @@ components:
         id:
           type: string
         object:
-          const: model
+          type: string
+          enum: [model, model.capabilities]
         created:
           type: integer
         owned_by:
@@ -495,6 +522,30 @@ components:
           enum: [unknown, available, unavailable, configurationRequired, unsupported]
         quarantined:
           type: boolean
+        capabilities:
+          type: array
+          items:
+            type: string
+        constraint_scope:
+          type: string
+          enum: [exact, provider_specific, not_published]
+        constraints:
+          $ref: "#/components/schemas/ModelConstraintDetails"
+    ModelCapabilities:
+      allOf:
+        - $ref: "#/components/schemas/Model"
+        - type: object
+          properties:
+            object:
+              const: model.capabilities
+    ModelConstraintDetails:
+      type: object
+      additionalProperties: true
+      description: >
+        供应商目录或官方注册表提供的机器可读参数约束。可能包含
+        input_modalities、output_modalities、image.sizes、image.aspect_ratios、
+        video.resolutions、video.durations_seconds、audio.formats、
+        audio.sample_rates_hz、parameters、source 与 updated_at；未发布的字段不猜测。
     ModelList:
       type: object
       required: [object, data]

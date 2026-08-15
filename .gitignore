@@ -25,3 +25,5 @@ docs/APP_STORE_RELEASE_READINESS.md
 *.pfx
 *.log
 submissions/
+docs/备案/
+release/decisions/

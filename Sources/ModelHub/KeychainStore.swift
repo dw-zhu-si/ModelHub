@@ -5,7 +5,15 @@ import Security
 enum KeychainStore {
     private static let service = "com.local.modelhub.secrets"
 
-    enum LookupResult: Equatable {
+    private actor NonInteractiveLookupCoordinator {
+        static let shared = NonInteractiveLookupCoordinator()
+
+        func read(account: String) -> LookupResult {
+            KeychainStore.readWithoutInteraction(account: account)
+        }
+    }
+
+    enum LookupResult: Equatable, Sendable {
         case value(String)
         case notFound
         case interactionRequired
@@ -42,6 +50,23 @@ enum KeychainStore {
         lookup(account: account, allowInteraction: false)
     }
 
+    static func readWithoutInteractionAsync(account: String) async -> LookupResult {
+        await NonInteractiveLookupCoordinator.shared.read(account: account)
+    }
+
+    static func nonInteractiveLookupQuery(account: String) -> [String: Any] {
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        return [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecUseAuthenticationContext as String: context,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+    }
+
     static func existsWithoutInteraction(account: String) -> Bool {
         let context = LAContext()
         context.interactionNotAllowed = true
@@ -70,22 +95,22 @@ enum KeychainStore {
         "provider.\(id.uuidString)"
     }
 
+    static func proxySubscriptionAccount(_ id: UUID) -> String {
+        "proxy.subscription.\(id.uuidString.lowercased()).url"
+    }
+
     static let gatewayTokenAccount = "gateway.token"
     static let agentTokenAccount = "agent.token"
+    static let proxyControllerSecretAccount = "proxy.controller.secret"
 
     private static func lookup(account: String, allowInteraction: Bool) -> LookupResult {
-        var query: [String: Any] = [
+        let query: [String: Any] = allowInteraction ? [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        if !allowInteraction {
-            let context = LAContext()
-            context.interactionNotAllowed = true
-            query[kSecUseAuthenticationContext as String] = context
-        }
+        ] : nonInteractiveLookupQuery(account: account)
 
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)

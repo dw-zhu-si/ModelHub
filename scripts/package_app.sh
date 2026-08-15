@@ -11,6 +11,7 @@ APP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${
 DIST_APP_DIR="${PROJECT_ROOT}/dist/${APP_NAME}.app"
 ZIP_PATH="${PROJECT_ROOT}/dist/${APP_NAME}-${APP_VERSION}-macos-universal.zip"
 SIGNING_IDENTITY=${MODELHUB_SIGNING_IDENTITY:--}
+TIMESTAMP_URL=${MODELHUB_TIMESTAMP_URL:-http://timestamp.apple.com/ts01}
 STAGING_ROOT=$(mktemp -d /private/tmp/modelhub-package.XXXXXX)
 APP_DIR="${STAGING_ROOT}/${APP_NAME}.app"
 CONTENTS_DIR="${APP_DIR}/Contents"
@@ -21,6 +22,7 @@ WIDGET_APP_DIR="${PLUGINS_DIR}/${WIDGET_NAME}.appex"
 WIDGET_CONTENTS_DIR="${WIDGET_APP_DIR}/Contents"
 WIDGET_MACOS_DIR="${WIDGET_CONTENTS_DIR}/MacOS"
 WIDGET_RESOURCES_DIR="${WIDGET_CONTENTS_DIR}/Resources"
+ZIP_VERIFY_ROOT="${STAGING_ROOT}/zip-verify"
 ICONSET_DIR="${PROJECT_ROOT}/.build/ModelHub.iconset"
 ICON_SOURCE="${PROJECT_ROOT}/.build/ModelHub-1024.png"
 PACKAGE_SCRATCH_DIR="${PROJECT_ROOT}/.build/package-swiftpm"
@@ -88,12 +90,12 @@ for spec in \
     sips -z "${size}" "${size}" "${ICON_SOURCE}" --out "${ICONSET_DIR}/${filename}" >/dev/null
 done
 iconutil -c icns "${ICONSET_DIR}" -o "${RESOURCES_DIR}/ModelHub.icns"
-xcrun xcstringstool installloc "${PROJECT_ROOT}/packaging/Localization" \
-    --output-directory "${RESOURCES_DIR}" \
-    --no-xcstrings-sources
-xcrun xcstringstool installloc "${PROJECT_ROOT}/packaging/Localization" \
-    --output-directory "${WIDGET_RESOURCES_DIR}" \
-    --no-xcstrings-sources
+xcrun xcstringstool compile \
+    "${PROJECT_ROOT}/packaging/Localization/Localizable.xcstrings" \
+    --output-directory "${RESOURCES_DIR}"
+xcrun xcstringstool compile \
+    "${PROJECT_ROOT}/packaging/Localization/Localizable.xcstrings" \
+    --output-directory "${WIDGET_RESOURCES_DIR}"
 
 xattr -cr "${APP_DIR}"
 if [[ "${SIGNING_IDENTITY}" == "-" ]]; then
@@ -101,10 +103,10 @@ if [[ "${SIGNING_IDENTITY}" == "-" ]]; then
     codesign --force --sign - --entitlements "${PROJECT_ROOT}/packaging/ModelHubWidget.entitlements" "${WIDGET_APP_DIR}"
     codesign --force --sign - --entitlements "${PROJECT_ROOT}/packaging/ModelHub.entitlements" "${APP_DIR}"
 else
-    codesign --force --options runtime --timestamp --sign "${SIGNING_IDENTITY}" "${MACOS_DIR}/${ACP_NAME}"
-    codesign --force --options runtime --timestamp --sign "${SIGNING_IDENTITY}" \
+    codesign --force --options runtime --timestamp="${TIMESTAMP_URL}" --sign "${SIGNING_IDENTITY}" "${MACOS_DIR}/${ACP_NAME}"
+    codesign --force --options runtime --timestamp="${TIMESTAMP_URL}" --sign "${SIGNING_IDENTITY}" \
         --entitlements "${PROJECT_ROOT}/packaging/ModelHubWidget.entitlements" "${WIDGET_APP_DIR}"
-    codesign --force --options runtime --timestamp --sign "${SIGNING_IDENTITY}" \
+    codesign --force --options runtime --timestamp="${TIMESTAMP_URL}" --sign "${SIGNING_IDENTITY}" \
         --entitlements "${PROJECT_ROOT}/packaging/ModelHub.entitlements" "${APP_DIR}"
 fi
 codesign --verify --strict "${MACOS_DIR}/${ACP_NAME}"
@@ -113,11 +115,28 @@ codesign --verify --deep --strict "${APP_DIR}"
 
 remove_item "${DIST_APP_DIR}"
 ditto --noextattr "${APP_DIR}" "${DIST_APP_DIR}"
-xattr -cr "${DIST_APP_DIR}"
-codesign --verify --strict "${DIST_APP_DIR}/Contents/PlugIns/${WIDGET_NAME}.appex"
-codesign --verify --deep --strict "${DIST_APP_DIR}"
 remove_item "${ZIP_PATH}"
-ditto -c -k --norsrc --keepParent "${DIST_APP_DIR}" "${ZIP_PATH}"
+# Package from the verified staging bundle. Desktop/FileProvider may attach
+# Finder metadata to dist/ModelHub.app immediately after it is copied, while
+# the staging bundle remains isolated from that host-filesystem race.
+ditto -c -k --norsrc --keepParent "${APP_DIR}" "${ZIP_PATH}"
+mkdir -p "${ZIP_VERIFY_ROOT}"
+ditto -x -k "${ZIP_PATH}" "${ZIP_VERIFY_ROOT}"
+codesign --verify --deep --strict "${ZIP_VERIFY_ROOT}/${APP_NAME}.app"
+
+# Keep the convenient unpacked bundle as clean as the hosting filesystem
+# allows, but make the already verified ZIP the authoritative deliverable.
+for attempt in 1 2 3; do
+    xattr -cr "${DIST_APP_DIR}"
+    if codesign --verify --deep --strict "${DIST_APP_DIR}" 2>/dev/null; then
+        break
+    fi
+    if [[ "${attempt}" == "3" ]]; then
+        print -u2 "warning: FileProvider reattached metadata to ${DIST_APP_DIR}; use the verified ZIP"
+    else
+        sleep 0.1
+    fi
+done
 
 echo "${DIST_APP_DIR}"
 echo "${ZIP_PATH}"

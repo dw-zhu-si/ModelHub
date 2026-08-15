@@ -5,10 +5,15 @@ SCRIPT_DIR=${0:A:h}
 PROJECT_ROOT=${SCRIPT_DIR:h}
 APP_PATH=${MODELHUB_DMG_APP_PATH:-${PROJECT_ROOT}/dist/ModelHub.app}
 APP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${PROJECT_ROOT}/packaging/Info.plist")
+APP_ZIP=${PROJECT_ROOT}/dist/ModelHub-${APP_VERSION}-macos-universal.zip
 DMG_PATH=${PROJECT_ROOT}/dist/ModelHub-${APP_VERSION}-macos-universal.dmg
 SHA256_PATH=${DMG_PATH}.sha256
 SIGNING_IDENTITY=${MODELHUB_SIGNING_IDENTITY:-}
+TIMESTAMP_URL=${MODELHUB_TIMESTAMP_URL:-http://timestamp.apple.com/ts01}
 NOTARY_PROFILE=${MODELHUB_NOTARY_PROFILE:-}
+NOTARY_KEY=${MODELHUB_NOTARY_KEY:-}
+NOTARY_KEY_ID=${MODELHUB_NOTARY_KEY_ID:-}
+NOTARY_ISSUER=${MODELHUB_NOTARY_ISSUER:-}
 STAGING_ROOT=$(mktemp -d /private/tmp/modelhub-dmg.XXXXXX)
 VOLUME_ROOT=${STAGING_ROOT}/volume
 NOTARY_RESULT=${STAGING_ROOT}/notary-result.json
@@ -39,9 +44,18 @@ if [[ -z "${SIGNING_IDENTITY}" ]]; then
     echo "必须通过 MODELHUB_SIGNING_IDENTITY 指定 Developer ID Application 身份" >&2
     exit 2
 fi
-if [[ -z "${NOTARY_PROFILE}" ]]; then
-    echo "必须通过 MODELHUB_NOTARY_PROFILE 指定已存在的 notarytool Keychain profile" >&2
+if [[ -z "${NOTARY_PROFILE}" && ( -z "${NOTARY_KEY}" || -z "${NOTARY_KEY_ID}" || -z "${NOTARY_ISSUER}" ) ]]; then
+    echo "必须提供 MODELHUB_NOTARY_PROFILE，或完整的 MODELHUB_NOTARY_KEY / MODELHUB_NOTARY_KEY_ID / MODELHUB_NOTARY_ISSUER" >&2
     exit 2
+fi
+if [[ -n "${NOTARY_KEY}" && ! -f "${NOTARY_KEY}" ]]; then
+    echo "指定的 App Store Connect API 私钥不存在" >&2
+    exit 2
+fi
+if [[ -z "${MODELHUB_DMG_APP_PATH:-}" && -f "${APP_ZIP}" ]]; then
+    /bin/mkdir -p "${STAGING_ROOT}/source"
+    /usr/bin/ditto -x -k "${APP_ZIP}" "${STAGING_ROOT}/source"
+    APP_PATH=${STAGING_ROOT}/source/ModelHub.app
 fi
 if [[ ! -d "${APP_PATH}" ]]; then
     echo "缺少待打包 App：${APP_PATH}" >&2
@@ -70,18 +84,36 @@ remove_item "${SHA256_PATH}"
     -ov \
     "${DMG_PATH}"
 
-/usr/bin/codesign --force --timestamp --sign "${SIGNING_IDENTITY}" "${DMG_PATH}"
+/usr/bin/codesign --force --timestamp="${TIMESTAMP_URL}" --sign "${SIGNING_IDENTITY}" "${DMG_PATH}"
 /usr/bin/codesign --verify --verbose=2 "${DMG_PATH}"
-/usr/bin/xcrun notarytool submit "${DMG_PATH}" \
-    --keychain-profile "${NOTARY_PROFILE}" \
-    --wait \
-    --output-format json > "${NOTARY_RESULT}"
+if [[ -n "${NOTARY_PROFILE}" ]]; then
+    /usr/bin/xcrun notarytool submit "${DMG_PATH}" \
+        --keychain-profile "${NOTARY_PROFILE}" \
+        --no-s3-acceleration \
+        --wait \
+        --output-format json > "${NOTARY_RESULT}"
+else
+    /usr/bin/xcrun notarytool submit "${DMG_PATH}" \
+        --key "${NOTARY_KEY}" \
+        --key-id "${NOTARY_KEY_ID}" \
+        --issuer "${NOTARY_ISSUER}" \
+        --no-s3-acceleration \
+        --wait \
+        --output-format json > "${NOTARY_RESULT}"
+fi
 
 NOTARY_STATUS=$(/usr/bin/jq -r '.status' "${NOTARY_RESULT}")
 NOTARY_ID=$(/usr/bin/jq -r '.id' "${NOTARY_RESULT}")
 if [[ "${NOTARY_STATUS}" != "Accepted" ]]; then
     echo "DMG 公证失败：${NOTARY_STATUS}（${NOTARY_ID}）" >&2
-    /usr/bin/xcrun notarytool log "${NOTARY_ID}" --keychain-profile "${NOTARY_PROFILE}" >&2 || true
+    if [[ -n "${NOTARY_PROFILE}" ]]; then
+        /usr/bin/xcrun notarytool log "${NOTARY_ID}" --keychain-profile "${NOTARY_PROFILE}" >&2 || true
+    else
+        /usr/bin/xcrun notarytool log "${NOTARY_ID}" \
+            --key "${NOTARY_KEY}" \
+            --key-id "${NOTARY_KEY_ID}" \
+            --issuer "${NOTARY_ISSUER}" >&2 || true
+    fi
     exit 1
 fi
 

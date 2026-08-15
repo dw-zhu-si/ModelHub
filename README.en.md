@@ -45,7 +45,7 @@ Clients call `http://127.0.0.1:11435/v1`. ModelHub resolves aliases, chooses a t
 
 ### Testing is separate from normal traffic
 
-Normal external calls do not refresh provider catalogs or re-test models. The provider editor accepts an exact catalog URL, fetches it only on demand, then lets the user search, select, preview, and deduplicate models before merging them. It can also import UTF-8, UTF-16, or Excel separator-declared CSV files and preview models, costs, and user-supplied exact endpoints before merging. Existing providers can hot-update models directly from the detail view without restarting the local service. A saved exact catalog takes priority; otherwise ModelHub may use only a complete provider-owned catalog whose official host is strictly matched by the built-in verified registry. Catalog entries are merged incrementally, manually maintained models and existing health records are preserved, and every newly discovered model—including deployment-reference entries—stays quarantined until a real provider verification succeeds. ModelHub never invents or appends `/v1/models` to a Base URL. Only explicit user actions access a catalog endpoint; failures leave the saved list usable. Chat tests can make a real provider request, while media and provider-specific action models are not incorrectly sent through the chat endpoint.
+Normal external calls do not refresh provider catalogs or re-test models. The provider editor accepts an exact catalog URL and fetches it only on demand. Fetching follows bounded same-origin pagination, preserves the exact provider model ID, and imports only machine-readable prices and capability constraints such as modalities, image sizes and aspect ratios, video resolutions and durations, and audio formats and sample rates. Missing facts are never guessed. Users can search, select, preview, and deduplicate before merging, or import UTF-8, UTF-16, or Excel separator-declared CSV files. Existing providers can hot-update models without restarting the service. A saved exact catalog takes priority; otherwise ModelHub uses only a complete provider-owned catalog whose official host is strictly matched by the verified registry. Entries are merged incrementally, manual models and health records are preserved, and every newly discovered model stays quarantined until real verification succeeds. ModelHub never invents or appends `/v1/models` to a Base URL. Only explicit user actions access a catalog endpoint; failures leave the saved list usable.
 
 ### Native macOS workflow
 
@@ -57,7 +57,7 @@ ModelHub uses a native menu-bar extra and never shows a Dock icon. A clean insta
 
 - Unified Protocol Chat Completions: `POST /v1/chat/completions`;
 - Unified Protocol Responses: `POST /v1/responses`, including tools, multimodal fields, and incremental SSE;
-- model, provider, health, and usage catalogs: `/v1/models`, `/v1/models/available`, `/v1/providers`, `/v1/analytics`;
+- model, capability, provider, health, and usage catalogs: `/v1/models`, `/v1/models/available`, `/v1/models/{id}/capabilities`, `/v1/providers`, `/v1/analytics`;
 - native image, video, task, speech, transcription, embedding, and reranking endpoints;
 - restricted provider actions through `POST /v1/native`;
 - read-only local MCP, A2A, and ACP stdio surfaces with a separate Agent token.
@@ -78,6 +78,12 @@ See the complete [OpenAPI contract](openapi/modelhub-openapi.yaml).
 ### Health and quarantine
 
 Every model health record includes its last check time, latency, HTTP status, and a readable reason. The UI distinguishes “available”, “pending verification · quarantined”, “unavailable”, and “needs configuration/processing”; an empty health record is never treated as usable.
+
+Bulk checks first select a normal text model as a canary for each provider. Timeouts, DNS failures, dropped connections, and TLS handshake failures receive one bounded retry. If the retried canary still shows a provider-wide transport failure, the remaining probes for that provider are paused and the last explicitly available records are preserved. Certificate validation is never disabled, while model-specific HTTP, permission, quota, and protocol failures still update health normally.
+
+Each provider view retains recent structured health activity: completed, available, failed, skipped, retry, preserved-available, transient-failure, circuit-breaker, and correlation-ID fields. History is capped at 50 entries and stores only counts and provider UUIDs—never API keys, URLs, request bodies, model output, or raw upstream errors. A user may explicitly withdraw a legacy quarantine caused by an identified transient URL error such as `NSURLErrorDomain -1200`; the recovery marker and its activity persist across app restarts, while later probe or configuration evidence takes precedence. Recovery moves the record to “pending verification · quarantined” without contacting the provider, incurring a charge, or restoring routing.
+
+When pending verification came from a proxy or TLS failure, **Proxy Subscriptions** now presents the nodes actually loaded from each subscription as selectable cards, with node search and user-triggered latency checks for one node or all visible nodes. Latency checks use `https://www.gstatic.com/generate_204`, run at no more than six concurrent requests, never call a model, and do not convert a failed speed test into model-health evidence. Bulk assignment can then be scoped by provider and health state. **Revalidate Pending via Proxy** opens the same workflow from a provider. Revalidation is limited to the selected pending or unavailable text models and repeats the potential small-charge disclosure before sending minimal requests. Image, video, music, speech, and other native/generative models are excluded from the batch and remain quarantined until individually confirmed.
 
 | State | External catalog | Normal routing | Explicit test |
 | --- | --- | --- | --- |
@@ -131,11 +137,14 @@ On a clean installation with no configured providers, the Overview screen offers
 - backups exclude Keychain and imports have preview and rollback protection;
 - `/v1/native` is host-bound and rejects hostnames and `..` path traversal;
 - MCP, A2A, and ACP use a separate Agent token and reject non-loopback Origins;
+- upstream networking uses dedicated direct sessions and does not inherit the macOS system proxy; use a manual HTTP/SOCKS5 endpoint or add a Clash/Mihomo-compatible source under **Proxy Subscriptions**, then assign nodes to exact provider-and-model pairs while catalog and pricing sync stay direct;
+- subscription URLs live only in macOS Keychain; configuration and backups retain only the source host, display metadata, and model assignments. Downloads require HTTPS, stream through a 4 MiB hard limit, and accept Mihomo YAML, URI-list, and Base64 URI-list formats. HTML login pages and JSON error documents are rejected. Node discovery reaches an explicit success or failure state, retains the last successful nodes on failure, and never persists the subscription body. Runtime profiles/configuration use mode 0600 before being deleted on stop;
+- ModelHub neither bundles nor downloads a proxy core, and it does not alter Clash Verge or the system proxy. Subscription nodes require a user-installed Clash Verge/Mihomo executable; controller and node listeners bind only to `127.0.0.1:11453–11469`;
 - ModelHub does not replace a provider's own access, billing, content, or retention policies.
 
 ## Install
 
-Download the notarized [v1.9.1 build 33 release](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.1-build33), open `ModelHub-1.9.1-macos-universal.dmg`, and drag `ModelHub.app` to Applications. The DMG and the app are Developer ID signed and passed Apple notarization, ticket stapling, image integrity, and Gatekeeper checks. A Universal ZIP is also available in the same release.
+Download the notarized [v1.9.3 build 63 release](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.3-build63), open `ModelHub-1.9.3-macos-universal.dmg`, and drag `ModelHub.app` to Applications. The DMG and the app are Developer ID signed and passed Apple notarization, ticket stapling, image integrity, and Gatekeeper checks. A Universal ZIP is also available in the same release.
 
 ### Requirements
 
@@ -160,7 +169,8 @@ shasum -a 256 -c ModelHub-1.9.1-SHA256.txt
 2. If you need an online check, run a model, provider, or all-model test and confirm possible upstream charges.
 3. Create a stable alias such as `smart` in **Model Routes**, add targets, and select a strategy.
 4. Copy the local endpoint and gateway token from **Service Settings**.
-5. Set your client's Base URL to `http://127.0.0.1:11435/v1` and use either the alias or an available model ID.
+5. If needed, add an HTTPS source under **Proxy Subscriptions**, refresh its nodes, and assign a node to each exact model. The manual HTTP/SOCKS5 endpoint remains available under **Service Settings → Model-specific proxy**. Unassigned models, catalog fetches, and official pricing sync remain direct.
+6. Set your client's Base URL to `http://127.0.0.1:11435/v1` and use either the alias or an available model ID.
 
 ### Chat Completions
 

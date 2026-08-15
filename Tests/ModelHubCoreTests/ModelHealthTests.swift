@@ -3,6 +3,190 @@ import XCTest
 @testable import ModelHubCore
 
 final class ModelHealthTests: XCTestCase {
+    func testMiniMaxExactNativeModelIDsMapToDedicatedProtocols() {
+        let provider = ProviderConfig(
+            name: "MiniMax 中国站",
+            kind: .minimaxChina,
+            baseURL: "https://api.minimaxi.com/v1"
+        )
+
+        XCTAssertEqual(ModelProbePolicy.nativeProtocol(provider: provider, model: "MiniMax-Hailuo-2.3"), .videoGeneration)
+        XCTAssertEqual(ModelProbePolicy.nativeProtocol(provider: provider, model: "music-3.0"), .musicGeneration)
+        XCTAssertEqual(
+            ModelProbePolicy.nativeProtocol(provider: provider, model: "MiniMax Music 3.0"),
+            .musicGeneration
+        )
+        XCTAssertEqual(ModelProbePolicy.nativeProtocol(provider: provider, model: "image-01-live"), .imageGeneration)
+        XCTAssertEqual(ModelProbePolicy.nativeProtocol(provider: provider, model: "speech-2.8-hd"), .speech)
+        XCTAssertEqual(
+            ModelProbePolicy.nativeProtocol(provider: provider, model: "minimax-hailuo-2.3"),
+            .providerNative
+        )
+        XCTAssertEqual(
+            ModelProbePolicy.disposition(
+                provider: provider,
+                model: "minimax-hailuo-2.3",
+                hasAPIKey: true
+            ),
+            .readyForNativeProtocol(.providerNative)
+        )
+        XCTAssertTrue(provider.kind.isOfficialProvider(for: "MiniMax-Hailuo-2.3"))
+        XCTAssertTrue(provider.kind.isOfficialProvider(for: "music-3.0"))
+    }
+
+    func testMiniMaxBusinessStatusOverridesHTTP200() {
+        let provider = ProviderConfig(
+            name: "MiniMax 中国站",
+            kind: .minimaxChina,
+            baseURL: "https://api.minimaxi.com/v1"
+        )
+        let authenticationFailure = ProviderResponse(
+            statusCode: 200,
+            headers: [:],
+            body: Data(#"{"base_resp":{"status_code":1004,"status_msg":"invalid api key"}}"#.utf8)
+        )
+        let rateLimited = ProviderResponse(
+            statusCode: 200,
+            headers: [:],
+            body: Data(#"{"base_resp":{"status_code":1002,"status_msg":"rate limit"}}"#.utf8)
+        )
+
+        let auth = ModelProbePolicy.nativeResponseAssessment(
+            authenticationFailure,
+            provider: provider,
+            operation: .imageGeneration
+        )
+        XCTAssertFalse(auth.isAccepted)
+        XCTAssertEqual(auth.availability, .configurationRequired)
+        XCTAssertEqual(auth.gatewayStatusCode, 401)
+
+        let limited = ModelProbePolicy.nativeResponseAssessment(
+            rateLimited,
+            provider: provider,
+            operation: .musicGeneration
+        )
+        XCTAssertFalse(limited.isAccepted)
+        XCTAssertEqual(limited.availability, .unavailable)
+        XCTAssertEqual(limited.gatewayStatusCode, 429)
+    }
+
+    func testMiniMaxChatBusinessStatusIsNotMistakenForTransportSuccess() {
+        let provider = ProviderConfig(
+            name: "MiniMax 中国站",
+            kind: .minimaxChina,
+            baseURL: "https://api.minimaxi.com/v1"
+        )
+        let response = ProviderResponse(
+            statusCode: 200,
+            headers: [:],
+            body: Data(#"{"choices":[],"base_resp":{"status_code":2049}}"#.utf8)
+        )
+
+        let assessment = ModelProbePolicy.providerResponseAssessment(
+            response,
+            provider: provider
+        )
+        XCTAssertFalse(assessment.isAccepted)
+        XCTAssertEqual(assessment.availability, .configurationRequired)
+        XCTAssertEqual(assessment.gatewayStatusCode, 401)
+    }
+
+    func testDocumentedQianwenImage404IsConfigurationIssueNotUnsupportedModel() {
+        let provider = ProviderConfig(
+            name: "千问AI平台（按量付费）",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+        let response = ProviderResponse(
+            statusCode: 404,
+            headers: [:],
+            body: Data()
+        )
+
+        let assessment = ModelProbePolicy.nativeResponseAssessment(
+            response,
+            provider: provider,
+            operation: .imageGeneration,
+            model: "qwen-image-3.0-pro"
+        )
+        let record = ModelHealthRecord(
+            providerID: provider.id,
+            model: "qwen-image-3.0-pro",
+            status: assessment.availability,
+            statusCode: assessment.gatewayStatusCode,
+            detail: assessment.detail
+        )
+
+        XCTAssertFalse(assessment.isAccepted)
+        XCTAssertEqual(assessment.availability, .configurationRequired)
+        XCTAssertEqual(assessment.gatewayStatusCode, 404)
+        XCTAssertTrue(assessment.detail.contains("官方能力目录确认支持"))
+        XCTAssertEqual(record.quarantineCause, .modelAccessNotConfigured)
+    }
+
+    func testMiniMaxSpeechProbeUsesOfficialBuiltInVoice() throws {
+        let payload = try XCTUnwrap(
+            ModelProbePolicy.nativeProbePayload(
+                for: .speech,
+                model: "speech-2.8-hd"
+            )
+        )
+        let body = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: payload.body) as? [String: Any]
+        )
+        XCTAssertEqual(body["voice"] as? String, "male-qn-qingse")
+    }
+
+    func testMiniMaxGenerationBusinessStatesAreDistinguished() {
+        let provider = ProviderConfig(
+            name: "MiniMax 国际站",
+            kind: .minimax,
+            baseURL: "https://api.minimax.io/v1"
+        )
+        let videoPending = ProviderResponse(
+            statusCode: 200,
+            headers: [:],
+            body: Data(#"{"task_id":"task_1","status":"Queueing","base_resp":{"status_code":0}}"#.utf8)
+        )
+        let videoFailed = ProviderResponse(
+            statusCode: 200,
+            headers: [:],
+            body: Data(#"{"task_id":"task_1","status":"Fail","base_resp":{"status_code":0}}"#.utf8)
+        )
+        let musicComplete = ProviderResponse(
+            statusCode: 200,
+            headers: [:],
+            body: Data(#"{"data":{"status":2,"audio":"https://example.com/audio.mp3"},"base_resp":{"status_code":0}}"#.utf8)
+        )
+
+        let pending = ModelProbePolicy.nativeResponseAssessment(
+            videoPending,
+            provider: provider,
+            operation: .videoTask
+        )
+        XCTAssertTrue(pending.isAccepted)
+        XCTAssertTrue(pending.isPending)
+        XCTAssertEqual(pending.availability, .available)
+
+        let failed = ModelProbePolicy.nativeResponseAssessment(
+            videoFailed,
+            provider: provider,
+            operation: .videoTask
+        )
+        XCTAssertFalse(failed.isAccepted)
+        XCTAssertEqual(failed.availability, .unavailable)
+        XCTAssertEqual(failed.gatewayStatusCode, 502)
+
+        let complete = ModelProbePolicy.nativeResponseAssessment(
+            musicComplete,
+            provider: provider,
+            operation: .musicGeneration
+        )
+        XCTAssertTrue(complete.isAccepted)
+        XCTAssertFalse(complete.isPending)
+        XCTAssertEqual(complete.availability, .available)
+    }
+
     func testLegacyBaseURLMigrationRecordsCompleteEndpointsOnce() {
         let chat = ProviderConfig(
             name: "兼容网关",
@@ -132,10 +316,10 @@ final class ModelHealthTests: XCTestCase {
     }
 
     func testBailianEditionsAreDistinctAndValidateOfficialEndpointFamilies() throws {
-        XCTAssertEqual(ProviderKind.qwen.displayName, "阿里云百炼（按量版）")
-        XCTAssertEqual(ProviderKind.qwenPersonal.displayName, "阿里云百炼个人版")
-        XCTAssertEqual(ProviderKind.qwenBusiness.displayName, "阿里云百炼企业版（业务空间/按量付费）")
-        XCTAssertEqual(ProviderKind.qwenEnterprise.displayName, "阿里云百炼 Token Plan 团队版")
+        XCTAssertEqual(ProviderKind.qwen.displayName, "千问AI平台（按量付费）")
+        XCTAssertEqual(ProviderKind.qwenPersonal.displayName, "千问AI平台 Token Plan 个人版")
+        XCTAssertEqual(ProviderKind.qwenBusiness.displayName, "千问AI平台（业务空间/按量付费）")
+        XCTAssertEqual(ProviderKind.qwenEnterprise.displayName, "千问AI平台 Token Plan 团队版")
         XCTAssertEqual(
             ProviderKind.qwenPersonal.recommendedBaseURL,
             "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
@@ -203,6 +387,61 @@ final class ModelHealthTests: XCTestCase {
             models: ["qwen-plus"]
         )
         XCTAssertNil(BailianEndpointPolicy.validationMessage(for: businessPayAsYouGo))
+    }
+
+    func testQianwenProviderMigrationRenamesLegacyProvidersWithoutChangingBillingFamily() {
+        let payAsYouGo = ProviderConfig(
+            name: "阿里云百炼个人按量版",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+        let business = ProviderConfig(
+            name: "阿里云百炼企业版(团队版)",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+
+        let migratedPayAsYouGo = QianwenProviderMigration.migratedProvider(payAsYouGo)
+        let migratedBusiness = QianwenProviderMigration.migratedProvider(business)
+
+        XCTAssertEqual(migratedPayAsYouGo?.kind, .qwen)
+        XCTAssertEqual(migratedPayAsYouGo?.name, "千问AI平台（按量付费）")
+        XCTAssertEqual(migratedBusiness?.kind, .qwenBusiness)
+        XCTAssertEqual(migratedBusiness?.name, "千问AI平台（业务空间/按量付费）")
+    }
+
+    func testQuarantineCauseUsesUpstreamBusinessCodeBeforeProxyHTTPStatus() {
+        let providerID = UUID()
+        XCTAssertEqual(
+            ModelHealthRecord(
+                providerID: providerID,
+                model: "removed-model",
+                status: .unavailable,
+                statusCode: 429,
+                detail: "HTTP 429 · code=model_not_found · message=model removed"
+            ).quarantineCause,
+            .endpointOrModelNotFound
+        )
+        XCTAssertEqual(
+            ModelHealthRecord(
+                providerID: providerID,
+                model: "restricted-model",
+                status: .unavailable,
+                statusCode: 429,
+                detail: "HTTP 429 · code=access_denied · message=permission denied"
+            ).quarantineCause,
+            .insufficientPermission
+        )
+        XCTAssertEqual(
+            ModelHealthRecord(
+                providerID: providerID,
+                model: "busy-model",
+                status: .unavailable,
+                statusCode: 429,
+                detail: "HTTP 429 · code=get_channel_failed · message=no channel"
+            ).quarantineCause,
+            .upstreamFailure
+        )
     }
 
     func testBailianTokenPlanRejectsMismatchedExplicitChatEndpoint() {
@@ -667,6 +906,25 @@ final class ModelHealthTests: XCTestCase {
         )
     }
 
+    func testQianwenHappyhorseVariantsAreVideoModelsInsteadOfChatModels() {
+        let provider = ProviderConfig(
+            name: "千问AI平台（业务空间/按量付费）",
+            kind: .qwenBusiness,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+
+        for model in [
+            "happyhorse-1.1-t2v",
+            "happyhorse-1.1-i2v",
+            "happyhorse-1.1-r2v"
+        ] {
+            XCTAssertEqual(
+                ModelProbePolicy.nativeProtocol(provider: provider, model: model),
+                .videoGeneration
+            )
+        }
+    }
+
     func testVendorActionModelsUseProviderNativePassthrough() {
         let provider = ProviderConfig(
             name: "云雾 API",
@@ -815,6 +1073,53 @@ final class ModelHealthTests: XCTestCase {
         XCTAssertTrue(normalized.allSatisfy { $0.detail.contains("已隔离") })
     }
 
+    func testMigrationReclassifiesAccessDeniedBusinessCodeAsConfigurationRequired() throws {
+        let provider = ProviderConfig(
+            name: "千问AI平台（按量付费）",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            models: ["qwen3.5-9b"]
+        )
+        let original = ModelHealthRecord(
+            providerID: provider.id,
+            model: "qwen3.5-9b",
+            status: .unavailable,
+            statusCode: 400,
+            detail: "HTTP 400 · code=access_denied · message=Access denied"
+        )
+
+        let normalized = ModelHealthMigration.normalize(
+            records: [original],
+            providers: [provider]
+        )
+
+        XCTAssertEqual(try XCTUnwrap(normalized.first).status, .configurationRequired)
+    }
+
+    func testMigrationPreservesSpecificHTTP403ConfigurationReason() throws {
+        let provider = ProviderConfig(
+            name: "受限供应商",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.com/v1",
+            models: ["restricted-model"]
+        )
+        let original = ModelHealthRecord(
+            providerID: provider.id,
+            model: "restricted-model",
+            status: .configurationRequired,
+            latencyMilliseconds: 321,
+            statusCode: 403,
+            detail: "HTTP 403 · code=access_denied · message=permission denied"
+        )
+
+        let normalized = ModelHealthMigration.normalize(
+            records: [original],
+            providers: [provider]
+        )
+
+        XCTAssertEqual(try XCTUnwrap(normalized.first), original)
+    }
+
     func testMigrationPrunesRecordsForRemovedProvidersAndModels() {
         let provider = ProviderConfig(
             name: "测试供应商",
@@ -857,6 +1162,27 @@ final class ModelHealthTests: XCTestCase {
         XCTAssertEqual(
             ModelProbeRetryPolicy.decision(statusCode: 400, headers: [:], attempt: 1),
             .stop
+        )
+    }
+
+    func testRetryPolicyRetriesTransientTLSHandshakeFailureWithoutRetryingUntrustedCertificate() {
+        XCTAssertTrue(
+            ModelProbeRetryPolicy.shouldRetryNetworkError(
+                URLError(.secureConnectionFailed),
+                attempt: 1
+            )
+        )
+        XCTAssertFalse(
+            ModelProbeRetryPolicy.shouldRetryNetworkError(
+                URLError(.secureConnectionFailed),
+                attempt: ModelProbeRetryPolicy.maximumAttempts
+            )
+        )
+        XCTAssertFalse(
+            ModelProbeRetryPolicy.shouldRetryNetworkError(
+                URLError(.serverCertificateUntrusted),
+                attempt: 1
+            )
         )
     }
 
@@ -983,5 +1309,420 @@ final class ModelHealthTests: XCTestCase {
                 statusCode: 200
             ).quarantineCause
         )
+    }
+
+    func testTransientHealthRecoveryDemotesExplicitTransportFailureToUnknown() throws {
+        let providerID = UUID()
+        let recoveredAt = Date(timeIntervalSince1970: 1_770_000_000)
+        let record = ModelHealthRecord(
+            providerID: providerID,
+            model: "stable-model",
+            status: .unavailable,
+            checkedAt: recoveredAt.addingTimeInterval(-60),
+            latencyMilliseconds: 3_000,
+            detail: "网络错误（-1200）"
+        )
+
+        let result = ModelHealthRecoveryPolicy.recovering(
+            records: [record],
+            providerID: providerID,
+            at: recoveredAt
+        )
+        let recovered = try XCTUnwrap(result.records.first)
+
+        XCTAssertEqual(result.recoveredCount, 1)
+        XCTAssertEqual(recovered.status, .unknown)
+        XCTAssertEqual(recovered.checkedAt, recoveredAt)
+        XCTAssertNil(recovered.latencyMilliseconds)
+        XCTAssertNil(recovered.statusCode)
+        XCTAssertTrue(recovered.detail.contains("-1200"))
+        XCTAssertTrue(recovered.status.isQuarantined)
+    }
+
+    func testTransientHealthRecoveryRejectsBusinessAndAmbiguousNetworkFailures() {
+        let providerID = UUID()
+        let records = [
+            ModelHealthRecord(
+                providerID: providerID,
+                model: "permission-denied",
+                status: .unavailable,
+                statusCode: 403,
+                detail: "HTTP 403"
+            ),
+            ModelHealthRecord(
+                providerID: providerID,
+                model: "ambiguous-network",
+                status: .unavailable,
+                detail: "网络连接失败"
+            ),
+            ModelHealthRecord(
+                providerID: providerID,
+                model: "still-available",
+                status: .available,
+                detail: "网络错误（-1200）"
+            )
+        ]
+
+        let result = ModelHealthRecoveryPolicy.recovering(records: records)
+
+        XCTAssertEqual(result.recoveredCount, 0)
+        XCTAssertEqual(result.records, records)
+    }
+
+    func testTransientHealthRecoveryScopesProviderAndPreservesRecordOrder() {
+        let firstProvider = UUID()
+        let secondProvider = UUID()
+        let records = [
+            ModelHealthRecord(
+                providerID: firstProvider,
+                model: "first",
+                status: .unavailable,
+                detail: "网络错误（-1005）"
+            ),
+            ModelHealthRecord(
+                providerID: secondProvider,
+                model: "second",
+                status: .unavailable,
+                detail: "网络错误（-1200）"
+            )
+        ]
+
+        let result = ModelHealthRecoveryPolicy.recovering(
+            records: records,
+            providerID: firstProvider
+        )
+
+        XCTAssertEqual(result.recoveredCount, 1)
+        XCTAssertEqual(result.records.map(\.model), ["first", "second"])
+        XCTAssertEqual(result.records[0].status, .unknown)
+        XCTAssertEqual(result.records[1], records[1])
+    }
+
+    func testTransientHealthRecoveryRecognizesStandardNSURLErrorDescription() {
+        let record = ModelHealthRecord(
+            providerID: UUID(),
+            model: "tls-model",
+            status: .unavailable,
+            detail: "Error Domain=NSURLErrorDomain Code=-1200"
+        )
+
+        XCTAssertEqual(ModelHealthRecoveryPolicy.recoverableErrorCode(in: record), -1200)
+    }
+
+    func testRecoveredPendingVerificationSurvivesRestartMigration() throws {
+        let provider = ProviderConfig(
+            name: "测试供应商",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.com/v1",
+            models: ["chat-model", "image-model"]
+        )
+        let recoveredAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let recovered = ModelHealthRecoveryPolicy.recovering(
+            records: [
+                ModelHealthRecord(
+                    providerID: provider.id,
+                    model: "chat-model",
+                    status: .unavailable,
+                    detail: "网络错误（-1200）"
+                ),
+                ModelHealthRecord(
+                    providerID: provider.id,
+                    model: "image-model",
+                    status: .unavailable,
+                    detail: "网络错误（-1005）"
+                )
+            ],
+            providerID: provider.id,
+            at: recoveredAt
+        )
+
+        let normalized = ModelHealthMigration.normalize(
+            records: recovered.records,
+            providers: [provider]
+        )
+
+        XCTAssertEqual(normalized.map(\.status), [.unknown, .unknown])
+        XCTAssertTrue(normalized.allSatisfy(
+            ModelHealthRecoveryPolicy.isRecoveredPendingVerification
+        ))
+    }
+
+    func testDeferredNativePendingVerificationSurvivesRestartMigration() throws {
+        let provider = ProviderConfig(
+            name: "测试供应商",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.com/v1",
+            models: ["image-model"]
+        )
+        let pending = ModelHealthRecord(
+            providerID: provider.id,
+            model: "image-model",
+            status: .unknown,
+            detail: "图像生成尚未通过真实协议验证，已隔离（未自动发起可能计费的请求）"
+        )
+
+        let normalized = ModelHealthMigration.normalize(
+            records: [pending],
+            providers: [provider]
+        )
+
+        XCTAssertEqual(normalized, [pending])
+        XCTAssertTrue(
+            ModelHealthRecoveryPolicy.isDeferredNativePendingVerification(pending)
+        )
+    }
+
+    func testRecordedRecoveryRepairsEarlyBuildRestartWithoutBroadeningScope() {
+        let providerID = UUID()
+        let otherProviderID = UUID()
+        let recoveredAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let degradedRecords = [
+            ModelHealthRecord(
+                providerID: providerID,
+                model: "recovered-a",
+                status: .unavailable,
+                checkedAt: recoveredAt,
+                detail: "尚未完成在线验证，已隔离"
+            ),
+            ModelHealthRecord(
+                providerID: providerID,
+                model: "not-in-count",
+                status: .unavailable,
+                checkedAt: recoveredAt,
+                detail: "尚未完成在线验证，已隔离"
+            ),
+            ModelHealthRecord(
+                providerID: otherProviderID,
+                model: "wrong-provider",
+                status: .unavailable,
+                checkedAt: recoveredAt,
+                detail: "尚未完成在线验证，已隔离"
+            )
+        ]
+        let activity = ModelHealthActivity(
+            kind: .transientRecovery,
+            startedAt: recoveredAt,
+            completedAt: recoveredAt,
+            providerID: providerID,
+            total: 1,
+            completed: 1,
+            recoveredToUnknown: 1
+        )
+
+        let restored = ModelHealthRecoveryPolicy.restoringRecordedRecoveries(
+            records: degradedRecords,
+            activities: [activity]
+        )
+
+        XCTAssertEqual(restored.map(\.status), [.unknown, .unavailable, .unavailable])
+        XCTAssertTrue(ModelHealthRecoveryPolicy.isRecoveredPendingVerification(restored[0]))
+    }
+
+    func testModelHealthActivityHistoryIsBoundedNewestFirstAndLegacyConfigDefaultsEmpty() throws {
+        let providerID = UUID()
+        let history = (0..<ModelHealthActivityStore.maximumCount).map { index in
+            ModelHealthActivity(
+                id: UUID(),
+                kind: .probe,
+                startedAt: Date(timeIntervalSince1970: TimeInterval(index)),
+                completedAt: Date(timeIntervalSince1970: TimeInterval(index)),
+                providerID: providerID,
+                total: 1,
+                completed: 1,
+                available: 1
+            )
+        }
+        let newest = ModelHealthActivity(
+            id: UUID(),
+            kind: .transientRecovery,
+            startedAt: Date(timeIntervalSince1970: 10_000),
+            completedAt: Date(timeIntervalSince1970: 10_001),
+            providerID: providerID,
+            total: 3,
+            completed: 3,
+            recoveredToUnknown: 3
+        )
+
+        let bounded = ModelHealthActivityStore.appending(newest, to: history)
+        let legacy = Data(#"{"providers":[],"routes":[],"server":{"port":11435}}"#.utf8)
+        let decoded = try JSONDecoder().decode(AppConfiguration.self, from: legacy)
+
+        XCTAssertEqual(bounded.count, ModelHealthActivityStore.maximumCount)
+        XCTAssertEqual(bounded.first?.id, newest.id)
+        XCTAssertFalse(bounded.contains { $0.id == history[0].id })
+        XCTAssertTrue(decoded.modelHealthActivities.isEmpty)
+    }
+
+    func testModelHealthActivityNormalizationSanitizesDecodedUntrustedValues() throws {
+        let providerIDs = (0..<40).map { _ in UUID().uuidString }
+        let raw: [String: Any] = [
+            "id": UUID().uuidString,
+            "kind": "probe",
+            "startedAt": 100.0,
+            "completedAt": 50.0,
+            "total": -1,
+            "completed": -2,
+            "available": -3,
+            "unavailable": -4,
+            "skipped": -5,
+            "preservedAvailable": -6,
+            "transientFailures": -7,
+            "retryAttempts": -8,
+            "circuitOpenedProviderIDs": providerIDs,
+            "circuitSkipped": -9,
+            "recoveredToUnknown": -10,
+            "cancelled": false,
+        ]
+        let data = try JSONSerialization.data(withJSONObject: raw)
+        let decoded = try JSONDecoder().decode(ModelHealthActivity.self, from: data)
+
+        let sanitized = try XCTUnwrap(ModelHealthActivityStore.normalized([decoded]).first)
+
+        XCTAssertEqual(sanitized.completedAt, sanitized.startedAt)
+        XCTAssertEqual(sanitized.total, 0)
+        XCTAssertEqual(sanitized.completed, 0)
+        XCTAssertEqual(sanitized.available, 0)
+        XCTAssertEqual(sanitized.unavailable, 0)
+        XCTAssertEqual(sanitized.skipped, 0)
+        XCTAssertEqual(sanitized.preservedAvailable, 0)
+        XCTAssertEqual(sanitized.transientFailures, 0)
+        XCTAssertEqual(sanitized.retryAttempts, 0)
+        XCTAssertEqual(sanitized.circuitOpenedProviderIDs.count, 32)
+        XCTAssertEqual(sanitized.circuitSkipped, 0)
+        XCTAssertEqual(sanitized.recoveredToUnknown, 0)
+    }
+
+    func testQianwenNonStreamingProbeDisablesHybridThinkingWithoutChangingThinkingOnlyModels() throws {
+        let provider = ProviderConfig(
+            name: "千问AI平台（按量付费）",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+
+        let hybridBody = try XCTUnwrap(
+            ModelProbePolicy.chatProbeBody(provider: provider, model: "qwen3-32b")
+        )
+        let hybridJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: hybridBody) as? [String: Any]
+        )
+        XCTAssertEqual(hybridJSON["enable_thinking"] as? Bool, false)
+
+        let thinkingOnlyBody = try XCTUnwrap(
+            ModelProbePolicy.chatProbeBody(
+                provider: provider,
+                model: "qwen3-next-80b-a3b-thinking"
+            )
+        )
+        let thinkingOnlyJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: thinkingOnlyBody) as? [String: Any]
+        )
+        XCTAssertNil(thinkingOnlyJSON["enable_thinking"])
+    }
+
+    func testGPT54ProProbeUsesProviderMinimumOutputTokenCount() throws {
+        let provider = ProviderConfig(
+            name: "云雾 API",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.invalid/v1"
+        )
+
+        let proBody = try XCTUnwrap(
+            ModelProbePolicy.chatProbeBody(provider: provider, model: "gpt-5.4-pro")
+        )
+        let datedProBody = try XCTUnwrap(
+            ModelProbePolicy.chatProbeBody(
+                provider: provider,
+                model: "gpt-5.4-pro-2026-03-05"
+            )
+        )
+        let regularBody = try XCTUnwrap(
+            ModelProbePolicy.chatProbeBody(provider: provider, model: "gpt-5.4")
+        )
+        let proJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: proBody) as? [String: Any]
+        )
+        let datedProJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: datedProBody) as? [String: Any]
+        )
+        let regularJSON = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: regularBody) as? [String: Any]
+        )
+
+        XCTAssertEqual(proJSON["max_tokens"] as? Int, 16)
+        XCTAssertEqual(datedProJSON["max_tokens"] as? Int, 16)
+        XCTAssertEqual(regularJSON["max_tokens"] as? Int, 1)
+    }
+
+    func testHTTP429WrappedParameterErrorIsNotRetriedOrReportedAsQuota() {
+        let provider = ProviderConfig(
+            name: "云雾 API",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.invalid/v1"
+        )
+        let response = ProviderResponse(
+            statusCode: 429,
+            headers: [:],
+            body: Data(
+                #"{"code":"integer_below_min_value","message":"Expected a value >= 16"}"#.utf8
+            )
+        )
+
+        let assessment = ModelProbePolicy.providerResponseAssessment(
+            response,
+            provider: provider
+        )
+        let record = ModelHealthRecord(
+            providerID: provider.id,
+            model: "gpt-5.4-pro",
+            status: assessment.availability,
+            statusCode: assessment.gatewayStatusCode,
+            detail: assessment.detail
+        )
+
+        XCTAssertEqual(assessment.availability, .unavailable)
+        XCTAssertEqual(assessment.gatewayStatusCode, 400)
+        XCTAssertEqual(record.quarantineCause, .invalidRequest)
+        XCTAssertEqual(
+            ModelProbeRetryPolicy.decision(
+                statusCode: assessment.gatewayStatusCode,
+                headers: response.headers,
+                attempt: 1
+            ),
+            .stop
+        )
+    }
+
+    func testBusinessAccessDeniedAtHTTP400RequiresConfigurationAction() {
+        let response = ProviderResponse(
+            statusCode: 400,
+            headers: [:],
+            body: Data(#"{"code":"access_denied","message":"Access denied"}"#.utf8)
+        )
+        let provider = ProviderConfig(
+            name: "千问AI平台（按量付费）",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+
+        XCTAssertEqual(
+            ModelProbePolicy.providerResponseAssessment(response, provider: provider).availability,
+            .configurationRequired
+        )
+    }
+
+    func testQianwenVisionEmbeddingProbeUsesMultimodalPayload() throws {
+        let payload = try XCTUnwrap(
+            ModelProbePolicy.nativeProbePayload(
+                for: .embeddings,
+                model: "qwen3-vl-embedding-2b"
+            )
+        )
+        let body = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: payload.body) as? [String: Any]
+        )
+        let input = try XCTUnwrap(body["input"] as? [String: Any])
+        let contents = try XCTUnwrap(input["contents"] as? [[String: Any]])
+
+        XCTAssertEqual(contents.first?["text"] as? String, "ModelHub connection test")
     }
 }

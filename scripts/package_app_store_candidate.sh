@@ -4,17 +4,24 @@ set -euo pipefail
 SCRIPT_DIR=${0:A:h}
 PROJECT_ROOT=${SCRIPT_DIR:h}
 SOURCE_APP=${PROJECT_ROOT}/dist/ModelHub.app
-CANDIDATE_APP=${PROJECT_ROOT}/dist/ModelHub-AppStore-Candidate.app
 APP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${PROJECT_ROOT}/packaging/Info.plist")
 PKG_PATH=${PROJECT_ROOT}/dist/ModelHub-${APP_VERSION}-AppStore.pkg
 APP_PROFILE=${MODELHUB_APPSTORE_APP_PROFILE:-}
 WIDGET_PROFILE=${MODELHUB_APPSTORE_WIDGET_PROFILE:-}
 APP_IDENTITY=${MODELHUB_APPSTORE_SIGNING_IDENTITY:-}
 INSTALLER_IDENTITY=${MODELHUB_APPSTORE_INSTALLER_IDENTITY:-}
+TIMESTAMP_URL=${MODELHUB_TIMESTAMP_URL:-http://timestamp.apple.com/ts01}
+STAGING_ROOT=$(mktemp -d /private/tmp/modelhub-app-store.XXXXXX)
+CANDIDATE_APP=${STAGING_ROOT}/ModelHub.app
 
 remove_item() {
     /usr/bin/swift -e 'import Foundation; let path = CommandLine.arguments[1]; if FileManager.default.fileExists(atPath: path) { try FileManager.default.removeItem(atPath: path) }' "$1"
 }
+
+cleanup() {
+    remove_item "${STAGING_ROOT}"
+}
+trap cleanup EXIT
 
 for value_name in APP_PROFILE WIDGET_PROFILE APP_IDENTITY INSTALLER_IDENTITY; do
     value=${(P)value_name}
@@ -44,13 +51,13 @@ if /usr/bin/xattr -lr "${CANDIDATE_APP}" | /usr/bin/grep -q 'com.apple.quarantin
     exit 2
 fi
 
-codesign --force --options runtime --timestamp --sign "${APP_IDENTITY}" \
+codesign --force --options runtime --timestamp="${TIMESTAMP_URL}" --sign "${APP_IDENTITY}" \
     --entitlements "${PROJECT_ROOT}/packaging/ModelHubACPAppStore.entitlements" \
     "${CANDIDATE_APP}/Contents/MacOS/ModelHubACP"
-codesign --force --options runtime --timestamp --sign "${APP_IDENTITY}" \
+codesign --force --options runtime --timestamp="${TIMESTAMP_URL}" --sign "${APP_IDENTITY}" \
     --entitlements "${PROJECT_ROOT}/packaging/ModelHubWidgetAppStore.entitlements" \
     "${CANDIDATE_APP}/Contents/PlugIns/ModelHubWidget.appex"
-codesign --force --options runtime --timestamp --sign "${APP_IDENTITY}" \
+codesign --force --options runtime --timestamp="${TIMESTAMP_URL}" --sign "${APP_IDENTITY}" \
     --entitlements "${PROJECT_ROOT}/packaging/ModelHubAppStore.entitlements" \
     "${CANDIDATE_APP}"
 codesign --verify --deep --strict "${CANDIDATE_APP}"

@@ -1,5 +1,70 @@
 import Foundation
 
+public enum ProviderNetworkSession {
+    public static func directConfiguration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        configuration.urlCache = nil
+        configuration.waitsForConnectivity = true
+        configuration.connectionProxyDictionary = [
+            "HTTPEnable": 0,
+            "HTTPSEnable": 0,
+            "SOCKSEnable": 0
+        ]
+        return configuration
+    }
+
+    public static func proxyConfiguration(
+        _ endpoint: ProviderProxyEndpoint
+    ) -> URLSessionConfiguration {
+        let configuration = directConfiguration()
+        switch endpoint.kind {
+        case .http:
+            configuration.connectionProxyDictionary = [
+                "HTTPEnable": 1,
+                "HTTPProxy": endpoint.host,
+                "HTTPPort": endpoint.port,
+                "HTTPSEnable": 1,
+                "HTTPSProxy": endpoint.host,
+                "HTTPSPort": endpoint.port,
+                "SOCKSEnable": 0
+            ]
+        case .socks5:
+            configuration.connectionProxyDictionary = [
+                "HTTPEnable": 0,
+                "HTTPSEnable": 0,
+                "SOCKSEnable": 1,
+                "SOCKSProxy": endpoint.host,
+                "SOCKSPort": endpoint.port
+            ]
+        }
+        return configuration
+    }
+}
+
+private actor ProviderProxySessionPool {
+    static let shared = ProviderProxySessionPool()
+    private var sessions: [ProviderProxyEndpoint: URLSession] = [:]
+    private var insertionOrder: [ProviderProxyEndpoint] = []
+    private let maximumSessionCount = 4
+
+    func session(for endpoint: ProviderProxyEndpoint) -> URLSession {
+        if let existing = sessions[endpoint] { return existing }
+        if sessions.count >= maximumSessionCount,
+           let oldest = insertionOrder.first
+        {
+            insertionOrder.removeFirst()
+            sessions.removeValue(forKey: oldest)?.invalidateAndCancel()
+        }
+        let created = URLSession(
+            configuration: ProviderNetworkSession.proxyConfiguration(endpoint)
+        )
+        sessions[endpoint] = created
+        insertionOrder.append(endpoint)
+        return created
+    }
+}
+
 public struct ProviderResponse: Sendable {
     public let statusCode: Int
     public let headers: [String: String]
@@ -84,15 +149,18 @@ public struct ProviderClient: Sendable {
     let session: URLSession
     let catalogRecoverySessionFactory: (@Sendable () -> URLSession)?
 
-    public init(session: URLSession = .shared) {
+    public init() {
+        self.session = URLSession(configuration: ProviderNetworkSession.directConfiguration())
+        self.catalogRecoverySessionFactory = {
+            URLSession(configuration: ProviderNetworkSession.directConfiguration())
+        }
+    }
+
+    public init(session: URLSession) {
         self.session = session
         if session === URLSession.shared {
             self.catalogRecoverySessionFactory = {
-                let configuration = URLSessionConfiguration.ephemeral
-                configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-                configuration.urlCache = nil
-                configuration.waitsForConnectivity = true
-                return URLSession(configuration: configuration)
+                URLSession(configuration: ProviderNetworkSession.directConfiguration())
             }
         } else {
             self.catalogRecoverySessionFactory = nil
@@ -112,7 +180,8 @@ public struct ProviderClient: Sendable {
         targetModel: String,
         provider: ProviderConfig,
         apiKey: String?,
-        timeoutInterval: TimeInterval = 180
+        timeoutInterval: TimeInterval = 180,
+        proxy: ProviderProxyEndpoint? = nil
     ) async throws -> ProviderResponse {
         try validateCredential(provider: provider, apiKey: apiKey)
 
@@ -123,7 +192,8 @@ public struct ProviderClient: Sendable {
                 targetModel: targetModel,
                 provider: provider,
                 apiKey: apiKey ?? "",
-                timeoutInterval: timeoutInterval
+                timeoutInterval: timeoutInterval,
+                proxy: proxy
             )
         case .gemini:
             return try await sendGemini(
@@ -131,7 +201,8 @@ public struct ProviderClient: Sendable {
                 targetModel: targetModel,
                 provider: provider,
                 apiKey: apiKey ?? "",
-                timeoutInterval: timeoutInterval
+                timeoutInterval: timeoutInterval,
+                proxy: proxy
             )
         default:
             return try await sendUnifiedCompatible(
@@ -139,7 +210,8 @@ public struct ProviderClient: Sendable {
                 targetModel: targetModel,
                 provider: provider,
                 apiKey: apiKey,
-                timeoutInterval: timeoutInterval
+                timeoutInterval: timeoutInterval,
+                proxy: proxy
             )
         }
     }
@@ -240,14 +312,15 @@ public struct ProviderClient: Sendable {
         rawBody: Data,
         targetModel: String,
         provider: ProviderConfig,
-        apiKey: String?
+        apiKey: String?,
+        proxy: ProviderProxyEndpoint? = nil
     ) async throws -> ProviderStreamResponse {
         let response = try await executeStream(chatRequest(
             rawBody: rawBody,
             targetModel: targetModel,
             provider: provider,
             apiKey: apiKey
-        ))
+        ), proxy: proxy)
         guard (200..<300).contains(response.statusCode) else { return response }
         switch provider.kind {
         case .anthropic:
@@ -263,14 +336,15 @@ public struct ProviderClient: Sendable {
         rawBody: Data,
         targetModel: String,
         provider: ProviderConfig,
-        apiKey: String?
+        apiKey: String?,
+        proxy: ProviderProxyEndpoint? = nil
     ) async throws -> ProviderStreamResponse {
         try await executeStream(responsesRequest(
             rawBody: rawBody,
             targetModel: targetModel,
             provider: provider,
             apiKey: apiKey
-        ))
+        ), proxy: proxy)
     }
 
     public func sendResponses(
@@ -278,7 +352,8 @@ public struct ProviderClient: Sendable {
         targetModel: String,
         provider: ProviderConfig,
         apiKey: String?,
-        timeoutInterval: TimeInterval = 180
+        timeoutInterval: TimeInterval = 180,
+        proxy: ProviderProxyEndpoint? = nil
     ) async throws -> ProviderResponse {
         try await execute(responsesRequest(
             rawBody: rawBody,
@@ -286,7 +361,7 @@ public struct ProviderClient: Sendable {
             provider: provider,
             apiKey: apiKey,
             timeoutInterval: timeoutInterval
-        ))
+        ), proxy: proxy)
     }
 
     public func nativeEndpoint(
@@ -311,16 +386,45 @@ public struct ProviderClient: Sendable {
         case .embeddings: .embeddings
         case .reranking: .reranking
         }
-        if operation == .imageGeneration,
-           isBailian(provider),
-           model.caseInsensitiveCompare("wanx-v1") == .orderedSame,
-           provider.endpointURLs[
-               ProviderEndpointRecord.key(for: .imageGeneration, model: model)
-           ] == nil,
-           let official = URL(
-               string: "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
-           ) {
-            return official
+        if isBailian(provider), !hasExplicitEndpoint(
+            provider,
+            kind: endpointKind,
+            model: model
+        ) {
+            if operation == .imageGeneration {
+                let path = model.caseInsensitiveCompare("wanx-v1") == .orderedSame
+                    ? "/api/v1/services/aigc/text2image/image-synthesis"
+                    : "/api/v1/services/aigc/multimodal-generation/generation"
+                if let official = bailianURL(provider: provider, path: path) { return official }
+            }
+            if operation == .videoGeneration,
+               let official = bailianURL(
+                   provider: provider,
+                   path: "/api/v1/services/aigc/video-generation/video-synthesis"
+               ) {
+                return official
+            }
+            if operation == .videoTask, let taskID,
+               let encoded = taskID.addingPercentEncoding(
+                   withAllowedCharacters: .urlPathAllowed.subtracting(
+                       CharacterSet(charactersIn: "/?#")
+                   )
+               ),
+               let official = bailianURL(provider: provider, path: "/api/v1/tasks/\(encoded)") {
+                return official
+            }
+            if operation == .embeddings {
+                let path = model.lowercased().contains("vl-embedding")
+                    ? "/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding"
+                    : "/compatible-mode/v1/embeddings"
+                if let official = bailianURL(provider: provider, path: path) { return official }
+            }
+            if operation == .reranking {
+                let path = model.lowercased().contains("vl-rerank")
+                    ? "/api/v1/services/rerank/text-rerank/text-rerank"
+                    : "/compatible-api/v1/reranks"
+                if let official = bailianURL(provider: provider, path: path) { return official }
+            }
         }
         return try configuredURL(
             for: provider,
@@ -351,6 +455,19 @@ public struct ProviderClient: Sendable {
             )
         )
         let isTaskQuery = operation == .videoTask || operation == .musicTask
+        if isTaskQuery, MiniMaxNativeAdapter.isMiniMax(provider) {
+            try MiniMaxNativeAdapter.validateExactModelID(
+                MiniMaxNativeAdapter.canonicalModelID(forStoredModelID: targetModel),
+                operation: operation
+            )
+        }
+        if !isTaskQuery,
+           MiniMaxNativeAdapter.isMiniMax(provider),
+           !contentType.lowercased().contains("application/json") {
+            throw ProviderClientError.invalidRequest(
+                "MiniMax 图片、音乐、视频和语音原生接口只接受 application/json"
+            )
+        }
         request.httpMethod = isTaskQuery ? "GET" : "POST"
         request.timeoutInterval = timeoutInterval
 
@@ -358,12 +475,23 @@ public struct ProviderClient: Sendable {
             if contentType.lowercased().contains("application/json") {
                 var json = try jsonObject(from: rawBody)
                 json["model"] = targetModel
-                if operation == .speech && isBailian(provider) {
+                if MiniMaxNativeAdapter.isMiniMax(provider) {
+                    json = try MiniMaxNativeAdapter.normalizedRequest(
+                        json,
+                        model: targetModel,
+                        operation: operation
+                    )
+                } else if operation == .speech && isBailian(provider) {
                     json = normalizeBailianSpeechJSON(json, model: targetModel)
                 } else if operation == .imageGeneration,
                           isBailian(provider),
                           targetModel.caseInsensitiveCompare("wanx-v1") == .orderedSame {
                     json = normalizeBailianWanxJSON(json, model: targetModel)
+                    request.setValue("enable", forHTTPHeaderField: "X-DashScope-Async")
+                } else if operation == .imageGeneration, isBailian(provider) {
+                    json = normalizeQianwenImageJSON(json, model: targetModel)
+                } else if operation == .videoGeneration, isBailian(provider) {
+                    json = normalizeQianwenVideoJSON(json, model: targetModel)
                     request.setValue("enable", forHTTPHeaderField: "X-DashScope-Async")
                 }
                 request.httpBody = try JSONSerialization.data(withJSONObject: json)
@@ -385,8 +513,27 @@ public struct ProviderClient: Sendable {
     }
 
     private func isBailian(_ provider: ProviderConfig) -> Bool {
-        provider.baseURL.lowercased().contains("dashscope.aliyuncs.com")
+        provider.kind.isBailian
+            || provider.baseURL.lowercased().contains("aliyuncs.com")
             || provider.name.contains("百炼")
+            || provider.name.contains("千问AI平台")
+    }
+
+    private func hasExplicitEndpoint(
+        _ provider: ProviderConfig,
+        kind: ProviderEndpointKind,
+        model: String
+    ) -> Bool {
+        provider.endpointURLs[ProviderEndpointRecord.key(for: kind, model: model)] != nil
+            || provider.endpointURLs[ProviderEndpointRecord.key(for: kind)] != nil
+    }
+
+    private func bailianURL(provider: ProviderConfig, path: String) -> URL? {
+        guard var components = URLComponents(string: provider.baseURL) else { return nil }
+        components.path = path
+        components.query = nil
+        components.fragment = nil
+        return components.url
     }
 
     private func normalizeBailianSpeechJSON(
@@ -450,6 +597,45 @@ public struct ProviderClient: Sendable {
         ]
     }
 
+    private func normalizeQianwenImageJSON(
+        _ original: [String: Any],
+        model: String
+    ) -> [String: Any] {
+        let prompt = original["prompt"] as? String ?? "ModelHub connection test"
+        var parameters = original["parameters"] as? [String: Any] ?? [:]
+        for key in ["size", "n", "negative_prompt", "prompt_extend", "watermark", "seed"] {
+            if let value = original[key] { parameters[key] = value }
+        }
+        return [
+            "model": model,
+            "input": [
+                "messages": [[
+                    "role": "user",
+                    "content": [["text": prompt]]
+                ]]
+            ],
+            "parameters": parameters
+        ]
+    }
+
+    private func normalizeQianwenVideoJSON(
+        _ original: [String: Any],
+        model: String
+    ) -> [String: Any] {
+        let prompt = original["prompt"] as? String ?? "ModelHub connection test"
+        var input = original["input"] as? [String: Any] ?? [:]
+        input["prompt"] = input["prompt"] ?? prompt
+        if let imageURL = original["image_url"] { input["img_url"] = imageURL }
+        var parameters = original["parameters"] as? [String: Any] ?? [:]
+        for key in [
+            "resolution", "duration", "size", "prompt_extend", "watermark",
+            "seed", "audio", "negative_prompt"
+        ] where original[key] != nil {
+            parameters[key] = original[key]
+        }
+        return ["model": model, "input": input, "parameters": parameters]
+    }
+
     private func rewriteMultipartModel(
         in body: Data,
         contentType: String,
@@ -497,7 +683,8 @@ public struct ProviderClient: Sendable {
         operation: NativeAPIOperation,
         taskID: String? = nil,
         contentType: String = "application/json",
-        timeoutInterval: TimeInterval = 600
+        timeoutInterval: TimeInterval = 600,
+        proxy: ProviderProxyEndpoint? = nil
     ) async throws -> ProviderResponse {
         try await execute(
             nativeRequest(
@@ -509,7 +696,8 @@ public struct ProviderClient: Sendable {
                 taskID: taskID,
                 contentType: contentType,
                 timeoutInterval: timeoutInterval
-            )
+            ),
+            proxy: proxy
         )
     }
 
@@ -623,7 +811,8 @@ public struct ProviderClient: Sendable {
         provider: ProviderConfig,
         apiKey: String?,
         headers: [String: String] = [:],
-        timeoutInterval: TimeInterval = 600
+        timeoutInterval: TimeInterval = 600,
+        proxy: ProviderProxyEndpoint? = nil
     ) async throws -> ProviderResponse {
         try await sendNativePassthrough(
             rawBody: rawBody,
@@ -635,7 +824,8 @@ public struct ProviderClient: Sendable {
             provider: provider,
             apiKey: apiKey,
             headers: headers,
-            timeoutInterval: timeoutInterval
+            timeoutInterval: timeoutInterval,
+            proxy: proxy
         )
     }
 
@@ -647,7 +837,8 @@ public struct ProviderClient: Sendable {
         provider: ProviderConfig,
         apiKey: String?,
         headers: [String: String] = [:],
-        timeoutInterval: TimeInterval = 600
+        timeoutInterval: TimeInterval = 600,
+        proxy: ProviderProxyEndpoint? = nil
     ) async throws -> ProviderResponse {
         try await execute(
             nativePassthroughRequest(
@@ -659,7 +850,8 @@ public struct ProviderClient: Sendable {
                 apiKey: apiKey,
                 headers: headers,
                 timeoutInterval: timeoutInterval
-            )
+            ),
+            proxy: proxy
         )
     }
 
@@ -684,7 +876,8 @@ public struct ProviderClient: Sendable {
         targetModel: String,
         provider: ProviderConfig,
         apiKey: String?,
-        timeoutInterval: TimeInterval
+        timeoutInterval: TimeInterval,
+        proxy: ProviderProxyEndpoint?
     ) async throws -> ProviderResponse {
         try await execute(chatRequest(
             rawBody: rawBody,
@@ -692,7 +885,7 @@ public struct ProviderClient: Sendable {
             provider: provider,
             apiKey: apiKey,
             timeoutInterval: timeoutInterval
-        ))
+        ), proxy: proxy)
     }
 
     private func sendAnthropic(
@@ -700,7 +893,8 @@ public struct ProviderClient: Sendable {
         targetModel: String,
         provider: ProviderConfig,
         apiKey: String,
-        timeoutInterval: TimeInterval
+        timeoutInterval: TimeInterval,
+        proxy: ProviderProxyEndpoint?
     ) async throws -> ProviderResponse {
         let request = try chatRequest(
             rawBody: rawBody,
@@ -709,7 +903,7 @@ public struct ProviderClient: Sendable {
             apiKey: apiKey,
             timeoutInterval: timeoutInterval
         )
-        let response = try await execute(request)
+        let response = try await execute(request, proxy: proxy)
         guard (200..<300).contains(response.statusCode) else { return response }
         return try UnifiedProtocolBridge.normalizeAnthropic(response)
     }
@@ -719,7 +913,8 @@ public struct ProviderClient: Sendable {
         targetModel: String,
         provider: ProviderConfig,
         apiKey: String,
-        timeoutInterval: TimeInterval
+        timeoutInterval: TimeInterval,
+        proxy: ProviderProxyEndpoint?
     ) async throws -> ProviderResponse {
         let request = try chatRequest(
             rawBody: rawBody,
@@ -728,7 +923,7 @@ public struct ProviderClient: Sendable {
             apiKey: apiKey,
             timeoutInterval: timeoutInterval
         )
-        let response = try await execute(request)
+        let response = try await execute(request, proxy: proxy)
         guard (200..<300).contains(response.statusCode) else { return response }
         return try UnifiedProtocolBridge.normalizeGemini(response, model: targetModel)
     }
@@ -810,8 +1005,16 @@ public struct ProviderClient: Sendable {
         return object["stream"] as? Bool == true
     }
 
-    private func execute(_ request: URLRequest) async throws -> ProviderResponse {
-        let (data, response) = try await session.data(for: request)
+    private func execute(
+        _ request: URLRequest,
+        proxy: ProviderProxyEndpoint? = nil
+    ) async throws -> ProviderResponse {
+        let transport = if let proxy {
+            await ProviderProxySessionPool.shared.session(for: proxy)
+        } else {
+            session
+        }
+        let (data, response) = try await transport.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw ProviderClientError.nonHTTPResponse
         }
@@ -822,8 +1025,16 @@ public struct ProviderClient: Sendable {
         return ProviderResponse(statusCode: http.statusCode, headers: headers, body: data)
     }
 
-    private func executeStream(_ request: URLRequest) async throws -> ProviderStreamResponse {
-        let (bytes, response) = try await session.bytes(for: request)
+    private func executeStream(
+        _ request: URLRequest,
+        proxy: ProviderProxyEndpoint? = nil
+    ) async throws -> ProviderStreamResponse {
+        let transport = if let proxy {
+            await ProviderProxySessionPool.shared.session(for: proxy)
+        } else {
+            session
+        }
+        let (bytes, response) = try await transport.bytes(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw ProviderClientError.nonHTTPResponse
         }

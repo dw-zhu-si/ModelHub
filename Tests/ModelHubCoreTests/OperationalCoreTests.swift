@@ -3,6 +3,101 @@ import XCTest
 @testable import ModelHubCore
 
 final class OperationalCoreTests: XCTestCase {
+    func testBulkProxyNodeAssignmentDeduplicatesModelsAndPreservesOtherProviders() {
+        let subscriptionID = UUID()
+        let providerID = UUID()
+        let otherProviderID = UUID()
+        let firstNode = ProxySubscriptionNode(
+            subscriptionID: subscriptionID,
+            name: "节点 A",
+            type: "ss"
+        )
+        let secondNode = ProxySubscriptionNode(
+            subscriptionID: subscriptionID,
+            name: "节点 B",
+            type: "ss"
+        )
+        var settings = ModelProxySettings(
+            subscriptions: [ProxySubscription(
+                id: subscriptionID,
+                name: "测试订阅",
+                sourceHost: "example.com"
+            )],
+            nodes: [firstNode, secondNode],
+            assignments: [
+                ModelProxyAssignment(
+                    providerID: otherProviderID,
+                    model: "other-model",
+                    nodeID: firstNode.id
+                ),
+                ModelProxyAssignment(
+                    providerID: providerID,
+                    model: "model-a",
+                    nodeID: firstNode.id
+                )
+            ]
+        )
+
+        let changed = settings.setAssignedNode(
+            secondNode.id,
+            providerID: providerID,
+            models: ["model-a", " model-b ", "model-b", ""]
+        )
+
+        XCTAssertEqual(changed, 2)
+        XCTAssertEqual(settings.assignments.count, 3)
+        XCTAssertTrue(settings.assignments.contains {
+            $0.providerID == otherProviderID && $0.nodeID == firstNode.id
+        })
+        XCTAssertEqual(
+            Set(settings.assignments.filter { $0.providerID == providerID }.map(\.nodeID)),
+            [secondNode.id]
+        )
+    }
+
+    func testApplyingAChosenNodeCanEnableTheExactModelProxyInOneAction() {
+        let subscriptionID = UUID()
+        let providerID = UUID()
+        let node = ProxySubscriptionNode(
+            subscriptionID: subscriptionID,
+            name: "节点 A",
+            type: "ss"
+        )
+        var settings = ModelProxySettings(
+            enabled: false,
+            subscriptions: [ProxySubscription(
+                id: subscriptionID,
+                name: "测试订阅",
+                sourceHost: "example.com"
+            )],
+            nodes: [node]
+        )
+
+        let changed = settings.setAssignedNode(
+            node.id,
+            providerID: providerID,
+            models: ["chat-model"],
+            enableWhenAssigned: true
+        )
+
+        XCTAssertEqual(changed, 1)
+        XCTAssertTrue(settings.enabled)
+        XCTAssertNotNil(settings.endpoint(providerID: providerID, model: "chat-model"))
+    }
+
+    func testRemovingAssignmentsDoesNotEnableTheModelProxy() {
+        var settings = ModelProxySettings(enabled: false)
+
+        _ = settings.setAssignedNode(
+            nil,
+            providerID: UUID(),
+            models: ["chat-model"],
+            enableWhenAssigned: true
+        )
+
+        XCTAssertFalse(settings.enabled)
+    }
+
     func testFixedPerRequestPriceAccountsForMediaWithoutTokenUsage() {
         let profile = TargetProfile(requestCostUSD: 0.08, pricingSource: "official")
 
@@ -94,6 +189,208 @@ final class OperationalCoreTests: XCTestCase {
 
         XCTAssertNil(decoded.currencyDisplay)
         XCTAssertEqual((decoded.currencyDisplay ?? .init()).currency, .usd)
+    }
+
+    func testLegacyOperationalSettingsDecodeWithProxyDisabled() throws {
+        let encoded = try JSONEncoder().encode(OperationalSettings())
+        var root = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        root.removeValue(forKey: "modelProxy")
+        let legacy = try JSONSerialization.data(withJSONObject: root)
+        let decoded = try JSONDecoder().decode(OperationalSettings.self, from: legacy)
+
+        XCTAssertNil(decoded.modelProxy)
+        XCTAssertFalse((decoded.modelProxy ?? .init()).enabled)
+    }
+
+    func testModelProxyMatchesExactProviderAndModelOnly() {
+        let providerID = UUID()
+        let settings = ModelProxySettings(
+            enabled: true,
+            kind: .http,
+            host: "127.0.0.1",
+            port: 7897,
+            selections: [
+                ModelProxySelection(providerID: providerID, model: "qwen-image-3.0-pro")
+            ]
+        )
+
+        XCTAssertNotNil(settings.endpoint(providerID: providerID, model: "qwen-image-3.0-pro"))
+        XCTAssertNil(settings.endpoint(providerID: providerID, model: "qwen-image-3.0"))
+        XCTAssertNil(settings.endpoint(providerID: UUID(), model: "qwen-image-3.0-pro"))
+    }
+
+    func testLegacyModelProxyDecodesWithoutSubscriptionFields() throws {
+        let providerID = UUID()
+        let data = try JSONSerialization.data(withJSONObject: [
+            "enabled": true,
+            "kind": "http",
+            "host": "127.0.0.1",
+            "port": 7897,
+            "selections": [[
+                "providerID": providerID.uuidString,
+                "model": "legacy-model"
+            ]]
+        ])
+
+        let decoded = try JSONDecoder().decode(ModelProxySettings.self, from: data)
+
+        XCTAssertTrue(decoded.subscriptions.isEmpty)
+        XCTAssertTrue(decoded.nodes.isEmpty)
+        XCTAssertTrue(decoded.assignments.isEmpty)
+        XCTAssertNotNil(decoded.endpoint(providerID: providerID, model: "legacy-model"))
+    }
+
+    func testSubscriptionNodeAssignmentOverridesManualProxyForExactModel() throws {
+        let providerID = UUID()
+        let subscription = ProxySubscription(name: "Work", sourceHost: "example.com")
+        let node = ProxySubscriptionNode(
+            subscriptionID: subscription.id,
+            name: "Hong Kong 01",
+            type: "Shadowsocks"
+        )
+        let settings = ModelProxySettings(
+            enabled: true,
+            kind: .socks5,
+            host: "127.0.0.1",
+            port: 7890,
+            selections: [ModelProxySelection(providerID: providerID, model: "direct-proxy")],
+            subscriptions: [subscription],
+            nodes: [node],
+            assignments: [ModelProxyAssignment(
+                providerID: providerID,
+                model: "subscribed-model",
+                nodeID: node.id
+            )]
+        )
+
+        let subscribed = try XCTUnwrap(settings.endpoint(
+            providerID: providerID,
+            model: "subscribed-model"
+        ))
+        XCTAssertEqual(subscribed.kind, .http)
+        XCTAssertEqual(subscribed.host, "127.0.0.1")
+        XCTAssertEqual(subscribed.port, ModelProxySettings.firstNodePort)
+        XCTAssertEqual(
+            settings.endpoint(providerID: providerID, model: "direct-proxy")?.port,
+            7890
+        )
+        XCTAssertNil(settings.endpoint(providerID: providerID, model: "other"))
+    }
+
+    func testSubscriptionSanitizationRemovesCredentialBearingDisplayName() throws {
+        let subscription = ProxySubscription(
+            name: "https://subscription.example/path?token=super-secret-token",
+            sourceHost: "subscription.example"
+        ).sanitized
+
+        XCTAssertEqual(subscription.name, "subscription.example")
+        let encoded = String(decoding: try JSONEncoder().encode(subscription), as: UTF8.self)
+        XCTAssertFalse(encoded.contains("super-secret-token"))
+        XCTAssertFalse(encoded.contains("https://subscription.example"))
+    }
+
+    func testSubscriptionProxyLimitsDistinctActiveNodes() {
+        let providerID = UUID()
+        let subscription = ProxySubscription(name: "Work", sourceHost: "example.com")
+        let nodes = (0...ModelProxySettings.maximumActiveNodes).map {
+            ProxySubscriptionNode(
+                subscriptionID: subscription.id,
+                name: "Node \($0)",
+                type: "VMess"
+            )
+        }
+        let assignments = nodes.enumerated().map { index, node in
+            ModelProxyAssignment(
+                providerID: providerID,
+                model: "model-\(index)",
+                nodeID: node.id
+            )
+        }
+        let settings = ModelProxySettings(
+            enabled: true,
+            subscriptions: [subscription],
+            nodes: nodes,
+            assignments: assignments
+        )
+
+        XCTAssertNotNil(settings.validationMessage)
+    }
+
+    func testMihomoRuntimeConfigUsesLoopbackAndContainsNoSubscriptionURL() throws {
+        let providerID = UUID()
+        let subscription = ProxySubscription(
+            id: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!,
+            name: "Secure subscription",
+            sourceHost: "secret.example.com"
+        )
+        let node = ProxySubscriptionNode(
+            subscriptionID: subscription.id,
+            name: "HK \"01\"",
+            type: "Trojan"
+        )
+        let settings = ModelProxySettings(
+            enabled: true,
+            subscriptions: [subscription],
+            nodes: [node],
+            assignments: [ModelProxyAssignment(
+                providerID: providerID,
+                model: "model-a",
+                nodeID: node.id
+            )]
+        )
+
+        let yaml = try ModelProxyRuntimeConfiguration.yaml(
+            settings: settings,
+            subscriptionFiles: [ProxyRuntimeSubscriptionFile(
+                subscription: subscription,
+                path: "/private/tmp/modelhub/subscription.yaml"
+            )],
+            controllerSecret: "local-secret"
+        )
+
+        XCTAssertTrue(yaml.contains("external-controller: \"127.0.0.1:11453\""))
+        XCTAssertTrue(yaml.contains("dns:\n  enable: true"))
+        XCTAssertTrue(yaml.contains("enhanced-mode: redir-host"))
+        XCTAssertTrue(yaml.contains("https://223.5.5.5/dns-query"))
+        XCTAssertTrue(yaml.contains("https://1.1.1.1/dns-query"))
+        XCTAssertTrue(yaml.contains("proxy-server-nameserver:"))
+        XCTAssertTrue(yaml.contains("listen: \"127.0.0.1\""))
+        XCTAssertTrue(yaml.contains("port: 11454"))
+        XCTAssertTrue(yaml.contains("name: \"modelhub-route-11454\""))
+        XCTAssertTrue(yaml.contains("filter: \"^\\\\[mh-aaaaaaaa] HK \\\"01\\\"$\""))
+        XCTAssertTrue(yaml.contains("proxy: \"modelhub-route-11454\""))
+        XCTAssertFalse(yaml.contains("secret.example.com"))
+        XCTAssertFalse(yaml.contains("http://"))
+        XCTAssertFalse(yaml.contains("https://secret.example.com"))
+    }
+
+    func testModelProxyRejectsCredentialBearingOrPathBearingHost() {
+        XCTAssertNotNil(ModelProxySettings(
+            enabled: true,
+            host: "http://user:secret@127.0.0.1/path",
+            port: 7897
+        ).validationMessage)
+        XCTAssertNotNil(ModelProxySettings(
+            enabled: true,
+            host: "127.0.0.1/path",
+            port: 7897
+        ).validationMessage)
+        XCTAssertNotNil(ModelProxySettings(
+            enabled: true,
+            host: "127.0.0.1",
+            port: 0
+        ).validationMessage)
+    }
+
+    func testDisabledModelProxyStillRejectsCredentialBearingHost() {
+        let settings = ModelProxySettings(
+            enabled: false,
+            host: "user:secret@127.0.0.1",
+            port: 7897
+        )
+
+        XCTAssertNotNil(settings.validationMessage)
+        XCTAssertNil(settings.endpoint(providerID: UUID(), model: "safe-model"))
     }
 
     func testCurrencyDisplayConvertsAndFormatsWithoutChangingStoredUSD() throws {
@@ -234,6 +531,72 @@ final class OperationalCoreTests: XCTestCase {
         XCTAssertThrowsError(
             try ConfigurationBackup.preview(Data(count: ConfigurationBackup.maximumBytes + 1))
         )
+    }
+
+    func testBackupRejectsCredentialBearingProxyEvenWhenProxyIsDisabled() throws {
+        var configuration = AppConfiguration()
+        configuration.operational.modelProxy = ModelProxySettings(
+            enabled: false,
+            host: "user:secret@127.0.0.1",
+            port: 7897
+        )
+
+        XCTAssertThrowsError(
+            try ConfigurationBackup.exportData(
+                configuration: configuration,
+                appVersion: "1.9.2"
+            )
+        )
+
+        let untrustedBackup = try JSONEncoder().encode(
+            ConfigurationBackupEnvelope(
+                appVersion: "1.9.2",
+                configuration: configuration
+            )
+        )
+        XCTAssertThrowsError(try ConfigurationBackup.preview(untrustedBackup))
+    }
+
+    func testBackupIncludesOnlySubscriptionMetadataAndRejectsInvalidSourceHost() throws {
+        let subscriptionID = UUID()
+        var configuration = AppConfiguration()
+        configuration.operational.modelProxy = ModelProxySettings(
+            subscriptions: [
+                ProxySubscription(
+                    id: subscriptionID,
+                    name: "Private route",
+                    sourceHost: "subscription.example",
+                    updateIntervalHours: 12,
+                    nodeCount: 3
+                )
+            ]
+        )
+
+        let data = try ConfigurationBackup.exportData(
+            configuration: configuration,
+            appVersion: "1.9.2"
+        )
+        let text = String(decoding: data, as: UTF8.self)
+        XCTAssertTrue(text.contains("subscription.example"))
+        XCTAssertFalse(text.contains("https://subscription.example"))
+        XCTAssertFalse(text.contains("super-secret-subscription-token"))
+
+        var invalidConfiguration = configuration
+        invalidConfiguration.operational.modelProxy?.subscriptions[0].sourceHost =
+            "user:secret@subscription.example/path"
+        XCTAssertThrowsError(
+            try ConfigurationBackup.exportData(
+                configuration: invalidConfiguration,
+                appVersion: "1.9.2"
+            )
+        )
+        let untrustedBackup = try JSONEncoder().encode(
+            ConfigurationBackupEnvelope(
+                appVersion: "1.9.2",
+                configuration: invalidConfiguration
+            )
+        )
+        XCTAssertThrowsError(try ConfigurationBackup.preview(untrustedBackup))
     }
 
     func testMCPToolsExposeReadOnlyContextAndBillableGenerationContracts() throws {

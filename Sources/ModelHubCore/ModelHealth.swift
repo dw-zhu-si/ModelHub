@@ -47,6 +47,7 @@ public enum ModelQuarantineCause: String, Codable, CaseIterable, Sendable {
     case insufficientPermission
     case invalidRequest
     case endpointOrModelNotFound
+    case modelAccessNotConfigured
     case requestTimedOut
     case rateLimitedOrOutOfQuota
     case upstreamFailure
@@ -80,11 +81,54 @@ public struct ModelHealthRecord: Codable, Hashable, Identifiable, Sendable {
         case .configurationRequired:
             if statusCode == 401 { return .invalidCredential }
             if statusCode == 403 { return .insufficientPermission }
+            if statusCode == 404 { return .modelAccessNotConfigured }
             return .missingCredential
         case .unsupported:
             return .unsupportedProtocol
         case .unavailable:
             break
+        }
+
+        let normalizedDetail = detail.folding(
+            options: [.caseInsensitive, .diacriticInsensitive],
+            locale: Locale(identifier: "en_US_POSIX")
+        )
+        if normalizedDetail.contains("model_not_found")
+            || normalizedDetail.contains("modelnotfound")
+            || normalizedDetail.contains("invalid_api_type")
+            || normalizedDetail.contains("unsupported model")
+        {
+            return .endpointOrModelNotFound
+        }
+        if normalizedDetail.contains("access_denied")
+            || normalizedDetail.contains("permission_denied")
+            || normalizedDetail.contains("insufficient permission")
+        {
+            return .insufficientPermission
+        }
+        if normalizedDetail.contains("get_channel_failed")
+            || normalizedDetail.contains("video_queue_full")
+            || normalizedDetail.contains("model_price_error")
+            || normalizedDetail.contains("upstream_service")
+        {
+            return .upstreamFailure
+        }
+        if normalizedDetail.contains("invalid_parameter")
+            || normalizedDetail.contains("invalid_request")
+            || normalizedDetail.contains("parameter_error")
+        {
+            return .invalidRequest
+        }
+        if normalizedDetail.contains("invalid_api_key")
+            || normalizedDetail.contains("authentication")
+        {
+            return .invalidCredential
+        }
+        if normalizedDetail.contains("rate_limit")
+            || normalizedDetail.contains("quota")
+            || normalizedDetail.contains("arrearage")
+        {
+            return .rateLimitedOrOutOfQuota
         }
 
         if let statusCode {
@@ -108,10 +152,6 @@ public struct ModelHealthRecord: Codable, Hashable, Identifiable, Sendable {
             }
         }
 
-        let normalizedDetail = detail.folding(
-            options: [.caseInsensitive, .diacriticInsensitive],
-            locale: Locale(identifier: "en_US_POSIX")
-        )
         if normalizedDetail.contains("api key") || normalizedDetail.contains("密钥") {
             return .missingCredential
         }

@@ -131,9 +131,7 @@ func existingTranslation(
     return value
 }
 
-@main
-struct LocalizationCatalogGenerator {
-    static func main() async {
+func generateLocalizationCatalog() async {
         do {
             guard CommandLine.arguments.count == 2 else { throw GeneratorError.usage }
             let catalogURL = URL(fileURLWithPath: CommandLine.arguments[1])
@@ -200,5 +198,10 @@ struct LocalizationCatalogGenerator {
             FileHandle.standardError.write(Data("error: \(error.localizedDescription)\n".utf8))
             exit(1)
         }
-    }
 }
+
+Task {
+    await generateLocalizationCatalog()
+    exit(0)
+}
+dispatchMain()

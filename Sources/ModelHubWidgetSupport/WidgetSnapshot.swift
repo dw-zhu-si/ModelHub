@@ -88,7 +88,10 @@ public enum ModelHubWidgetSnapshotStore {
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        try encoder.encode(snapshot).write(to: url, options: .atomic)
+        // This status file is disposable and rebuilt by the host app. A plain
+        // write avoids Foundation's protected atomic-temp-file path, which can
+        // block indefinitely in an App Group container on some macOS systems.
+        try encoder.encode(snapshot).write(to: url)
     }
 
     private static func snapshotURL(fileManager: FileManager) -> URL? {

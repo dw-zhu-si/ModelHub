@@ -144,6 +144,7 @@ struct ModelHubApp: App {
                     model.refreshLaunchAtLoginStatus()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                    model.stopModelProxyRuntime()
                     model.flushPendingPersistence()
                 }
                 .frame(minWidth: 980, minHeight: 680)

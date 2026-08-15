@@ -131,6 +131,7 @@ public struct TargetProfile: Codable, Hashable, Sendable {
     public var outputCostPerMillionTokens: Double?
     public var requestCostUSD: Double?
     public var capabilities: Set<ModelCapability>
+    public var capabilityDetails: ModelCapabilityDetails?
     public var pricingSource: String
     public var pricingUpdatedAt: Date?
     public var monthlyTokenLimit: Int?
@@ -141,6 +142,7 @@ public struct TargetProfile: Codable, Hashable, Sendable {
         outputCostPerMillionTokens: Double? = nil,
         requestCostUSD: Double? = nil,
         capabilities: Set<ModelCapability> = [],
+        capabilityDetails: ModelCapabilityDetails? = nil,
         pricingSource: String = "",
         pricingUpdatedAt: Date? = nil,
         monthlyTokenLimit: Int? = nil
@@ -150,6 +152,7 @@ public struct TargetProfile: Codable, Hashable, Sendable {
         self.outputCostPerMillionTokens = outputCostPerMillionTokens
         self.requestCostUSD = requestCostUSD
         self.capabilities = capabilities
+        self.capabilityDetails = capabilityDetails
         self.pricingSource = pricingSource
         self.pricingUpdatedAt = pricingUpdatedAt
         self.monthlyTokenLimit = monthlyTokenLimit
@@ -369,6 +372,7 @@ public struct OperationalSettings: Codable, Hashable, Sendable {
     public var responseCache: ResponseCacheSettings?
     public var pricingUpdate: PricingUpdateSettings?
     public var currencyDisplay: CurrencyDisplaySettings?
+    public var modelProxy: ModelProxySettings?
     public var analyticsRetentionMonths: Int
 
     public init(
@@ -379,6 +383,7 @@ public struct OperationalSettings: Codable, Hashable, Sendable {
         responseCache: ResponseCacheSettings? = .init(),
         pricingUpdate: PricingUpdateSettings? = .init(),
         currencyDisplay: CurrencyDisplaySettings? = .init(),
+        modelProxy: ModelProxySettings? = .init(),
         analyticsRetentionMonths: Int = 12
     ) {
         self.resilience = resilience
@@ -388,7 +393,417 @@ public struct OperationalSettings: Codable, Hashable, Sendable {
         self.responseCache = responseCache
         self.pricingUpdate = pricingUpdate
         self.currencyDisplay = currencyDisplay
+        self.modelProxy = modelProxy
         self.analyticsRetentionMonths = analyticsRetentionMonths
+    }
+}
+
+public enum ModelProxyKind: String, Codable, CaseIterable, Hashable, Sendable {
+    case http
+    case socks5
+
+    public var displayName: String {
+        switch self {
+        case .http: "HTTP / HTTPS"
+        case .socks5: "SOCKS5"
+        }
+    }
+}
+
+public struct ModelProxySelection: Codable, Hashable, Sendable, Identifiable {
+    public var providerID: UUID
+    public var model: String
+
+    public var id: String { "\(providerID.uuidString.lowercased())::\(model)" }
+
+    public init(providerID: UUID, model: String) {
+        self.providerID = providerID
+        self.model = model.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+public struct ProxySubscription: Codable, Hashable, Sendable, Identifiable {
+    public var id: UUID
+    public var name: String
+    public var sourceHost: String
+    public var enabled: Bool
+    public var updateIntervalHours: Int
+    public var lastUpdatedAt: Date?
+    public var nodeCount: Int
+    public var uploadBytes: Int64?
+    public var downloadBytes: Int64?
+    public var totalBytes: Int64?
+    public var expiresAt: Date?
+
+    public init(
+        id: UUID = UUID(),
+        name: String,
+        sourceHost: String,
+        enabled: Bool = true,
+        updateIntervalHours: Int = 24,
+        lastUpdatedAt: Date? = nil,
+        nodeCount: Int = 0,
+        uploadBytes: Int64? = nil,
+        downloadBytes: Int64? = nil,
+        totalBytes: Int64? = nil,
+        expiresAt: Date? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.sourceHost = sourceHost
+        self.enabled = enabled
+        self.updateIntervalHours = updateIntervalHours
+        self.lastUpdatedAt = lastUpdatedAt
+        self.nodeCount = nodeCount
+        self.uploadBytes = uploadBytes
+        self.downloadBytes = downloadBytes
+        self.totalBytes = totalBytes
+        self.expiresAt = expiresAt
+    }
+
+    public var runtimePrefix: String {
+        "[mh-\(id.uuidString.lowercased().prefix(8))]"
+    }
+
+    public var validationMessage: String? {
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanHost = sourceHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty, cleanName.count <= 120 else {
+            return "订阅名称不能为空且不得超过 120 个字符"
+        }
+        guard !cleanHost.isEmpty, cleanHost.count <= 255,
+              !cleanHost.contains("://"),
+              !cleanHost.contains("@"),
+              !cleanHost.contains("/"),
+              !cleanHost.contains("?"),
+              !cleanHost.contains("#"),
+              !cleanHost.contains("\\")
+        else { return "订阅来源只能保存域名或 IP" }
+        return nil
+    }
+
+    public var sanitized: ProxySubscription {
+        var copy = self
+        let cleanHost = sourceHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        copy.name = Self.safeDisplayName(cleanName, fallbackHost: cleanHost)
+        copy.sourceHost = cleanHost
+        copy.updateIntervalHours = min(max(updateIntervalHours, 1), 168)
+        copy.nodeCount = max(nodeCount, 0)
+        copy.uploadBytes = uploadBytes.map { max($0, 0) }
+        copy.downloadBytes = downloadBytes.map { max($0, 0) }
+        copy.totalBytes = totalBytes.map { max($0, 0) }
+        return copy
+    }
+
+    private static func safeDisplayName(_ name: String, fallbackHost: String) -> String {
+        let normalized = name.lowercased()
+        let looksLikeURL = name.contains("://")
+            || URLComponents(string: name)?.query != nil
+        let looksLikeCredential = [
+            "token=", "key=", "secret=", "password=", "credential="
+        ].contains { normalized.contains($0) }
+        guard looksLikeURL || looksLikeCredential else { return name }
+        return fallbackHost.isEmpty ? "代理订阅" : fallbackHost
+    }
+}
+
+public struct ProxySubscriptionNode: Codable, Hashable, Sendable, Identifiable {
+    public var subscriptionID: UUID
+    public var name: String
+    public var type: String
+    public var isAlive: Bool
+
+    public var id: String {
+        "\(subscriptionID.uuidString.lowercased())::\(name)"
+    }
+
+    public init(
+        subscriptionID: UUID,
+        name: String,
+        type: String,
+        isAlive: Bool = true
+    ) {
+        self.subscriptionID = subscriptionID
+        self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.type = type.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.isAlive = isAlive
+    }
+}
+
+public struct ModelProxyAssignment: Codable, Hashable, Sendable, Identifiable {
+    public var providerID: UUID
+    public var model: String
+    public var nodeID: String
+
+    public var id: String {
+        "\(providerID.uuidString.lowercased())::\(model)"
+    }
+
+    public init(providerID: UUID, model: String, nodeID: String) {
+        self.providerID = providerID
+        self.model = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.nodeID = nodeID.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+public struct ProviderProxyEndpoint: Hashable, Sendable {
+    public let kind: ModelProxyKind
+    public let host: String
+    public let port: Int
+
+    public init(kind: ModelProxyKind, host: String, port: Int) {
+        self.kind = kind
+        self.host = host
+        self.port = port
+    }
+}
+
+public struct ModelProxySettings: Codable, Hashable, Sendable {
+    public static let controllerPort = 11_453
+    public static let firstNodePort = 11_454
+    public static let maximumActiveNodes = 16
+
+    public var enabled: Bool
+    public var kind: ModelProxyKind
+    public var host: String
+    public var port: Int
+    public var selections: [ModelProxySelection]
+    public var subscriptions: [ProxySubscription]
+    public var nodes: [ProxySubscriptionNode]
+    public var assignments: [ModelProxyAssignment]
+
+    public init(
+        enabled: Bool = false,
+        kind: ModelProxyKind = .http,
+        host: String = "127.0.0.1",
+        port: Int = 7897,
+        selections: [ModelProxySelection] = [],
+        subscriptions: [ProxySubscription] = [],
+        nodes: [ProxySubscriptionNode] = [],
+        assignments: [ModelProxyAssignment] = []
+    ) {
+        self.enabled = enabled
+        self.kind = kind
+        self.host = host
+        self.port = port
+        self.selections = selections
+        self.subscriptions = subscriptions
+        self.nodes = nodes
+        self.assignments = assignments
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case enabled, kind, host, port, selections, subscriptions, nodes, assignments
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        kind = try container.decodeIfPresent(ModelProxyKind.self, forKey: .kind) ?? .http
+        host = try container.decodeIfPresent(String.self, forKey: .host) ?? "127.0.0.1"
+        port = try container.decodeIfPresent(Int.self, forKey: .port) ?? 7897
+        selections = try container.decodeIfPresent(
+            [ModelProxySelection].self,
+            forKey: .selections
+        ) ?? []
+        subscriptions = try container.decodeIfPresent(
+            [ProxySubscription].self,
+            forKey: .subscriptions
+        ) ?? []
+        nodes = try container.decodeIfPresent(
+            [ProxySubscriptionNode].self,
+            forKey: .nodes
+        ) ?? []
+        assignments = try container.decodeIfPresent(
+            [ModelProxyAssignment].self,
+            forKey: .assignments
+        ) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(enabled, forKey: .enabled)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(host, forKey: .host)
+        try container.encode(port, forKey: .port)
+        try container.encode(selections, forKey: .selections)
+        try container.encode(subscriptions, forKey: .subscriptions)
+        try container.encode(nodes, forKey: .nodes)
+        try container.encode(assignments, forKey: .assignments)
+    }
+
+    public var validationMessage: String? {
+        let trimmed = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "代理主机不能为空" }
+        guard (1...65_535).contains(port) else { return "代理端口必须在 1–65535 之间" }
+        guard !trimmed.contains("://"),
+              !trimmed.contains("@"),
+              !trimmed.contains("/"),
+              !trimmed.contains("?"),
+              !trimmed.contains("#"),
+              !trimmed.contains("\\")
+        else {
+            return "代理主机只能填写域名或 IP，不得包含协议、路径或凭证"
+        }
+        guard trimmed.unicodeScalars.allSatisfy({
+            CharacterSet.urlHostAllowed.contains($0)
+                && !CharacterSet.whitespacesAndNewlines.contains($0)
+        }) else {
+            return "代理主机包含无效字符"
+        }
+        guard activeNodeIDs.count <= Self.maximumActiveNodes else {
+            return "最多可同时启用 \(Self.maximumActiveNodes) 个不同订阅节点"
+        }
+        if let message = subscriptions.lazy.compactMap(\.validationMessage).first {
+            return message
+        }
+        return nil
+    }
+
+    public var sanitized: ModelProxySettings {
+        var copy = self
+        copy.host = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        var unique: [String: ModelProxySelection] = [:]
+        for selection in selections {
+            let normalized = ModelProxySelection(
+                providerID: selection.providerID,
+                model: selection.model
+            )
+            guard !normalized.model.isEmpty else { continue }
+            unique[normalized.id] = normalized
+        }
+        copy.selections = unique.values.sorted {
+            if $0.providerID == $1.providerID { return $0.model < $1.model }
+            return $0.providerID.uuidString < $1.providerID.uuidString
+        }
+        var uniqueSubscriptions: [UUID: ProxySubscription] = [:]
+        for subscription in subscriptions {
+            let normalized = subscription.sanitized
+            guard normalized.validationMessage == nil else { continue }
+            uniqueSubscriptions[normalized.id] = normalized
+        }
+        copy.subscriptions = uniqueSubscriptions.values.sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+        let validSubscriptionIDs = Set(copy.subscriptions.map(\.id))
+        var uniqueNodes: [String: ProxySubscriptionNode] = [:]
+        for node in nodes where validSubscriptionIDs.contains(node.subscriptionID) {
+            let normalized = ProxySubscriptionNode(
+                subscriptionID: node.subscriptionID,
+                name: node.name,
+                type: node.type,
+                isAlive: node.isAlive
+            )
+            guard !normalized.name.isEmpty,
+                  normalized.name.count <= 512,
+                  normalized.type.count <= 80
+            else { continue }
+            uniqueNodes[normalized.id] = normalized
+        }
+        copy.nodes = uniqueNodes.values.sorted {
+            if $0.subscriptionID == $1.subscriptionID { return $0.name < $1.name }
+            return $0.subscriptionID.uuidString < $1.subscriptionID.uuidString
+        }
+        let validNodeIDs = Set(copy.nodes.map(\.id))
+        var uniqueAssignments: [String: ModelProxyAssignment] = [:]
+        for assignment in assignments {
+            let normalized = ModelProxyAssignment(
+                providerID: assignment.providerID,
+                model: assignment.model,
+                nodeID: assignment.nodeID
+            )
+            guard !normalized.model.isEmpty, validNodeIDs.contains(normalized.nodeID) else { continue }
+            uniqueAssignments[normalized.id] = normalized
+        }
+        copy.assignments = uniqueAssignments.values.sorted {
+            if $0.providerID == $1.providerID { return $0.model < $1.model }
+            return $0.providerID.uuidString < $1.providerID.uuidString
+        }
+        return copy
+    }
+
+    public var activeNodeIDs: [String] {
+        Array(Set(assignments.map(\.nodeID))).sorted()
+    }
+
+    public var nodePortMap: [String: Int] {
+        Dictionary(uniqueKeysWithValues: activeNodeIDs.prefix(Self.maximumActiveNodes)
+            .enumerated()
+            .map { index, nodeID in (nodeID, Self.firstNodePort + index) })
+    }
+
+    public func contains(providerID: UUID, model: String) -> Bool {
+        let exact = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        return selections.contains { $0.providerID == providerID && $0.model == exact }
+    }
+
+    public func endpoint(providerID: UUID, model: String) -> ProviderProxyEndpoint? {
+        let settings = sanitized
+        guard settings.enabled, settings.validationMessage == nil else { return nil }
+        let exact = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let assignment = settings.assignments.first(where: {
+            $0.providerID == providerID && $0.model == exact
+        }), let port = settings.nodePortMap[assignment.nodeID] {
+            return ProviderProxyEndpoint(kind: .http, host: "127.0.0.1", port: port)
+        }
+        guard settings.contains(providerID: providerID, model: model) else { return nil }
+        return ProviderProxyEndpoint(kind: settings.kind, host: settings.host, port: settings.port)
+    }
+
+    public mutating func setSelected(_ selected: Bool, providerID: UUID, model: String) {
+        let selection = ModelProxySelection(providerID: providerID, model: model)
+        selections.removeAll { $0.providerID == providerID && $0.model == selection.model }
+        if selected, !selection.model.isEmpty { selections.append(selection) }
+    }
+
+    public mutating func setAssignedNode(
+        _ nodeID: String?,
+        providerID: UUID,
+        model: String
+    ) {
+        let assignment = ModelProxyAssignment(
+            providerID: providerID,
+            model: model,
+            nodeID: nodeID ?? ""
+        )
+        assignments.removeAll { $0.id == assignment.id }
+        if !assignment.model.isEmpty,
+           !assignment.nodeID.isEmpty,
+           nodes.contains(where: { $0.id == assignment.nodeID })
+        {
+            assignments.append(assignment)
+        }
+    }
+
+    @discardableResult
+    public mutating func setAssignedNode(
+        _ nodeID: String?,
+        providerID: UUID,
+        models: [String],
+        enableWhenAssigned: Bool = false
+    ) -> Int {
+        var seen = Set<String>()
+        let normalizedModels = models.compactMap { rawModel -> String? in
+            let model = rawModel.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !model.isEmpty, seen.insert(model).inserted else { return nil }
+            return model
+        }
+        for model in normalizedModels {
+            setAssignedNode(nodeID, providerID: providerID, model: model)
+        }
+        if enableWhenAssigned,
+           let nodeID = nodeID?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !nodeID.isEmpty,
+           assignments.contains(where: {
+               $0.providerID == providerID
+                   && normalizedModels.contains($0.model)
+                   && $0.nodeID == nodeID
+           })
+        {
+            enabled = true
+        }
+        return normalizedModels.count
     }
 }
 

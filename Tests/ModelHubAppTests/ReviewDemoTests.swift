@@ -13,7 +13,13 @@ final class ReviewDemoTests: XCTestCase {
         XCTAssertEqual(configuration.providers.count, 2)
         XCTAssertEqual(configuration.routes.count, 3)
         XCTAssertFalse(configuration.usage.isEmpty)
-        XCTAssertTrue(configuration.modelHealth.allSatisfy { $0.status == .available })
+        XCTAssertTrue(configuration.modelHealth.contains { $0.status == .available })
+        XCTAssertEqual(
+            configuration.modelHealth.filter(ModelHealthRecoveryPolicy.isRecoverable).count,
+            1
+        )
+        XCTAssertEqual(configuration.modelHealthActivities.count, 1)
+        XCTAssertEqual(configuration.modelHealthActivities.first?.circuitSkipped, 4)
         XCTAssertTrue(configuration.providers.allSatisfy {
             URL(string: $0.baseURL)?.host?.hasSuffix(".invalid") == true
         })
@@ -51,6 +57,25 @@ final class ReviewDemoTests: XCTestCase {
         XCTAssertEqual(model.providers, [originalProvider])
         XCTAssertEqual(model.totalRequests, 7)
         XCTAssertEqual(model.successfulRequests, 6)
+    }
+
+    func testTransientRecoveryActionKeepsSyntheticModelQuarantinedAndAddsActivity() throws {
+        let model = AppModel()
+        model.enterReviewDemoMode()
+        let providerID = try XCTUnwrap(model.providers.first?.id)
+
+        XCTAssertEqual(model.recoverableTransientHealthCount(providerID: providerID), 1)
+
+        let recoveredCount = model.recoverTransientNetworkHealth(providerID: providerID)
+
+        XCTAssertEqual(recoveredCount, 1)
+        XCTAssertEqual(model.recoverableTransientHealthCount(providerID: providerID), 0)
+        XCTAssertEqual(
+            model.healthRecord(providerID: providerID, model: "review-text-1")?.status,
+            .unknown
+        )
+        XCTAssertEqual(model.recentModelHealthActivities().first?.kind, .transientRecovery)
+        XCTAssertEqual(model.recentModelHealthActivities().first?.recoveredToUnknown, 1)
     }
 
     func testDemoConsoleProducesLocalDisclosureAndLog() async {

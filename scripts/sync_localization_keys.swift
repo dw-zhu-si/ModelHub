@@ -24,15 +24,22 @@ func containsHan(_ value: String) -> Bool {
 let literalPattern = try NSRegularExpression(pattern: #"\"(?:\\.|[^\"\\])*\""#)
 let manager = FileManager.default
 var discovered = Set<String>()
+var scannedSwiftFiles = 0
 
 for sourcePath in CommandLine.arguments.dropFirst(2) {
     let sourceURL = URL(fileURLWithPath: sourcePath)
     guard let enumerator = manager.enumerator(
         at: sourceURL,
-        includingPropertiesForKeys: [.isRegularFileKey],
-        options: [.skipsHiddenFiles]
+        // Some project target directories on external APFS volumes carry the
+        // filesystem `hidden` flag even though their names are not dot-prefixed.
+        // `.skipsHiddenFiles` would therefore omit most of the app sources.
+        includingPropertiesForKeys: nil,
+        options: []
     ) else { continue }
-    for case let fileURL as URL in enumerator where fileURL.pathExtension == "swift" {
+    for case let fileURL as URL in enumerator
+        where fileURL.pathExtension == "swift" && !fileURL.lastPathComponent.hasPrefix(".")
+    {
+        scannedSwiftFiles += 1
         guard let source = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
         let range = NSRange(source.startIndex..<source.endIndex, in: source)
         for match in literalPattern.matches(in: source, range: range) {
@@ -60,4 +67,7 @@ let output = try JSONSerialization.data(
     options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
 )
 try output.write(to: catalogURL, options: .atomic)
-print("Added \(missing.count) localization keys; catalog now has \(strings.count) keys.")
+print(
+    "Scanned \(scannedSwiftFiles) Swift files; added \(missing.count) localization keys; "
+        + "catalog now has \(strings.count) keys."
+)

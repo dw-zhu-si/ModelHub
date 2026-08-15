@@ -2,6 +2,207 @@ import XCTest
 @testable import ModelHubCore
 
 final class ProviderClientTests: XCTestCase {
+    func testDirectSessionExplicitlyDisablesSystemProxyInheritance() {
+        let dictionary = ProviderNetworkSession.directConfiguration().connectionProxyDictionary
+
+        XCTAssertEqual(dictionary?["HTTPEnable"] as? Int, 0)
+        XCTAssertEqual(dictionary?["HTTPSEnable"] as? Int, 0)
+        XCTAssertEqual(dictionary?["SOCKSEnable"] as? Int, 0)
+    }
+
+    func testHTTPProxySessionAppliesToHTTPAndHTTPSDestinations() {
+        let endpoint = ProviderProxyEndpoint(kind: .http, host: "127.0.0.1", port: 7897)
+        let dictionary = ProviderNetworkSession.proxyConfiguration(endpoint).connectionProxyDictionary
+
+        XCTAssertEqual(dictionary?["HTTPEnable"] as? Int, 1)
+        XCTAssertEqual(dictionary?["HTTPProxy"] as? String, "127.0.0.1")
+        XCTAssertEqual(dictionary?["HTTPPort"] as? Int, 7897)
+        XCTAssertEqual(dictionary?["HTTPSEnable"] as? Int, 1)
+        XCTAssertEqual(dictionary?["HTTPSProxy"] as? String, "127.0.0.1")
+        XCTAssertEqual(dictionary?["HTTPSPort"] as? Int, 7897)
+        XCTAssertEqual(dictionary?["SOCKSEnable"] as? Int, 0)
+    }
+
+    func testSOCKSProxySessionDoesNotEnableHTTPProxyKeys() {
+        let endpoint = ProviderProxyEndpoint(kind: .socks5, host: "localhost", port: 7890)
+        let dictionary = ProviderNetworkSession.proxyConfiguration(endpoint).connectionProxyDictionary
+
+        XCTAssertEqual(dictionary?["HTTPEnable"] as? Int, 0)
+        XCTAssertEqual(dictionary?["HTTPSEnable"] as? Int, 0)
+        XCTAssertEqual(dictionary?["SOCKSEnable"] as? Int, 1)
+        XCTAssertEqual(dictionary?["SOCKSProxy"] as? String, "localhost")
+        XCTAssertEqual(dictionary?["SOCKSPort"] as? Int, 7890)
+    }
+
+    func testMiniMaxVideoRequestUsesExactModelAndDedicatedParameters() throws {
+        let provider = try miniMaxProvider(kind: .minimaxChina)
+        let request = try ProviderClient().nativeRequest(
+            rawBody: Data(#"{"prompt":"ocean","duration":5,"resolution":"480p","size":"16:9","generate_audio":false,"watermark":true}"#.utf8),
+            targetModel: "MiniMax-Hailuo-2.3",
+            provider: provider,
+            apiKey: "test-key",
+            operation: .videoGeneration
+        )
+
+        let body = try jsonBody(request)
+        XCTAssertEqual(body["model"] as? String, "MiniMax-Hailuo-2.3")
+        XCTAssertEqual(body["duration"] as? Int, 6)
+        XCTAssertEqual(body["resolution"] as? String, "768P")
+        XCTAssertEqual(body["aigc_watermark"] as? Bool, true)
+        XCTAssertNil(body["size"])
+        XCTAssertNil(body["generate_audio"])
+        XCTAssertNil(body["watermark"])
+    }
+
+    func testMiniMaxMusicRequestMapsGenericFieldsToOfficialSchema() throws {
+        let provider = try miniMaxProvider(kind: .minimax)
+        let request = try ProviderClient().nativeRequest(
+            rawBody: Data(#"{"prompt":"calm piano","duration":5,"instrumental":true,"response_format":"url","sample_rate":44100}"#.utf8),
+            targetModel: "music-3.0",
+            provider: provider,
+            apiKey: "test-key",
+            operation: .musicGeneration
+        )
+
+        let body = try jsonBody(request)
+        XCTAssertEqual(body["model"] as? String, "music-3.0")
+        XCTAssertEqual(body["is_instrumental"] as? Bool, true)
+        XCTAssertEqual(body["output_format"] as? String, "url")
+        XCTAssertEqual((body["audio_setting"] as? [String: Any])?["sample_rate"] as? Int, 44_100)
+        XCTAssertNil(body["instrumental"])
+        XCTAssertNil(body["duration"])
+        XCTAssertNil(body["response_format"])
+        XCTAssertNil(body["sample_rate"])
+    }
+
+    func testMiniMaxRepairsOnlyKnownLegacyModelHubMusicAlias() throws {
+        let provider = try miniMaxProvider(kind: .minimaxChina)
+        let request = try ProviderClient().nativeRequest(
+            rawBody: Data(#"{"prompt":"calm piano","instrumental":true}"#.utf8),
+            targetModel: "MiniMax Music 3.0",
+            provider: provider,
+            apiKey: "test-key",
+            operation: .musicGeneration
+        )
+
+        XCTAssertEqual(try jsonBody(request)["model"] as? String, "music-3.0")
+    }
+
+    func testMiniMaxRepairsLegacyMusic26ModelHubAlias() throws {
+        let provider = try miniMaxProvider(kind: .minimaxChina)
+        let request = try ProviderClient().nativeRequest(
+            rawBody: Data(#"{"prompt":"calm piano","instrumental":true}"#.utf8),
+            targetModel: "MiniMax Music-2.6",
+            provider: provider,
+            apiKey: "test-key",
+            operation: .musicGeneration
+        )
+
+        XCTAssertEqual(try jsonBody(request)["model"] as? String, "music-2.6")
+    }
+
+    func testMiniMaxSpeechRequestMapsUnifiedSpeechFields() throws {
+        let provider = try miniMaxProvider(kind: .minimaxChina)
+        let request = try ProviderClient().nativeRequest(
+            rawBody: Data(#"{"input":"你好","voice":"male-qn-qingse","response_format":"mp3","sample_rate":32000}"#.utf8),
+            targetModel: "speech-2.8-hd",
+            provider: provider,
+            apiKey: "test-key",
+            operation: .speech
+        )
+
+        let body = try jsonBody(request)
+        XCTAssertEqual(body["model"] as? String, "speech-2.8-hd")
+        XCTAssertEqual(body["text"] as? String, "你好")
+        XCTAssertEqual((body["voice_setting"] as? [String: Any])?["voice_id"] as? String, "male-qn-qingse")
+        XCTAssertEqual((body["audio_setting"] as? [String: Any])?["format"] as? String, "mp3")
+        XCTAssertEqual((body["audio_setting"] as? [String: Any])?["sample_rate"] as? Int, 32_000)
+        XCTAssertNil(body["input"])
+        XCTAssertNil(body["voice"])
+        XCTAssertNil(body["response_format"])
+    }
+
+    func testMiniMaxImageRequestMapsOpenAICompatibleSize() throws {
+        let provider = try miniMaxProvider(kind: .minimaxChina)
+        let request = try ProviderClient().nativeRequest(
+            rawBody: Data(#"{"prompt":"mountain","size":"1024x1024","quality":"high","watermark":false}"#.utf8),
+            targetModel: "image-01",
+            provider: provider,
+            apiKey: "test-key",
+            operation: .imageGeneration
+        )
+
+        let body = try jsonBody(request)
+        XCTAssertEqual(body["model"] as? String, "image-01")
+        XCTAssertEqual(body["width"] as? Int, 1_024)
+        XCTAssertEqual(body["height"] as? Int, 1_024)
+        XCTAssertEqual(body["aigc_watermark"] as? Bool, false)
+        XCTAssertNil(body["size"])
+        XCTAssertNil(body["quality"])
+    }
+
+    func testMiniMaxNativeRequestRejectsInexactOrWrongCapabilityModelIDs() throws {
+        let provider = try miniMaxProvider(kind: .minimaxChina)
+        for (model, operation) in [
+            ("minimax-hailuo-2.3", NativeAPIOperation.videoGeneration),
+            ("music-3.0", NativeAPIOperation.videoGeneration),
+            ("image-01", NativeAPIOperation.musicGeneration)
+        ] {
+            XCTAssertThrowsError(
+                try ProviderClient().nativeRequest(
+                    rawBody: Data(#"{"prompt":"test"}"#.utf8),
+                    targetModel: model,
+                    provider: provider,
+                    apiKey: "test-key",
+                    operation: operation
+                )
+            ) { error in
+                guard case ProviderClientError.invalidRequest(let detail) = error else {
+                    return XCTFail("Unexpected error: \(error)")
+                }
+                XCTAssertTrue(detail.contains("精确模型 ID"))
+            }
+        }
+    }
+
+    func testMiniMaxTaskQueryRejectsInexactModelIDBeforeNetworkUse() throws {
+        let provider = try miniMaxProvider(kind: .minimaxChina)
+        XCTAssertThrowsError(
+            try ProviderClient().nativeRequest(
+                rawBody: Data(),
+                targetModel: "minimax-hailuo-2.3",
+                provider: provider,
+                apiKey: "test-key",
+                operation: .videoTask,
+                taskID: "task_1"
+            )
+        ) { error in
+            guard case ProviderClientError.invalidRequest(let detail) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertTrue(detail.contains("精确模型 ID"))
+        }
+    }
+
+    func testMiniMaxNativeOperationsRejectMultipartBeforeNetworkUse() throws {
+        let provider = try miniMaxProvider(kind: .minimaxChina)
+        XCTAssertThrowsError(
+            try ProviderClient().nativeRequest(
+                rawBody: Data("body".utf8),
+                targetModel: "image-01",
+                provider: provider,
+                apiKey: "test-key",
+                operation: .imageGeneration,
+                contentType: "multipart/form-data; boundary=test"
+            )
+        ) { error in
+            guard case ProviderClientError.invalidRequest(let detail) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertTrue(detail.contains("application/json"))
+        }
+    }
+
     func testBailianBusinessWorkspaceUsesPayAsYouGoEndpointAndCredential() throws {
         let preset = try XCTUnwrap(
             ProviderConnectionPresets.preset(for: .qwenBusiness)
@@ -724,6 +925,32 @@ final class ProviderClientTests: XCTestCase {
         XCTAssertEqual((json["input"] as? [String: Any])?["prompt"] as? String, "ModelHub connection test")
     }
 
+    func testQianwenImageUsesMultimodalGenerationEndpointAndPayload() throws {
+        let provider = ProviderConfig(
+            name: "千问AI平台（按量付费）",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+        let request = try ProviderClient().nativeRequest(
+            rawBody: Data(#"{"prompt":"一只猫","size":"2K"}"#.utf8),
+            targetModel: "qwen-image-3.0-pro",
+            provider: provider,
+            apiKey: "test-key",
+            operation: .imageGeneration
+        )
+
+        XCTAssertEqual(
+            request.url?.absoluteString,
+            "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+        )
+        let json = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
+        )
+        let input = try XCTUnwrap(json["input"] as? [String: Any])
+        XCTAssertNotNil(input["messages"] as? [[String: Any]])
+        XCTAssertEqual((json["parameters"] as? [String: Any])?["size"] as? String, "2K")
+    }
+
     func testBailianSpeechNormalizesCompatibleStyleInput() throws {
         let provider = ProviderConfig(
             name: "阿里云百炼 TTS",
@@ -834,6 +1061,61 @@ final class ProviderClientTests: XCTestCase {
                 provider: provider,
                 apiKey: "provider-key"
             )
+        )
+    }
+
+    func testQianwenNativeProbeUsesOfficialEmbeddingAndRerankingEndpoints() throws {
+        let provider = ProviderConfig(
+            name: "千问AI平台（按量付费）",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            endpointURLs: [
+                ProviderEndpointRecord.key(for: .chat):
+                    "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+            ]
+        )
+        let client = ProviderClient()
+
+        XCTAssertEqual(
+            try client.nativeEndpoint(
+                for: provider,
+                model: "text-embedding-v4",
+                operation: .embeddings
+            ).absoluteString,
+            "https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings"
+        )
+        XCTAssertEqual(
+            try client.nativeEndpoint(
+                for: provider,
+                model: "qwen3-rerank",
+                operation: .reranking
+            ).absoluteString,
+            "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
+        )
+        XCTAssertEqual(
+            try client.nativeEndpoint(
+                for: provider,
+                model: "qwen3-vl-embedding-2b",
+                operation: .embeddings
+            ).absoluteString,
+            "https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding"
+        )
+    }
+}
+
+private extension ProviderClientTests {
+    func miniMaxProvider(kind: ProviderKind) throws -> ProviderConfig {
+        let preset = try XCTUnwrap(ProviderConnectionPresets.preset(for: kind))
+        return preset.applying(
+            to: ProviderConfig(name: kind.displayName, kind: kind, baseURL: ""),
+            mode: .replaceURLs
+        )
+    }
+
+    func jsonBody(_ request: URLRequest) throws -> [String: Any] {
+        try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try XCTUnwrap(request.httpBody))
+                as? [String: Any]
         )
     }
 }

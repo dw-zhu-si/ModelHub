@@ -1,5 +1,14 @@
 # Third-party notices
 
+## Optional Mihomo interoperability
+
+ModelHub can interoperate with a Mihomo executable already installed by the
+user, including the executable distributed inside Clash Verge. ModelHub does
+not bundle, copy, download, modify, or redistribute Mihomo or Clash Verge.
+Those programs remain separate works under their respective licenses. The
+optional integration exchanges local configuration and controller requests
+only when proxy subscriptions are enabled.
+
 ## OmniRoute
 
 ModelHub's native routing, resilience, budget, context, protocol, and local

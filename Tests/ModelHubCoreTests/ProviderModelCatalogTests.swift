@@ -4,6 +4,7 @@ import XCTest
 final class ProviderModelCatalogTests: XCTestCase {
     override func tearDown() {
         CatalogURLProtocolStub.responseBody = Data()
+        CatalogURLProtocolStub.responseBodies = []
         CatalogURLProtocolStub.statusCode = 200
         CatalogURLProtocolStub.failuresBeforeSuccess = 0
         CatalogURLProtocolStub.failureCode = .unknown
@@ -37,6 +38,137 @@ final class ProviderModelCatalogTests: XCTestCase {
             try ProviderModelCatalogParser.parse(bailianShape),
             ["qwen3-8b", "qwen3-32b"]
         )
+    }
+
+    func testDetailedCatalogPrefersExactModelIDAndExtractsCapabilityConstraints() throws {
+        let body = Data(#"""
+        {
+          "models": [{
+            "name": "Qwen Image 3.0 Pro",
+            "model_id": "qwen-image-3.0-pro",
+            "modality": {"input": ["text", "image"], "output": ["image"]},
+            "supported_parameters": {
+              "size": {"type": "string", "enum": ["1K", "2K"]},
+              "n": {"type": "integer", "minimum": 1, "maximum": 6}
+            }
+          }]
+        }
+        """#.utf8)
+
+        let parsed = try ProviderModelCatalogParser.parseDetailed(
+            body,
+            providerKind: .qwen,
+            source: "https://platform.qianwenai.com/models"
+        )
+
+        XCTAssertEqual(parsed.models, ["qwen-image-3.0-pro"])
+        let details = try XCTUnwrap(parsed.capabilityDetails["qwen-image-3.0-pro"])
+        XCTAssertEqual(details.inputModalities, [.text, .image])
+        XCTAssertEqual(details.outputModalities, [.image])
+        XCTAssertEqual(
+            details.image?.widthPixels,
+            .range(minimum: 512, maximum: 2048, step: nil)
+        )
+        XCTAssertEqual(details.image?.maximumOutputs, 6)
+        XCTAssertEqual(details.parameters.first(where: { $0.name == "n" })?.maximum, 6)
+    }
+
+    func testCatalogPaginationBuildsSameOriginNextPageAndStopsAtTotalPages() throws {
+        let current = try XCTUnwrap(URL(
+            string: "https://dashscope.aliyuncs.com/api/v1/deployments/models?page_no=1&page_size=100"
+        ))
+        let body = Data(#"{"page_no":1,"page_size":100,"total_pages":3,"models":[{"model_id":"qwen-a"}]}"#.utf8)
+
+        XCTAssertEqual(
+            try ProviderModelCatalogPagination.nextURL(responseBody: body, currentURL: current)?
+                .absoluteString,
+            "https://dashscope.aliyuncs.com/api/v1/deployments/models?page_no=2&page_size=100"
+        )
+
+        let lastBody = Data(#"{"page_no":3,"page_size":100,"total_pages":3,"models":[{"model_id":"qwen-c"}]}"#.utf8)
+        XCTAssertNil(try ProviderModelCatalogPagination.nextURL(
+            responseBody: lastBody,
+            currentURL: current
+        ))
+    }
+
+    func testCatalogFetchFollowsBoundedPaginationAndMergesEveryPage() async throws {
+        CatalogURLProtocolStub.responseBodies = [
+            Data(#"{"page":1,"total_pages":2,"models":[{"id":"model-a"}]}"#.utf8),
+            Data(#"{"page":2,"total_pages":2,"models":[{"id":"model-b"}]}"#.utf8)
+        ]
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [CatalogURLProtocolStub.self]
+        let client = ProviderClient(session: URLSession(configuration: configuration))
+        let provider = ProviderConfig(
+            name: "Paged",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.com/v1",
+            endpointURLs: [
+                ProviderEndpointRecord.key(for: .modelCatalog):
+                    "https://catalog.example.com/models?page=1&limit=1"
+            ]
+        )
+
+        let result = try await client.fetchModelCatalog(provider: provider, apiKey: "test-key")
+
+        XCTAssertEqual(result.models, ["model-a", "model-b"])
+        XCTAssertEqual(result.pageCount, 2)
+        XCTAssertEqual(CatalogURLProtocolStub.attemptCount, 2)
+    }
+
+    func testCapabilityMetadataSurvivesConfigurationRoundTrip() throws {
+        let details = ModelCapabilityDetails(
+            inputModalities: [.text],
+            outputModalities: [.video],
+            video: .init(
+                resolutions: ["720P", "1080P"],
+                durationsSeconds: .range(minimum: 2, maximum: 15, step: 1)
+            ),
+            source: "official"
+        )
+        let profile = TargetProfile(
+            capabilities: [.videoGeneration],
+            capabilityDetails: details
+        )
+
+        let decoded = try JSONDecoder().decode(
+            TargetProfile.self,
+            from: JSONEncoder().encode(profile)
+        )
+
+        XCTAssertEqual(decoded, profile)
+    }
+
+    func testCapabilityUpdaterPersistsCatalogMetadataWithoutOverwritingPrices() throws {
+        var provider = ProviderConfig(
+            name: "千问AI平台",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            models: ["wan2.7-t2v"]
+        )
+        provider.modelProfiles = [
+            "wan2.7-t2v": TargetProfile(inputCostPerMillionTokens: 1.5)
+        ]
+        let details = ModelCapabilityDetails(
+            inputModalities: [.text],
+            outputModalities: [.video],
+            video: .init(
+                resolutions: ["720P", "1080P"],
+                aspectRatios: ["16:9", "9:16"],
+                durationsSeconds: .range(minimum: 2, maximum: 15, step: 1)
+            ),
+            source: "official-catalog"
+        )
+
+        let updated = ProviderModelCapabilityUpdater.apply(
+            details: ["wan2.7-t2v": details],
+            to: &provider
+        )
+
+        XCTAssertEqual(updated, 1)
+        XCTAssertEqual(provider.modelProfiles?["wan2.7-t2v"]?.inputCostPerMillionTokens, 1.5)
+        XCTAssertEqual(provider.modelProfiles?["wan2.7-t2v"]?.capabilityDetails, details)
     }
 
     func testRejectsInvalidEmptyAndOversizedCatalogs() throws {
@@ -525,8 +657,34 @@ final class ProviderModelCatalogTests: XCTestCase {
                 existing: ["existing", "Model-A"],
                 imported: ["model-a", "model-b", " model-c "]
             ),
-            ["existing", "Model-A", "model-b", "model-c"]
+            ["existing", "model-a", "model-b", "model-c"]
         )
+    }
+
+    func testCatalogSourceDoesNotPersistQueryParameters() async throws {
+        CatalogURLProtocolStub.responseBody = Data(
+            #"{"models":[{"id":"model-a","input_price":1,"output_modalities":["text"]}]}"#.utf8
+        )
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [CatalogURLProtocolStub.self]
+        let client = ProviderClient(session: URLSession(configuration: configuration))
+        let provider = ProviderConfig(
+            name: "Compatible",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.com/v1",
+            endpointURLs: [
+                ProviderEndpointRecord.key(for: .modelCatalog):
+                    "https://catalog.example.com/models?page=1"
+            ]
+        )
+
+        let result = try await client.fetchModelCatalog(provider: provider, apiKey: "test-key")
+
+        XCTAssertEqual(
+            result.capabilityDetails["model-a"]?.source,
+            "https://catalog.example.com/models"
+        )
+        XCTAssertNotNil(result.capabilityDetails["model-a"]?.updatedAt)
     }
 
     func testHotUpdaterPreservesExistingHealthAndQuarantinesNewModels() {
@@ -564,7 +722,7 @@ final class ProviderModelCatalogTests: XCTestCase {
             healthRecords: &health
         )
 
-        XCTAssertEqual(provider.models, ["model-a", "model-b", "model-c"])
+        XCTAssertEqual(provider.models, ["model-a", "MODEL-B", "model-c"])
         XCTAssertEqual(summary.catalogModelCount, 2)
         XCTAssertEqual(summary.addedModelCount, 1)
         XCTAssertEqual(summary.retainedModelCount, 2)
@@ -815,6 +973,7 @@ final class ProviderModelCatalogTests: XCTestCase {
 
 private final class CatalogURLProtocolStub: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var responseBody = Data()
+    nonisolated(unsafe) static var responseBodies: [Data] = []
     nonisolated(unsafe) static var statusCode = 200
     nonisolated(unsafe) static var failuresBeforeSuccess = 0
     nonisolated(unsafe) static var failureCode = URLError.Code.unknown
@@ -841,7 +1000,9 @@ private final class CatalogURLProtocolStub: URLProtocol, @unchecked Sendable {
             return
         }
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Self.responseBody)
+        let index = min(Self.attemptCount - 1, max(0, Self.responseBodies.count - 1))
+        let body = Self.responseBodies.isEmpty ? Self.responseBody : Self.responseBodies[index]
+        client?.urlProtocol(self, didLoad: body)
         client?.urlProtocolDidFinishLoading(self)
     }
 

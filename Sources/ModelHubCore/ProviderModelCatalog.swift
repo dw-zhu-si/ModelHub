@@ -3,22 +3,44 @@ import Foundation
 public struct ProviderModelCatalogResult: Sendable, Equatable {
     public let models: [String]
     public let prices: [String: ProviderModelPrice]
+    public let capabilityDetails: [String: ModelCapabilityDetails]
     public let endpoint: URL
     public let durationMilliseconds: Int
     public let responseBytes: Int
+    public let pageCount: Int
 
     public init(
         models: [String],
         prices: [String: ProviderModelPrice] = [:],
+        capabilityDetails: [String: ModelCapabilityDetails] = [:],
         endpoint: URL,
         durationMilliseconds: Int,
-        responseBytes: Int
+        responseBytes: Int,
+        pageCount: Int = 1
     ) {
         self.models = models
         self.prices = prices
+        self.capabilityDetails = capabilityDetails
         self.endpoint = endpoint
         self.durationMilliseconds = durationMilliseconds
         self.responseBytes = responseBytes
+        self.pageCount = pageCount
+    }
+}
+
+public struct ProviderModelCatalogParseResult: Sendable, Equatable {
+    public let models: [String]
+    public let prices: [String: ProviderModelPrice]
+    public let capabilityDetails: [String: ModelCapabilityDetails]
+
+    public init(
+        models: [String],
+        prices: [String: ProviderModelPrice],
+        capabilityDetails: [String: ModelCapabilityDetails]
+    ) {
+        self.models = models
+        self.prices = prices
+        self.capabilityDetails = capabilityDetails
     }
 }
 
@@ -60,6 +82,8 @@ public enum ProviderModelCatalogError: LocalizedError, Equatable {
     case networkUnavailable
     case timedOut
     case responseTooLarge(maximumBytes: Int)
+    case tooManyPages(maximum: Int)
+    case tooManyModels(maximum: Int)
     case rejected(statusCode: Int, providerKind: ProviderKind)
     case invalidResponse
     case noModels
@@ -90,6 +114,10 @@ public enum ProviderModelCatalogError: LocalizedError, Equatable {
             "模型名录请求超时；已停止重试，请稍后再试"
         case .responseTooLarge(let maximumBytes):
             "模型名录响应超过安全上限（\(maximumBytes / 1_048_576) MiB）"
+        case .tooManyPages(let maximum):
+            "模型名录分页超过安全上限（\(maximum) 页），为避免返回不完整目录已停止导入"
+        case .tooManyModels(let maximum):
+            "模型名录超过安全上限（\(maximum) 个模型），为避免内存占用异常已停止导入"
         case .rejected(let statusCode, let providerKind):
             rejectionDescription(statusCode: statusCode, providerKind: providerKind)
         case .invalidResponse:
@@ -108,13 +136,13 @@ public enum ProviderModelCatalogError: LocalizedError, Equatable {
         }
         switch providerKind {
         case .qwenPersonal:
-            return "百炼个人版鉴权失败（HTTP \(statusCode)）：请使用与 Token Plan Base URL 配套、以 sk-sp- 开头的个人版专属 API Key，并确认订阅仍有效。"
+            return "千问AI平台个人版鉴权失败（HTTP \(statusCode)）：请使用与 Token Plan Base URL 配套、以 sk-sp- 开头的个人版专属 API Key，并确认订阅仍有效。"
         case .qwenEnterprise:
-            return "百炼 Token Plan 团队版鉴权失败（HTTP \(statusCode)）：请先分配成员席位，再使用与 Token Plan Base URL 配套、以 sk-sp- 开头的团队版专属 API Key。"
+            return "千问AI平台 Token Plan 团队版鉴权失败（HTTP \(statusCode)）：请先分配成员席位，再使用与 Token Plan Base URL 配套、以 sk-sp- 开头的团队版专属 API Key。"
         case .qwen:
-            return "百炼按量付费版鉴权失败（HTTP \(statusCode)）：请使用当前地域/默认业务空间对应的按量付费 API Key 与 Base URL，不能混用 sk-sp- 套餐密钥。"
+            return "千问AI平台按量付费版鉴权失败（HTTP \(statusCode)）：请使用当前地域/默认业务空间对应的按量付费 API Key 与 Base URL，不能混用 sk-sp- 套餐密钥。"
         case .qwenBusiness:
-            return "百炼企业业务空间鉴权失败（HTTP \(statusCode)）：请使用 API Keys 页面生成的按量付费 API Key，并核对页面展示的地域、业务空间和 Base URL；不能混用 sk-sp- 套餐密钥。"
+            return "千问AI平台业务空间鉴权失败（HTTP \(statusCode)）：请使用 API Keys 页面生成的按量付费 API Key，并核对页面展示的地域、业务空间和 Base URL；不能混用 sk-sp- 套餐密钥。"
         case .minimax:
             return "MiniMax 国际站鉴权失败（HTTP \(statusCode)）：当前 API Key 不被 api.minimax.io 接受；如果使用中国站账号，请将供应商类型切换为“MiniMax 中国站”。"
         case .minimaxChina:
@@ -138,7 +166,7 @@ public enum ProviderModelCatalogParser {
         _ data: Data,
         providerKind: ProviderKind,
         source: String
-    ) throws -> (models: [String], prices: [String: ProviderModelPrice]) {
+    ) throws -> ProviderModelCatalogParseResult {
         guard data.count <= maximumResponseBytes else {
             throw ProviderModelCatalogError.responseTooLarge(
                 maximumBytes: maximumResponseBytes
@@ -150,18 +178,21 @@ public enum ProviderModelCatalogParser {
 
         var candidates: [String] = []
         var rawPrices: [String: ProviderModelPrice] = [:]
+        var rawDetails: [String: ModelCapabilityDetails] = [:]
         collect(
             from: root,
             depth: 0,
             providerKind: providerKind,
             source: source,
             candidates: &candidates,
-            prices: &rawPrices
+            prices: &rawPrices,
+            capabilityDetails: &rawDetails
         )
 
         var seen = Set<String>()
         var result: [String] = []
         var prices: [String: ProviderModelPrice] = [:]
+        var capabilityDetails: [String: ModelCapabilityDetails] = [:]
         result.reserveCapacity(min(candidates.count, maximumModelCount))
         for rawName in candidates {
             guard let name = normalized(rawName) else { continue }
@@ -171,10 +202,22 @@ public enum ProviderModelCatalogParser {
             if let price = rawPrices[identity], price.hasKnownPrice {
                 prices[name] = price
             }
+            let catalog = rawDetails[identity]
+            let inferred = providerKind.isBailian
+                ? QianwenModelCapabilityRegistry.details(for: name)
+                : nil
+            if let details = catalog?.mergingFallback(inferred) ?? inferred,
+               !details.isEmpty {
+                capabilityDetails[name] = details
+            }
             if result.count == maximumModelCount { break }
         }
         guard !result.isEmpty else { throw ProviderModelCatalogError.noModels }
-        return (result, prices)
+        return .init(
+            models: result,
+            prices: prices,
+            capabilityDetails: capabilityDetails
+        )
     }
 
     private static func collect(
@@ -183,7 +226,8 @@ public enum ProviderModelCatalogParser {
         providerKind: ProviderKind,
         source: String,
         candidates: inout [String],
-        prices: inout [String: ProviderModelPrice]
+        prices: inout [String: ProviderModelPrice],
+        capabilityDetails: inout [String: ModelCapabilityDetails]
     ) {
         guard depth <= 4, candidates.count < maximumModelCount else { return }
         if let array = value as? [Any] {
@@ -199,6 +243,18 @@ public enum ProviderModelCatalogParser {
                     {
                         prices[name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()] = price
                     }
+                    if let object = item as? [String: Any],
+                       let details = parsedCapabilityDetails(
+                           from: object,
+                           modelName: name,
+                           providerKind: providerKind,
+                           source: source
+                       )
+                    {
+                        capabilityDetails[
+                            name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                        ] = details
+                    }
                 } else if item is [Any] || item is [String: Any] {
                     collect(
                         from: item,
@@ -206,7 +262,8 @@ public enum ProviderModelCatalogParser {
                         providerKind: providerKind,
                         source: source,
                         candidates: &candidates,
-                        prices: &prices
+                        prices: &prices,
+                        capabilityDetails: &capabilityDetails
                     )
                 }
             }
@@ -225,7 +282,8 @@ public enum ProviderModelCatalogParser {
                     providerKind: providerKind,
                     source: source,
                     candidates: &candidates,
-                    prices: &prices
+                    prices: &prices,
+                    capabilityDetails: &capabilityDetails
                 )
             }
         }
@@ -299,10 +357,191 @@ public enum ProviderModelCatalogParser {
     private static func modelName(from value: Any) -> String? {
         if let string = value as? String { return string }
         guard let object = value as? [String: Any] else { return nil }
-        for key in ["id", "name", "model", "model_id", "modelId", "model_name"] {
+        for key in ["id", "model_id", "modelId", "model", "model_name", "name"] {
             if let string = object[key] as? String { return string }
         }
         return nil
+    }
+
+    private static func parsedCapabilityDetails(
+        from object: [String: Any],
+        modelName: String,
+        providerKind: ProviderKind,
+        source: String
+    ) -> ModelCapabilityDetails? {
+        let modality = object["modality"] as? [String: Any]
+        let input = modalities(
+            modality?["input"] ?? object["input_modalities"] ?? object["inputModalities"]
+        )
+        let output = modalities(
+            modality?["output"] ?? object["output_modalities"] ?? object["outputModalities"]
+        )
+        let rawParameters = object["supported_parameters"]
+            ?? object["supportedParameters"]
+            ?? object["parameters"]
+        let parameters = parameterConstraints(rawParameters)
+        let sizeValues = parameters.first { ["size", "image_size"].contains($0.name) }?
+            .allowedValues ?? stringValues(object["supported_sizes"] ?? object["sizes"])
+        let ratioValues = parameters.first { ["aspect_ratio", "ratio"].contains($0.name) }?
+            .allowedValues ?? stringValues(object["aspect_ratios"])
+        let resolutionValues = parameters.first { $0.name == "resolution" }?.allowedValues
+            ?? stringValues(object["resolutions"])
+        let duration = durationConstraint(
+            parameter: parameters.first { ["duration", "duration_seconds"].contains($0.name) },
+            raw: object["durations"] ?? object["duration_seconds"]
+        )
+        let maximumOutputs = parameters.first { ["n", "count"].contains($0.name) }?
+            .maximum.map(Int.init)
+        let widthPixels = numericConstraint(
+            parameter: parameters.first { ["width", "width_pixels"].contains($0.name) },
+            minimum: object["minimum_width"] ?? object["min_width"],
+            maximum: object["maximum_width"] ?? object["max_width"]
+        )
+        let heightPixels = numericConstraint(
+            parameter: parameters.first { ["height", "height_pixels"].contains($0.name) },
+            minimum: object["minimum_height"] ?? object["min_height"],
+            maximum: object["maximum_height"] ?? object["max_height"]
+        )
+
+        let hasImage = output.contains(.image) || !sizeValues.isEmpty
+        let hasVideo = output.contains(.video) || !resolutionValues.isEmpty || duration != nil
+        let hasAudio = output.contains(.audio)
+        let details = ModelCapabilityDetails(
+            inputModalities: input,
+            outputModalities: output,
+            image: hasImage ? .init(
+                sizes: sizeValues,
+                aspectRatios: ratioValues,
+                widthPixels: widthPixels,
+                heightPixels: heightPixels,
+                maximumOutputs: maximumOutputs
+            ) : nil,
+            video: hasVideo ? .init(
+                resolutions: resolutionValues,
+                aspectRatios: ratioValues,
+                durationsSeconds: duration
+            ) : nil,
+            audio: hasAudio ? .init(
+                formats: stringValues(object["audio_formats"] ?? object["formats"]),
+                sampleRatesHz: integerValues(object["sample_rates"] ?? object["sample_rates_hz"])
+            ) : nil,
+            parameters: parameters,
+            source: source
+        ).mergingFallback(
+            providerKind.isBailian
+                ? QianwenModelCapabilityRegistry.details(for: modelName)
+                : nil
+        )
+        return details.isEmpty ? nil : details
+    }
+
+    private static func modalities(_ value: Any?) -> [ModelModality] {
+        stringValues(value).compactMap { raw in
+            switch raw.lowercased() {
+            case "text", "language": .text
+            case "image", "vision": .image
+            case "video": .video
+            case "audio", "speech", "music": .audio
+            case "vector", "embedding", "embeddings": .vector
+            default: nil
+            }
+        }
+    }
+
+    private static func parameterConstraints(_ value: Any?) -> [ModelParameterConstraint] {
+        if let dictionary = value as? [String: Any] {
+            return dictionary.keys.sorted().compactMap { name in
+                guard let definition = dictionary[name] as? [String: Any] else {
+                    return ModelParameterConstraint(name: name)
+                }
+                return parameterConstraint(name: name, definition: definition)
+            }
+        }
+        if let array = value as? [[String: Any]] {
+            return array.compactMap { definition in
+                guard let name = definition["name"] as? String else { return nil }
+                return parameterConstraint(name: name, definition: definition)
+            }
+        }
+        return []
+    }
+
+    private static func parameterConstraint(
+        name: String,
+        definition: [String: Any]
+    ) -> ModelParameterConstraint {
+        .init(
+            name: name,
+            valueType: definition["type"] as? String,
+            required: (definition["required"] as? Bool) ?? false,
+            allowedValues: stringValues(
+                definition["enum"] ?? definition["allowed_values"] ?? definition["values"]
+            ),
+            minimum: number(definition["minimum"] ?? definition["min"]),
+            maximum: number(definition["maximum"] ?? definition["max"]),
+            step: number(definition["step"]),
+            unit: definition["unit"] as? String,
+            description: definition["description"] as? String
+        )
+    }
+
+    private static func durationConstraint(
+        parameter: ModelParameterConstraint?,
+        raw: Any?
+    ) -> ModelNumericConstraint? {
+        if let parameter {
+            let values = parameter.allowedValues.compactMap(Double.init)
+            if !values.isEmpty { return .values(values) }
+            if let minimum = parameter.minimum, let maximum = parameter.maximum {
+                return .range(minimum: minimum, maximum: maximum, step: parameter.step)
+            }
+        }
+        let values = numericValues(raw)
+        return values.isEmpty ? nil : .values(values)
+    }
+
+    private static func numericConstraint(
+        parameter: ModelParameterConstraint?,
+        minimum: Any?,
+        maximum: Any?
+    ) -> ModelNumericConstraint? {
+        if let parameter {
+            let values = parameter.allowedValues.compactMap(Double.init)
+            if !values.isEmpty { return .values(values) }
+            if let minimum = parameter.minimum, let maximum = parameter.maximum {
+                return .range(
+                    minimum: minimum,
+                    maximum: maximum,
+                    step: parameter.step
+                )
+            }
+        }
+        guard let minimum = number(minimum), let maximum = number(maximum) else {
+            return nil
+        }
+        return .range(minimum: minimum, maximum: maximum, step: nil)
+    }
+
+    private static func stringValues(_ value: Any?) -> [String] {
+        if let string = value as? String { return [string] }
+        if let values = value as? [String] { return values }
+        if let values = value as? [Any] {
+            return values.compactMap {
+                if let string = $0 as? String { return string }
+                if let number = $0 as? NSNumber { return number.stringValue }
+                return nil
+            }
+        }
+        return []
+    }
+
+    private static func numericValues(_ value: Any?) -> [Double] {
+        if let values = value as? [Any] { return values.compactMap(number) }
+        return number(value).map { [$0] } ?? []
+    }
+
+    private static func integerValues(_ value: Any?) -> [Int] {
+        numericValues(value).map(Int.init)
     }
 
     private static func normalized(_ raw: String) -> String? {
@@ -319,12 +558,111 @@ public enum ProviderModelCatalogParser {
 
 public enum ProviderModelCatalogImporter {
     public static func merging(existing: [String], imported: [String]) -> [String] {
+        let importedExactNames = Dictionary(
+            imported.compactMap { raw -> (String, String)? in
+                let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty else { return nil }
+                return (name.lowercased(), name)
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
         var seen = Set<String>()
         return (existing + imported).compactMap { raw in
             let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !name.isEmpty, seen.insert(name.lowercased()).inserted else { return nil }
-            return name
+            let identity = name.lowercased()
+            guard !name.isEmpty, seen.insert(identity).inserted else { return nil }
+            // Catalog IDs are authoritative. This also repairs old entries that
+            // accidentally persisted a display name or different ID casing.
+            return importedExactNames[identity] ?? name
         }
+    }
+}
+
+public enum ProviderModelCatalogPagination {
+    public static func nextURL(responseBody: Data, currentURL: URL) throws -> URL? {
+        guard let root = try? JSONSerialization.jsonObject(with: responseBody),
+              let rootObject = root as? [String: Any]
+        else { return nil }
+        let object = paginationObject(in: rootObject)
+
+        if let rawNext = string(
+            object["next"] ?? object["next_url"] ?? object["nextUrl"]
+        ), !rawNext.isEmpty {
+            guard let resolved = URL(string: rawNext, relativeTo: currentURL)?.absoluteURL,
+                  sameOrigin(currentURL, resolved)
+            else { throw ProviderModelCatalogError.redirectedToDifferentOrigin }
+            return resolved
+        }
+
+        if let token = string(
+            object["next_page_token"] ?? object["nextPageToken"]
+        ), !token.isEmpty {
+            var components = URLComponents(url: currentURL, resolvingAgainstBaseURL: false)
+            var items = components?.queryItems ?? []
+            let existingName = items.first {
+                ["page_token", "pageToken", "cursor"].contains($0.name)
+            }?.name ?? "page_token"
+            items.removeAll { $0.name == existingName }
+            items.append(.init(name: existingName, value: token))
+            components?.queryItems = items
+            return components?.url
+        }
+
+        let currentPage = integer(
+            object["page_no"] ?? object["pageNo"] ?? object["page"]
+        )
+        let totalPages = integer(
+            object["total_pages"] ?? object["totalPages"] ?? object["pages"]
+        )
+        guard let currentPage, let totalPages, currentPage < totalPages else { return nil }
+        var components = URLComponents(url: currentURL, resolvingAgainstBaseURL: false)
+        var items = components?.queryItems ?? []
+        let candidates = ["page_no", "pageNo", "page"]
+        let name = items.first { candidates.contains($0.name) }?.name
+            ?? (object["page_no"] != nil ? "page_no" : "page")
+        items.removeAll { $0.name == name }
+        let insertion = items.firstIndex { ["page_size", "pageSize", "limit"].contains($0.name) }
+            ?? items.endIndex
+        items.insert(.init(name: name, value: String(currentPage + 1)), at: insertion)
+        components?.queryItems = items
+        return components?.url
+    }
+
+    private static func paginationObject(in root: [String: Any]) -> [String: Any] {
+        for key in ["pagination", "page_info", "pageInfo", "meta", "response", "result", "output"] {
+            if let nested = root[key] as? [String: Any],
+               nested.keys.contains(where: {
+                   ["next", "next_url", "next_page_token", "page_no", "page", "total_pages"]
+                       .contains($0)
+               }) {
+                return nested.merging(root) { nested, _ in nested }
+            }
+        }
+        return root
+    }
+
+    private static func string(_ value: Any?) -> String? {
+        if let value = value as? String { return value }
+        if let value = value as? NSNumber { return value.stringValue }
+        return nil
+    }
+
+    private static func integer(_ value: Any?) -> Int? {
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
+    }
+
+    private static func sameOrigin(_ lhs: URL, _ rhs: URL) -> Bool {
+        lhs.scheme?.lowercased() == rhs.scheme?.lowercased()
+            && lhs.host?.lowercased() == rhs.host?.lowercased()
+            && effectivePort(lhs) == effectivePort(rhs)
+            && rhs.user == nil && rhs.password == nil
+    }
+
+    private static func effectivePort(_ url: URL) -> Int? {
+        if let port = url.port { return port }
+        return url.scheme?.lowercased() == "https" ? 443 : 80
     }
 }
 
@@ -545,7 +883,7 @@ public enum ProviderModelCatalogSuggestions {
             return fixed(
                 "dashscope.aliyuncs.com",
                 "https://dashscope.aliyuncs.com/api/v1/models",
-                "阿里云百炼账户可用模型"
+                "千问AI平台账户可用模型"
             )
         case "apihub.agnes-ai.com":
             return fixed(
@@ -592,13 +930,13 @@ public enum ProviderModelCatalogSuggestions {
             return fixed(
                 "dashscope.aliyuncs.com",
                 "https://dashscope.aliyuncs.com/api/v1/models",
-                "百炼北京地域账户可用模型"
+                "千问AI平台北京地域账户可用模型"
             )
         case .qwenPersonal, .qwenEnterprise:
             return fixed(
                 "token-plan.cn-beijing.maas.aliyuncs.com",
                 "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/models",
-                "百炼 Token Plan 当前版本可用模型"
+                "千问AI平台 Token Plan 当前版本可用模型"
             )
         case .moonshot:
             return fixed("api.moonshot.cn", "https://api.moonshot.cn/v1/models", "Moonshot 账户可用模型")
@@ -696,9 +1034,9 @@ public enum ProviderModelCatalogPricingPolicy {
     private static func unavailableReason(for kind: ProviderKind) -> String {
         switch kind {
         case .qwenPersonal, .qwenEnterprise:
-            return "百炼 Token Plan 的模型目录不提供美元单价；套餐按 Credits 与动态抵扣系数计量，请以百炼控制台为准。现有费用不会被覆盖。"
+            return "千问AI平台 Token Plan 的模型目录不提供美元单价；套餐按 Credits 与动态抵扣系数计量，请以平台控制台为准。现有费用不会被覆盖。"
         case .qwen, .qwenBusiness:
-            return "百炼按量付费模型目录不提供带明确币种与单位的机器可读价格；请以百炼控制台价格页为准，现有费用不会被覆盖。"
+            return "千问AI平台按量付费模型目录不提供带明确币种与单位的机器可读价格；请以平台控制台价格页为准，现有费用不会被覆盖。"
         case .minimax, .minimaxChina:
             return "MiniMax 模型目录只返回模型信息，不提供机器可读价格；当前不能从该目录自动同步金额，现有费用不会被覆盖。"
         case .apimart, .yunwu:
@@ -727,6 +1065,9 @@ public enum ProviderModelCatalogMigration {
 }
 
 extension ProviderClient {
+    private static var maximumCatalogPageCount: Int { 100 }
+    private static var maximumCatalogTotalBytes: Int { 16 * 1_048_576 }
+
     public func modelCatalogRequest(
         provider: ProviderConfig,
         apiKey: String?,
@@ -799,11 +1140,78 @@ extension ProviderClient {
         timeoutInterval: TimeInterval = 20,
         retryDelayNanoseconds: UInt64 = 250_000_000
     ) async throws -> ProviderModelCatalogResult {
-        let request = try modelCatalogRequest(
+        var request = try modelCatalogRequest(
             provider: provider,
             apiKey: apiKey,
             timeoutInterval: timeoutInterval
         )
+        let firstEndpoint = request.url!
+        var models: [String] = []
+        var prices: [String: ProviderModelPrice] = [:]
+        var capabilities: [String: ModelCapabilityDetails] = [:]
+        var totalDuration = 0
+        var totalBytes = 0
+        var pageCount = 0
+
+        var nextURL: URL?
+        while pageCount < Self.maximumCatalogPageCount {
+            let page = try await fetchModelCatalogPage(
+                request,
+                providerKind: provider.kind,
+                retryDelayNanoseconds: retryDelayNanoseconds
+            )
+            pageCount += 1
+            totalDuration += page.result.durationMilliseconds
+            totalBytes += page.result.responseBytes
+            guard totalBytes <= Self.maximumCatalogTotalBytes else {
+                throw ProviderModelCatalogError.responseTooLarge(
+                    maximumBytes: Self.maximumCatalogTotalBytes
+                )
+            }
+            let mergedModels = ProviderModelCatalogImporter.merging(
+                existing: models,
+                imported: page.result.models
+            )
+            guard mergedModels.count <= ProviderModelCatalogParser.maximumModelCount else {
+                throw ProviderModelCatalogError.tooManyModels(
+                    maximum: ProviderModelCatalogParser.maximumModelCount
+                )
+            }
+            models = mergedModels
+            for (model, price) in page.result.prices { prices[model] = price }
+            for (model, details) in page.result.capabilityDetails {
+                capabilities[model] = details
+            }
+            nextURL = page.nextURL
+            guard let nextURL else { break }
+            request.url = nextURL
+        }
+        if pageCount == Self.maximumCatalogPageCount, nextURL != nil {
+            throw ProviderModelCatalogError.tooManyPages(
+                maximum: Self.maximumCatalogPageCount
+            )
+        }
+        return .init(
+            models: models,
+            prices: prices,
+            capabilityDetails: capabilities,
+            endpoint: firstEndpoint,
+            durationMilliseconds: totalDuration,
+            responseBytes: totalBytes,
+            pageCount: pageCount
+        )
+    }
+
+    private struct ProviderModelCatalogPage {
+        let result: ProviderModelCatalogResult
+        let nextURL: URL?
+    }
+
+    private func fetchModelCatalogPage(
+        _ request: URLRequest,
+        providerKind: ProviderKind,
+        retryDelayNanoseconds: UInt64
+    ) async throws -> ProviderModelCatalogPage {
         var requestSession = session
         var recoverySession: URLSession?
         defer { recoverySession?.finishTasksAndInvalidate() }
@@ -812,7 +1220,7 @@ extension ProviderClient {
             do {
                 return try await performModelCatalogRequest(
                     request,
-                    providerKind: provider.kind,
+                    providerKind: providerKind,
                     session: requestSession
                 )
             } catch let error as URLError {
@@ -845,7 +1253,7 @@ extension ProviderClient {
         _ request: URLRequest,
         providerKind: ProviderKind,
         session: URLSession
-    ) async throws -> ProviderModelCatalogResult {
+    ) async throws -> ProviderModelCatalogPage {
         let startedAt = ContinuousClock.now
         let (bytes, response) = try await session.bytes(
             for: request,
@@ -876,21 +1284,46 @@ extension ProviderClient {
             }
             body.append(byte)
         }
+        let source = sanitizedCatalogSource(request.url!)
         let parsed = try ProviderModelCatalogParser.parseDetailed(
             body,
             providerKind: providerKind,
-            source: request.url!.absoluteString
+            source: source
         )
+        let fetchedAt = Date()
+        let capabilityDetails = parsed.capabilityDetails.mapValues { details in
+            var stamped = details
+            stamped.updatedAt = fetchedAt
+            return stamped
+        }
         let elapsed = startedAt.duration(to: .now)
         let milliseconds = Int(elapsed.components.seconds * 1_000)
             + Int(elapsed.components.attoseconds / 1_000_000_000_000_000)
-        return ProviderModelCatalogResult(
+        let result = ProviderModelCatalogResult(
             models: parsed.models,
             prices: parsed.prices,
+            capabilityDetails: capabilityDetails,
             endpoint: request.url!,
             durationMilliseconds: milliseconds,
             responseBytes: body.count
         )
+        return .init(
+            result: result,
+            nextURL: try ProviderModelCatalogPagination.nextURL(
+                responseBody: body,
+                currentURL: request.url!
+            )
+        )
+    }
+
+    private func sanitizedCatalogSource(_ url: URL) -> String {
+        guard var components = URLComponents(
+            url: url,
+            resolvingAgainstBaseURL: false
+        ) else { return "provider-catalog" }
+        components.query = nil
+        components.fragment = nil
+        return components.url?.absoluteString ?? "provider-catalog"
     }
 
     private func shouldRetryCatalogRequest(after error: URLError) -> Bool {

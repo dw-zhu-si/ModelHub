@@ -36,10 +36,10 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .anthropic: "Anthropic Claude"
         case .gemini: "Google Gemini"
         case .deepSeek: "DeepSeek"
-        case .qwen: "阿里云百炼（按量版）"
-        case .qwenBusiness: "阿里云百炼企业版（业务空间/按量付费）"
-        case .qwenPersonal: "阿里云百炼个人版"
-        case .qwenEnterprise: "阿里云百炼 Token Plan 团队版"
+        case .qwen: "千问AI平台（按量付费）"
+        case .qwenBusiness: "千问AI平台（业务空间/按量付费）"
+        case .qwenPersonal: "千问AI平台 Token Plan 个人版"
+        case .qwenEnterprise: "千问AI平台 Token Plan 团队版"
         case .moonshot: "Moonshot / Kimi"
         case .zhipu: "智谱 GLM"
         case .xAI: "xAI Grok"
@@ -130,9 +130,39 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .cohere: return name.hasPrefix("command") || name.hasPrefix("embed-")
         case .perplexity: return name.hasPrefix("sonar")
         case .volcengine: return name.contains("doubao") || name.contains("seed")
-        case .minimax, .minimaxChina: return name.hasPrefix("minimax")
+        case .minimax, .minimaxChina:
+            return name.hasPrefix("minimax")
+                || MiniMaxNativeAdapter.nativeProtocol(
+                    forExactModelID: MiniMaxNativeAdapter.canonicalModelID(
+                        forStoredModelID: model
+                    )
+                ) != nil
         default: return false
         }
+    }
+}
+
+/// Renames legacy Bailian labels to the current Qianwen AI Platform branding
+/// while preserving the actual billing and credential family.
+public enum QianwenProviderMigration {
+    public static func migratedProvider(_ provider: ProviderConfig) -> ProviderConfig? {
+        guard provider.kind.isBailian else { return nil }
+        let legacy = provider.name
+            .replacingOccurrences(of: "（", with: "(")
+            .replacingOccurrences(of: "）", with: ")")
+            .lowercased()
+        var migrated = provider
+
+        if provider.kind == .qwen,
+           legacy.contains("企业"),
+           !legacy.contains("token plan"),
+           !provider.baseURL.lowercased().contains("token-plan.") {
+            migrated.kind = .qwenBusiness
+        }
+        let expectedName = migrated.kind.displayName
+        guard migrated.kind != provider.kind || provider.name != expectedName else { return nil }
+        migrated.name = expectedName
+        return migrated
     }
 }
 
@@ -148,15 +178,15 @@ public enum BailianEndpointPolicy {
               baseURL.scheme?.lowercased() == "https",
               let baseHost = baseURL.host?.lowercased()
         else {
-            return "百炼 Base URL 必须是完整的 HTTPS 地址。"
+            return "千问AI平台 Base URL 必须是完整的 HTTPS 地址。"
         }
 
         if [.qwen, .qwenBusiness].contains(provider.kind), baseHost == tokenPlanHost {
-            return "当前地址属于百炼 Token Plan，请将供应商类型改为“Token Plan 个人版”或“Token Plan 团队版”。"
+            return "当前地址属于千问AI平台 Token Plan，请将供应商类型改为“Token Plan 个人版”或“Token Plan 团队版”。"
         }
         if provider.kind.isBailianTokenPlan {
             guard baseHost == tokenPlanHost else {
-                return "百炼 Token Plan 个人版和团队版必须使用 Token Plan 官方 Base URL；按量付费 DashScope 地址与其 API Key 不兼容。"
+                return "千问AI平台 Token Plan 个人版和团队版必须使用 Token Plan 官方 Base URL；按量付费 DashScope 地址与其 API Key 不兼容。"
             }
             guard hasTokenPlanCompatiblePath(baseURL.path) else {
                 return "Token Plan Base URL 必须包含 /compatible-mode/v1；ModelHub 不会自动补全路径。"
@@ -168,14 +198,14 @@ public enum BailianEndpointPolicy {
                   endpoint.scheme?.lowercased() == "https",
                   let host = endpoint.host?.lowercased()
             else {
-                return "百炼显式请求端点必须是完整的 HTTPS 地址。"
+                return "千问AI平台显式请求端点必须是完整的 HTTPS 地址。"
             }
             if provider.kind.isBailianTokenPlan {
                 guard host == tokenPlanHost, hasTokenPlanCompatiblePath(endpoint.path) else {
-                    return "百炼 Token Plan 个人版/团队版的聊天端点必须属于 Token Plan 官方 /compatible-mode/v1 路径。"
+                    return "千问AI平台 Token Plan 个人版/团队版的聊天端点必须属于 Token Plan 官方 /compatible-mode/v1 路径。"
                 }
             } else if host == tokenPlanHost {
-                return "当前聊天端点属于百炼 Token Plan，请选择 Token Plan 个人版或团队版，不能沿用按量付费类型。"
+                return "当前聊天端点属于千问AI平台 Token Plan，请选择 Token Plan 个人版或团队版，不能沿用按量付费类型。"
             }
         }
         return nil
@@ -231,15 +261,15 @@ public enum ProviderCredentialPolicy {
         switch providerKind {
         case .qwenPersonal:
             guard key.hasPrefix("sk-sp-") else {
-                return "百炼个人版必须使用 Token Plan 专属 API Key（以 sk-sp- 开头）；当前凭证属于其他百炼计费体系，未发起网络请求。"
+                return "千问AI平台个人版必须使用 Token Plan 专属 API Key（以 sk-sp- 开头）；当前凭证属于其他计费体系，未发起网络请求。"
             }
         case .qwenEnterprise:
             guard key.hasPrefix("sk-sp-") else {
-                return "百炼 Token Plan 团队版必须使用分配席位后生成的专属 API Key（以 sk-sp- 开头）；企业业务空间的按量付费 Key 不能在此使用，未发起网络请求。"
+                return "千问AI平台 Token Plan 团队版必须使用分配席位后生成的专属 API Key（以 sk-sp- 开头）；业务空间的按量付费 Key 不能在此使用，未发起网络请求。"
             }
         case .qwen, .qwenBusiness:
             guard !key.hasPrefix("sk-sp-") else {
-                return "百炼按量付费版不能使用 Token Plan 专属 API Key（sk-sp-）；请改用按量付费 API Key，或切换到 Token Plan 个人版/团队版。"
+                return "千问AI平台按量付费版不能使用 Token Plan 专属 API Key（sk-sp-）；请改用按量付费 API Key，或切换到 Token Plan 个人版/团队版。"
             }
         default:
             break
@@ -615,9 +645,21 @@ public enum ProviderBaseURLMigration {
         case .transcription:
             suffix = "/v1/audio/transcriptions"
         case .embeddings:
-            suffix = "/v1/embeddings"
+            if isBailian {
+                suffix = model.lowercased().contains("vl-embedding")
+                    ? "/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding"
+                    : "/compatible-mode/v1/embeddings"
+            } else {
+                suffix = "/v1/embeddings"
+            }
         case .reranking:
-            suffix = "/v1/rerank"
+            if isBailian {
+                suffix = model.lowercased().contains("vl-rerank")
+                    ? "/api/v1/services/rerank/text-rerank/text-rerank"
+                    : "/compatible-api/v1/reranks"
+            } else {
+                suffix = "/v1/rerank"
+            }
         case .videoTask:
             return nil
         }
@@ -762,6 +804,7 @@ public struct AppConfiguration: Codable, Sendable {
     public var routing: RoutingRuleSettings
     public var server: ServerSettings
     public var modelHealth: [ModelHealthRecord]
+    public var modelHealthActivities: [ModelHealthActivity]
     public var operational: OperationalSettings
     public var usage: [UsageAggregate]
     public var workspaces: [WorkspaceConfig]
@@ -774,6 +817,7 @@ public struct AppConfiguration: Codable, Sendable {
         routing: RoutingRuleSettings = .init(),
         server: ServerSettings = .init(),
         modelHealth: [ModelHealthRecord] = [],
+        modelHealthActivities: [ModelHealthActivity] = [],
         operational: OperationalSettings = .init(),
         usage: [UsageAggregate] = [],
         workspaces: [WorkspaceConfig] = [],
@@ -785,6 +829,7 @@ public struct AppConfiguration: Codable, Sendable {
         self.routing = routing
         self.server = server
         self.modelHealth = modelHealth
+        self.modelHealthActivities = ModelHealthActivityStore.normalized(modelHealthActivities)
         self.operational = operational
         self.usage = usage
         self.workspaces = workspaces
@@ -793,7 +838,8 @@ public struct AppConfiguration: Codable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case providers, routes, routing, server, modelHealth, operational, usage,
+        case providers, routes, routing, server, modelHealth, modelHealthActivities,
+             operational, usage,
              workspaces, virtualKeys, securityAudit
     }
 
@@ -804,6 +850,12 @@ public struct AppConfiguration: Codable, Sendable {
         routing = try container.decodeIfPresent(RoutingRuleSettings.self, forKey: .routing) ?? .init()
         server = try container.decodeIfPresent(ServerSettings.self, forKey: .server) ?? .init()
         modelHealth = try container.decodeIfPresent([ModelHealthRecord].self, forKey: .modelHealth) ?? []
+        modelHealthActivities = ModelHealthActivityStore.normalized(
+            try container.decodeIfPresent(
+                [ModelHealthActivity].self,
+                forKey: .modelHealthActivities
+            ) ?? []
+        )
         operational = try container.decodeIfPresent(
             OperationalSettings.self,
             forKey: .operational
@@ -821,6 +873,7 @@ public struct AppConfiguration: Codable, Sendable {
         try container.encode(routing, forKey: .routing)
         try container.encode(server, forKey: .server)
         try container.encode(modelHealth, forKey: .modelHealth)
+        try container.encode(modelHealthActivities, forKey: .modelHealthActivities)
         try container.encode(operational, forKey: .operational)
         try container.encode(usage, forKey: .usage)
         try container.encode(workspaces, forKey: .workspaces)
