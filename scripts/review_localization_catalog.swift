@@ -324,7 +324,7 @@ let providerStrings: [String: [String]] = [
 ]
 
 func replace(_ key: String, language: String, value: String) {
-    guard var entry = strings[key] as? [String: Any] else { return }
+    var entry = strings[key] as? [String: Any] ?? [:]
     var localizations = entry["localizations"] as? [String: Any] ?? [:]
     localizations[language] = ["stringUnit": ["state": "translated", "value": value]]
     entry["localizations"] = localizations
