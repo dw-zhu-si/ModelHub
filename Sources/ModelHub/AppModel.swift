@@ -178,6 +178,14 @@ struct ModelPriceRefreshProgress: Equatable {
     }
 }
 
+enum ApplicationUpdateState: Equatable {
+    case idle
+    case checking
+    case upToDate(version: String, checkedAt: Date)
+    case available(version: String, pageURL: URL, checkedAt: Date)
+    case failed(message: String, checkedAt: Date)
+}
+
 enum ProxyNodeLatencyFailure: Equatable, Sendable {
     case subscriptionUnavailable
     case runtimeUnavailable
@@ -334,6 +342,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var proxyRuntimeStatus = String(localized: "未启动", locale: AppLanguage.saved.locale)
     @Published private(set) var testingProxyNodeIDs: Set<String> = []
     @Published private(set) var proxyNodeLatencyResults: [String: ProxyNodeLatencyResult] = [:]
+    @Published private(set) var applicationUpdateState: ApplicationUpdateState = .idle
+    @Published private(set) var automaticApplicationUpdateChecksEnabled = false
 
     private let router = RoutingEngine()
     private let providerClient = ProviderClient()
@@ -343,6 +353,7 @@ final class AppModel: ObservableObject {
     private let configurationPersistence = ConfigurationPersistence()
     private let currencyRateClient = CurrencyRateClient()
     private let modelProxyRuntime = ModelProxyRuntimeManager()
+    private let applicationUpdateClient = ApplicationUpdateClient()
     private var server: LocalAPIServer?
     private var didBootstrap = false
     private var modelTestTask: Task<Void, Never>?
@@ -354,6 +365,7 @@ final class AppModel: ObservableObject {
     private var pricingUpdateTask: Task<Void, Never>?
     private var proxySubscriptionUpdateTask: Task<Void, Never>?
     private var proxyNodeLatencyTask: Task<Void, Never>?
+    private var applicationUpdateTask: Task<Void, Never>?
     private var healthIndex = ModelHealthIndex(records: [])
     private var proxyEndpointIndex = ModelProxyEndpointIndex(settings: .init())
     private var proxyFailoverIndex = ModelProxyFailoverIndex(settings: .init())
@@ -369,6 +381,8 @@ final class AppModel: ObservableObject {
     private static let launchAtLoginRequestedKey = "launchAtLoginRequested"
     private static let launchAtLoginStatusKey = "launchAtLoginStatus"
     private static let launchAtLoginErrorKey = "launchAtLoginLastError"
+    private static let automaticApplicationUpdateChecksKey = "automaticApplicationUpdateChecks"
+    private static let lastApplicationUpdateCheckKey = "lastApplicationUpdateCheck"
     private static let verificationTimestampFormatter = ISO8601DateFormatter()
 
     private struct ReviewDemoBackup {
@@ -382,6 +396,83 @@ final class AppModel: ObservableObject {
 
     var interfaceLocale: Locale {
         preferredLanguage.locale
+    }
+
+    var applicationReleaseChannel: ApplicationReleaseChannel {
+        #if DEBUG
+        let isDebugBuild = true
+        #else
+        let isDebugBuild = false
+        #endif
+        let receiptURL = Bundle.main.appStoreReceiptURL
+        let hasReceipt = receiptURL.map {
+            FileManager.default.fileExists(atPath: $0.path)
+        } ?? false
+        return ApplicationReleaseChannel.resolve(
+            explicitValue: Bundle.main.object(
+                forInfoDictionaryKey: "ModelHubReleaseChannel"
+            ) as? String,
+            hasAppStoreReceipt: hasReceipt,
+            isDebugBuild: isDebugBuild
+        )
+    }
+
+    var applicationReleaseChannelText: String {
+        switch applicationReleaseChannel {
+        case .appStore: L10n.text("App Store 渠道")
+        case .github: L10n.text("GitHub 独立安装渠道")
+        case .local: L10n.text("本地开发构建")
+        }
+    }
+
+    var currentApplicationVersionText: String {
+        let version = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? "—"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        return L10n.format("版本 %@（build %@）", version, build)
+    }
+
+    var applicationUpdateStatusText: String {
+        switch applicationUpdateState {
+        case .idle:
+            if let lastCheck = UserDefaults.standard.object(
+                forKey: Self.lastApplicationUpdateCheckKey
+            ) as? Date {
+                return L10n.format(
+                    "上次检查：%@",
+                    lastCheck.formatted(date: .abbreviated, time: .shortened)
+                )
+            }
+            return applicationReleaseChannel == .local
+                ? L10n.text("本地开发构建不检查线上更新。")
+                : L10n.text("尚未检查更新。")
+        case .checking:
+            return L10n.text("正在检查受信任发行渠道…")
+        case .upToDate(let version, let checkedAt):
+            return L10n.format(
+                "已是最新版本 %@ · %@",
+                version,
+                checkedAt.formatted(date: .abbreviated, time: .shortened)
+            )
+        case .available(let version, _, let checkedAt):
+            return L10n.format(
+                "发现新版本 %@ · %@",
+                version,
+                checkedAt.formatted(date: .abbreviated, time: .shortened)
+            )
+        case .failed(let message, _):
+            return L10n.format("检查更新失败：%@", message)
+        }
+    }
+
+    var availableApplicationUpdateVersion: String? {
+        guard case .available(let version, _, _) = applicationUpdateState else { return nil }
+        return version
+    }
+
+    var isCheckingForApplicationUpdate: Bool {
+        applicationUpdateState == .checking
     }
 
     func setPreferredLanguage(_ language: AppLanguage) {
@@ -869,6 +960,10 @@ final class AppModel: ObservableObject {
         didBootstrap = true
         loadConfiguration()
         schedulePricingUpdates()
+        automaticApplicationUpdateChecksEnabled = UserDefaults.standard.bool(
+            forKey: Self.automaticApplicationUpdateChecksKey
+        )
+        scheduleAutomaticApplicationUpdateCheck()
         Task { await initializeSecretsWithoutInteraction() }
         Task { await initializeAgentSecretWithoutInteraction() }
         launchAtLoginRequested = UserDefaults.standard.bool(
@@ -899,6 +994,79 @@ final class AppModel: ObservableObject {
             ) }
         }
         publishWidgetSnapshot()
+    }
+
+    func setAutomaticApplicationUpdateChecksEnabled(_ enabled: Bool) {
+        automaticApplicationUpdateChecksEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.automaticApplicationUpdateChecksKey)
+        if enabled { checkForApplicationUpdate(userInitiated: false) }
+    }
+
+    func checkForApplicationUpdate(userInitiated: Bool = true) {
+        guard applicationReleaseChannel != .local,
+              applicationUpdateTask == nil
+        else {
+            if userInitiated, applicationReleaseChannel == .local {
+                notice = L10n.text("本地开发构建不检查线上更新。")
+            }
+            return
+        }
+        applicationUpdateState = .checking
+        let currentVersion = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? "0.0.0"
+        let channel = applicationReleaseChannel
+        applicationUpdateTask = Task { [weak self] in
+            guard let self else { return }
+            defer { applicationUpdateTask = nil }
+            do {
+                let result = try await applicationUpdateClient.check(
+                    currentVersion: currentVersion,
+                    channel: channel
+                )
+                let checkedAt = Date()
+                UserDefaults.standard.set(checkedAt, forKey: Self.lastApplicationUpdateCheckKey)
+                applicationUpdateState = result.isUpdateAvailable
+                    ? .available(
+                        version: result.release.version,
+                        pageURL: result.release.pageURL,
+                        checkedAt: checkedAt
+                    )
+                    : .upToDate(version: currentVersion, checkedAt: checkedAt)
+                if userInitiated { notice = applicationUpdateStatusText }
+            } catch {
+                let checkedAt = Date()
+                applicationUpdateState = .failed(
+                    message: error.localizedDescription,
+                    checkedAt: checkedAt
+                )
+                if userInitiated { notice = applicationUpdateStatusText }
+            }
+        }
+    }
+
+    func openApplicationUpdatePage() {
+        guard case .available(_, let pageURL, _) = applicationUpdateState,
+              ApplicationUpdatePolicy.isTrustedReleaseURL(
+                pageURL,
+                for: applicationReleaseChannel
+              )
+        else {
+            notice = L10n.text("更新地址未通过发行渠道校验。")
+            return
+        }
+        NSWorkspace.shared.open(pageURL)
+    }
+
+    private func scheduleAutomaticApplicationUpdateCheck() {
+        guard automaticApplicationUpdateChecksEnabled,
+              applicationReleaseChannel != .local
+        else { return }
+        let lastCheck = UserDefaults.standard.object(
+            forKey: Self.lastApplicationUpdateCheckKey
+        ) as? Date
+        guard lastCheck.map({ Date().timeIntervalSince($0) >= 86_400 }) ?? true else { return }
+        checkForApplicationUpdate(userInitiated: false)
     }
 
     func initializeSecrets() {

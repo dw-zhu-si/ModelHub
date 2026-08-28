@@ -153,6 +153,13 @@ struct ModelHubApp: App {
         .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(after: .appInfo) {
+                Button(mhLocalized("检查更新…")) {
+                    model.checkForApplicationUpdate()
+                }
+                .disabled(
+                    model.applicationReleaseChannel == .local
+                        || model.isCheckingForApplicationUpdate
+                )
                 Divider()
                 Button(mhLocalized(model.isServerRunning ? "停止本地 API 服务" : "启动本地 API 服务")) {
                     model.isServerRunning ? model.stopServer() : model.startServer()

@@ -4650,6 +4650,49 @@ struct SettingsView: View {
                 Button("刷新登录项状态") { model.refreshLaunchAtLoginStatus() }
             }
 
+            Section("应用更新") {
+                LabeledContent("当前版本") {
+                    Text(model.currentApplicationVersionText)
+                        .font(.system(.body, design: .monospaced))
+                }
+                LabeledContent("发行渠道") {
+                    Text(model.applicationReleaseChannelText)
+                }
+                Toggle(
+                    "每天自动检查一次",
+                    isOn: Binding(
+                        get: { model.automaticApplicationUpdateChecksEnabled },
+                        set: { model.setAutomaticApplicationUpdateChecksEnabled($0) }
+                    )
+                )
+                .disabled(model.applicationReleaseChannel == .local)
+
+                HStack {
+                    Button("检查更新") {
+                        model.checkForApplicationUpdate()
+                    }
+                    .disabled(
+                        model.applicationReleaseChannel == .local
+                            || model.isCheckingForApplicationUpdate
+                    )
+                    if model.isCheckingForApplicationUpdate {
+                        ProgressView().controlSize(.small)
+                    }
+                    if let version = model.availableApplicationUpdateVersion {
+                        Button(L10n.format("前往更新 %@", version)) {
+                            model.openApplicationUpdatePage()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+                Text(model.applicationUpdateStatusText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("模型目录、代理订阅和价格可在运行时热更新；应用代码只通过当前受信任发行渠道更新，不下载或执行远程代码。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("模型专用代理") {
                 Toggle("启用 ModelHub 自定义代理", isOn: $modelProxy.enabled)
                 Picker("代理类型", selection: $modelProxy.kind) {
