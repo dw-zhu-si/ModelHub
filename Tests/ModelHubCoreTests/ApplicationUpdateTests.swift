@@ -115,4 +115,46 @@ final class ApplicationUpdateTests: XCTestCase {
             channel: .github
         ))
     }
+
+    func testClientRejectsOversizedBodyBeforeParsing() async throws {
+        ApplicationUpdateURLProtocolStub.responseBody = Data(
+            count: ApplicationUpdatePolicy.maximumResponseBytes + 1
+        )
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ApplicationUpdateURLProtocolStub.self]
+        let client = ApplicationUpdateClient(session: URLSession(configuration: configuration))
+
+        do {
+            _ = try await client.check(currentVersion: "1.9.5", channel: .github)
+            XCTFail("Expected the bounded reader to reject the response")
+        } catch {
+            XCTAssertEqual(error as? ApplicationUpdateError, .responseTooLarge)
+        }
+    }
+}
+
+private final class ApplicationUpdateURLProtocolStub: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var responseBody = Data()
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let url = request.url,
+              let response = HTTPURLResponse(
+                  url: url,
+                  statusCode: 200,
+                  httpVersion: "HTTP/1.1",
+                  headerFields: ["Content-Type": "application/json"]
+              )
+        else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Self.responseBody)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }

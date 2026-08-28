@@ -201,7 +201,15 @@ public actor ApplicationUpdateClient {
         request.cachePolicy = .reloadRevalidatingCacheData
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("ModelHub/\(currentVersion)", forHTTPHeaderField: "User-Agent")
-        let (data, response) = try await session.data(for: request)
+        let (bytes, response) = try await session.bytes(for: request)
+        var data = Data()
+        data.reserveCapacity(min(ApplicationUpdatePolicy.maximumResponseBytes, 32 * 1_024))
+        for try await byte in bytes {
+            guard data.count < ApplicationUpdatePolicy.maximumResponseBytes else {
+                throw ApplicationUpdateError.responseTooLarge
+            }
+            data.append(byte)
+        }
         try ApplicationUpdatePolicy.validateResponse(
             response,
             data: data,

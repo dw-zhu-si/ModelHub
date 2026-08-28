@@ -47,6 +47,12 @@ ModelHub 本机网关（127.0.0.1:11435）
 
 正常外部调用不会为了刷新目录而重复拉取或测试模型。选择内置供应商时，编辑器会直接带出已核验的完整 Base URL、模型名录 URL 和该供应商适用的协议端点，通常只需填写 API Key；当前除必须由用户定义主机的“通用兼容协议”外，所有内置供应商类型都具备独立且完整的模型名录预设。MiniMax 明确区分中国站与国际站；千问AI平台则区分通用按量付费、业务空间按量付费、Token Plan 个人版和 Token Plan 团队版，避免跨地域、跨计费体系混用密钥和端点。主动拉取会跟随最多 100 页的同源分页，优先采用供应商返回的精确模型 ID，并解析目录中机器可读的价格、输入/输出模态、图片尺寸与比例、视频分辨率与时长、音频格式与采样率及通用参数限制；未由供应商发布的能力或价格不会猜测。拉取后可搜索、勾选和预览，再与已有模型去重合并；也可导入 UTF-8、UTF-16 或含 Excel 分隔符声明的 CSV，预览后合并模型、费用、能力和用户给出的精确端点。已有供应商还可在详情页直接“热更新模型”：优先使用已保存的精确目录；未保存时，只允许使用内置核验注册表中与供应商官方主机严格匹配的完整目录地址。服务无需重启，目录结果只做增量合并，不删除手工模型，不改变既有检测状态；新发现模型都会先保持隔离，完成真实验证后才能参与外部路由。ModelHub 只使用预设中明确保存的完整地址，不会根据 Base URL 临时拼接 `/v1/models`。只有用户主动执行热更新、单模型、单供应商或“测试全部”时才会访问名录端点；拉取失败会明确提示并继续使用已保存列表。测试聊天模型可能产生供应商费用，媒体和专用动作模型不会被错误送到聊天端点。
 
+### 运行时热更新与应用更新
+
+模型目录、代理订阅和价格数据可在应用运行期间按需刷新，无需重启本机网关。这些变更都受到来源校验、大小上限、同源约束和现有隔离规则保护；新发现的模型不会因热更新而自动变成可路由状态。
+
+设置页的“应用更新”可手动检查新版本，也可由用户选择开启每日一次的自动检查。App Store 安装版只查询 Apple 公开目录并打开 App Store；GitHub 独立安装版只查询本项目的官方 Release 并打开受信任的发布页。ModelHub 不会在应用内下载、替换或执行远程代码。自动检查默认关闭，检查失败不影响本机 API 服务。
+
 ### 原生 macOS 体验
 
 应用使用原生菜单栏入口并始终不显示程序坞图标。首次安装会显示一次主窗口，便于完成配置或进入无需账号的安全演示；之后默认在菜单栏后台启动。它支持登录时自动启动和 WidgetKit 桌面小组件。后台读取 Keychain 不要求反复授权，只有用户主动显示、复制或修改密钥时才会触发系统授权交互。
@@ -154,7 +160,7 @@ ModelHub 本机网关（127.0.0.1:11435）
 
 ### 普通用户：下载已公证 DMG
 
-从 [GitHub Releases](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.4) 下载 `ModelHub-1.9.4-macos-universal.dmg`，打开后把 `ModelHub.app` 拖到“应用程序”文件夹。该 DMG 与其中的 App 均使用 Developer ID 签名，并已通过 Apple 公证、票据装订、镜像完整性和 Gatekeeper 验证。
+从 [GitHub Releases](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.5) 下载 `ModelHub-1.9.5-macos-universal.dmg`，打开后把 `ModelHub.app` 拖到“应用程序”文件夹。该 DMG 与其中的 App 均使用 Developer ID 签名，并已通过 Apple 公证、票据装订、镜像完整性和 Gatekeeper 验证。
 
 也可以下载同一 Release 中的 Universal ZIP，解压后手动移动到“应用程序”。
 
@@ -166,11 +172,11 @@ ModelHub 本机网关（127.0.0.1:11435）
 
 ### 校验安装包
 
-下载同一 Release 中的 `ModelHub-1.9.4-macos-universal.zip.sha256` 与 `ModelHub-1.9.4-macos-universal.dmg.sha256` 后，可执行：
+下载同一 Release 中的 `ModelHub-1.9.5-macos-universal.zip.sha256` 与 `ModelHub-1.9.5-macos-universal.dmg.sha256` 后，可执行：
 
 ```bash
-shasum -a 256 -c ModelHub-1.9.4-macos-universal.zip.sha256
-shasum -a 256 -c ModelHub-1.9.4-macos-universal.dmg.sha256
+shasum -a 256 -c ModelHub-1.9.5-macos-universal.zip.sha256
+shasum -a 256 -c ModelHub-1.9.5-macos-universal.dmg.sha256
 ```
 
 ## 五分钟开始使用

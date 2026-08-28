@@ -42,6 +42,13 @@ fi
 remove_item "${CANDIDATE_APP}"
 /usr/bin/ditto --noextattr "${SOURCE_APP}" "${CANDIDATE_APP}"
 /bin/cp "${PROJECT_ROOT}/packaging/Info.plist" "${CANDIDATE_APP}/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Set :ModelHubReleaseChannel app-store' \
+    "${CANDIDATE_APP}/Contents/Info.plist"
+if [[ $(/usr/libexec/PlistBuddy -c 'Print :ModelHubReleaseChannel' \
+    "${CANDIDATE_APP}/Contents/Info.plist") != "app-store" ]]; then
+    echo "App Store 候选的更新渠道标记不正确" >&2
+    exit 2
+fi
 /bin/cp "${APP_PROFILE}" "${CANDIDATE_APP}/Contents/embedded.provisionprofile"
 /bin/cp "${WIDGET_PROFILE}" \
     "${CANDIDATE_APP}/Contents/PlugIns/ModelHubWidget.appex/Contents/embedded.provisionprofile"

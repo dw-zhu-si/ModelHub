@@ -366,6 +366,7 @@ final class AppModel: ObservableObject {
     private var proxySubscriptionUpdateTask: Task<Void, Never>?
     private var proxyNodeLatencyTask: Task<Void, Never>?
     private var applicationUpdateTask: Task<Void, Never>?
+    private var applicationUpdateScheduleTask: Task<Void, Never>?
     private var healthIndex = ModelHealthIndex(records: [])
     private var proxyEndpointIndex = ModelProxyEndpointIndex(settings: .init())
     private var proxyFailoverIndex = ModelProxyFailoverIndex(settings: .init())
@@ -999,7 +1000,7 @@ final class AppModel: ObservableObject {
     func setAutomaticApplicationUpdateChecksEnabled(_ enabled: Bool) {
         automaticApplicationUpdateChecksEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: Self.automaticApplicationUpdateChecksKey)
-        if enabled { checkForApplicationUpdate(userInitiated: false) }
+        scheduleAutomaticApplicationUpdateCheck()
     }
 
     func checkForApplicationUpdate(userInitiated: Bool = true) {
@@ -1018,7 +1019,12 @@ final class AppModel: ObservableObject {
         let channel = applicationReleaseChannel
         applicationUpdateTask = Task { [weak self] in
             guard let self else { return }
-            defer { applicationUpdateTask = nil }
+            defer {
+                applicationUpdateTask = nil
+                if automaticApplicationUpdateChecksEnabled {
+                    scheduleAutomaticApplicationUpdateCheck()
+                }
+            }
             do {
                 let result = try await applicationUpdateClient.check(
                     currentVersion: currentVersion,
@@ -1036,6 +1042,7 @@ final class AppModel: ObservableObject {
                 if userInitiated { notice = applicationUpdateStatusText }
             } catch {
                 let checkedAt = Date()
+                UserDefaults.standard.set(checkedAt, forKey: Self.lastApplicationUpdateCheckKey)
                 applicationUpdateState = .failed(
                     message: error.localizedDescription,
                     checkedAt: checkedAt
@@ -1059,14 +1066,37 @@ final class AppModel: ObservableObject {
     }
 
     private func scheduleAutomaticApplicationUpdateCheck() {
+        applicationUpdateScheduleTask?.cancel()
+        applicationUpdateScheduleTask = nil
         guard automaticApplicationUpdateChecksEnabled,
               applicationReleaseChannel != .local
         else { return }
-        let lastCheck = UserDefaults.standard.object(
-            forKey: Self.lastApplicationUpdateCheckKey
-        ) as? Date
-        guard lastCheck.map({ Date().timeIntervalSince($0) >= 86_400 }) ?? true else { return }
-        checkForApplicationUpdate(userInitiated: false)
+        applicationUpdateScheduleTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                let lastCheck = UserDefaults.standard.object(
+                    forKey: Self.lastApplicationUpdateCheckKey
+                ) as? Date
+                let elapsed = lastCheck.map { Date().timeIntervalSince($0) } ?? 86_400
+                let waitSeconds = min(86_400, max(0, 86_400 - elapsed))
+                if waitSeconds > 0 {
+                    do {
+                        try await Task.sleep(
+                            nanoseconds: UInt64(waitSeconds * 1_000_000_000)
+                        )
+                    } catch {
+                        return
+                    }
+                    continue
+                }
+                checkForApplicationUpdate(userInitiated: false)
+                do {
+                    try await Task.sleep(nanoseconds: 86_400 * 1_000_000_000)
+                } catch {
+                    return
+                }
+            }
+        }
     }
 
     func initializeSecrets() {

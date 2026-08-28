@@ -47,6 +47,12 @@ Clients call `http://127.0.0.1:11435/v1`. ModelHub resolves aliases, chooses a t
 
 Normal external calls do not refresh provider catalogs or re-test models. The provider editor accepts an exact catalog URL and fetches it only on demand. Fetching follows bounded same-origin pagination, preserves the exact provider model ID, and imports only machine-readable prices and capability constraints such as modalities, image sizes and aspect ratios, video resolutions and durations, and audio formats and sample rates. Missing facts are never guessed. Users can search, select, preview, and deduplicate before merging, or import UTF-8, UTF-16, or Excel separator-declared CSV files. Existing providers can hot-update models without restarting the service. A saved exact catalog takes priority; otherwise ModelHub uses only a complete provider-owned catalog whose official host is strictly matched by the verified registry. Entries are merged incrementally, manual models and health records are preserved, and every newly discovered model stays quarantined until real verification succeeds. ModelHub never invents or appends `/v1/models` to a Base URL. Only explicit user actions access a catalog endpoint; failures leave the saved list usable.
 
+### Runtime hot updates and app updates
+
+Model catalogs, proxy subscriptions, and machine-readable prices can refresh while the local gateway is running. Each flow keeps its existing source validation, size limits, same-origin rules, and quarantine boundary. A newly discovered model never becomes routable merely because a catalog was refreshed.
+
+The Application Updates section in Settings can check manually or, when explicitly enabled, once per day. App Store builds query Apple's public catalog and open the App Store only. Standalone GitHub builds query only this repository's official latest release and open its trusted release page. ModelHub never downloads, replaces, or executes remote application code. Automatic checks are disabled by default, and a failed check does not affect the local API service.
+
 ### Native macOS workflow
 
 ModelHub uses a native menu-bar extra and never shows a Dock icon. A clean installation opens the main window once so users can configure the app or enter the credential-free review demo; later launches stay in the menu bar by default. It supports launch at login and a credential-free WidgetKit status widget. Background Keychain reads are non-interactive; macOS authorization is only requested when a user chooses to reveal, copy, or edit a credential.
@@ -144,7 +150,7 @@ On a clean installation with no configured providers, the Overview screen offers
 
 ## Install
 
-Download the notarized [v1.9.4 release](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.4), open `ModelHub-1.9.4-macos-universal.dmg`, and drag `ModelHub.app` to Applications. The DMG and the app are Developer ID signed and passed Apple notarization, ticket stapling, image integrity, and Gatekeeper checks. A Universal ZIP is also available in the same release.
+Download the notarized [v1.9.5 release](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.5), open `ModelHub-1.9.5-macos-universal.dmg`, and drag `ModelHub.app` to Applications. The DMG and the app are Developer ID signed and passed Apple notarization, ticket stapling, image integrity, and Gatekeeper checks. A Universal ZIP is also available in the same release.
 
 ### Requirements
 
@@ -155,8 +161,8 @@ Download the notarized [v1.9.4 release](https://github.com/dw-zhu-si/ModelHub/re
 ### Verify the release
 
 ```bash
-shasum -a 256 -c ModelHub-1.9.4-macos-universal.zip.sha256
-shasum -a 256 -c ModelHub-1.9.4-macos-universal.dmg.sha256
+shasum -a 256 -c ModelHub-1.9.5-macos-universal.zip.sha256
+shasum -a 256 -c ModelHub-1.9.5-macos-universal.dmg.sha256
 ```
 
 ## Quick start
