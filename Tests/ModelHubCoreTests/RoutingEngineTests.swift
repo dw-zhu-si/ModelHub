@@ -2,6 +2,197 @@ import XCTest
 @testable import ModelHubCore
 
 final class RoutingEngineTests: XCTestCase {
+    func testRoutingUsagePerformanceBaseline() async {
+        let provider = ProviderConfig(
+            name: "Performance",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.invalid"
+        )
+        let targets = (0..<500).map { index in
+            RouteTarget(
+                providerID: provider.id,
+                model: "model-\(index)",
+                priority: index % 5,
+                profile: TargetProfile(
+                    contextWindow: 32_000 + index,
+                    inputCostPerMillionTokens: Double((index % 10) + 1),
+                    outputCostPerMillionTokens: Double((index % 20) + 1)
+                )
+            )
+        }
+        let health = ModelHealthIndex(records: targets.map {
+            ModelHealthRecord(
+                providerID: $0.providerID,
+                model: $0.model,
+                status: .available,
+                latencyMilliseconds: 100
+            )
+        })
+        let usage = (0..<1_000).map { index in
+            UsageAggregate(
+                month: "2026-08",
+                requestedModel: "performance",
+                providerID: provider.id,
+                providerName: provider.name,
+                model: "model-\(index % targets.count)",
+                requests: 10,
+                successfulRequests: 5 + (index % 6),
+                totalLatencyMilliseconds: 1_000 + index,
+                recentLatencyMilliseconds: [50 + (index % 500), 100 + (index % 500)]
+            )
+        }
+        let route = RouteConfig(
+            alias: "performance",
+            strategy: .balanced,
+            targets: targets,
+            constraints: RouteConstraints(maximumP90LatencyMilliseconds: 1_000)
+        )
+        let engine = RoutingEngine()
+        let clock = ContinuousClock()
+        let started = clock.now
+
+        for _ in 0..<10 {
+            let candidates = await engine.candidates(
+                for: route.alias,
+                routes: [route],
+                providers: [provider],
+                health: health,
+                usage: usage
+            )
+            XCTAssertEqual(candidates.count, targets.count)
+        }
+
+        let duration = started.duration(to: clock.now)
+        print("ROUTING_USAGE_BASELINE workload=500_targets_1000_usage_10_decisions duration=\(duration)")
+#if !DEBUG
+        XCTAssertLessThan(duration, .seconds(2))
+#endif
+    }
+
+    func testP90ConstraintUsesIndexedMetricsAndExcludesSlowOrUnknownTargets() async {
+        let provider = ProviderConfig(
+            name: "Latency policy",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.invalid"
+        )
+        let targets = ["fast", "slow", "unknown"].map {
+            RouteTarget(providerID: provider.id, model: $0)
+        }
+        let health = ModelHealthIndex(records: targets.map {
+            ModelHealthRecord(providerID: provider.id, model: $0.model, status: .available)
+        })
+        let usage = [
+            UsageAggregate(
+                month: "2026-08",
+                requestedModel: "constrained",
+                providerID: provider.id,
+                providerName: provider.name,
+                model: "fast",
+                recentLatencyMilliseconds: [80, 120]
+            ),
+            UsageAggregate(
+                month: "2026-08",
+                requestedModel: "constrained",
+                providerID: provider.id,
+                providerName: provider.name,
+                model: "slow",
+                recentLatencyMilliseconds: [250, 400]
+            )
+        ]
+        let route = RouteConfig(
+            alias: "constrained",
+            strategy: .priority,
+            targets: targets,
+            constraints: RouteConstraints(maximumP90LatencyMilliseconds: 200)
+        )
+
+        let candidates = await RoutingEngine().candidates(
+            for: route.alias,
+            routes: [route],
+            providers: [provider],
+            health: health,
+            usage: usage
+        )
+
+        XCTAssertEqual(candidates.map(\.model), ["fast"])
+    }
+
+    func testUsageMetricIndexAggregatesLatencyAndStabilityOncePerTarget() throws {
+        let providerID = UUID()
+        let usage = [
+            UsageAggregate(
+                month: "2026-07",
+                requestedModel: "route-a",
+                providerID: providerID,
+                providerName: "Performance",
+                model: "model-a",
+                requests: 10,
+                successfulRequests: 8,
+                recentLatencyMilliseconds: [100, 200, 300]
+            ),
+            UsageAggregate(
+                month: "2026-08",
+                requestedModel: "route-b",
+                providerID: providerID,
+                providerName: "Performance",
+                model: "model-a",
+                requests: 30,
+                successfulRequests: 22,
+                recentLatencyMilliseconds: [250, 400]
+            )
+        ]
+
+        let index = UsageMetricIndex(usage: usage)
+
+        XCTAssertEqual(
+            index.p90LatencyMilliseconds(providerID: providerID, model: "model-a"),
+            400
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(index.stability(providerID: providerID, model: "model-a")),
+            0.75,
+            accuracy: 0.000_001
+        )
+        XCTAssertNil(index.p90LatencyMilliseconds(providerID: providerID, model: "MODEL-A"))
+        XCTAssertNil(index.stability(providerID: providerID, model: "missing"))
+    }
+
+    func testWeightedRandomUsesDeterministicCumulativeBoundaries() async {
+        let provider = ProviderConfig(
+            name: "Weighted",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.invalid"
+        )
+        let targets = [
+            RouteTarget(providerID: provider.id, model: "a", weight: 1),
+            RouteTarget(providerID: provider.id, model: "b", weight: 3),
+            RouteTarget(providerID: provider.id, model: "c", weight: 2)
+        ]
+        let route = RouteConfig(alias: "weighted", strategy: .weightedRandom, targets: targets)
+        let health = ModelHealthIndex(records: targets.map {
+            ModelHealthRecord(providerID: $0.providerID, model: $0.model, status: .available)
+        })
+
+        func firstModel(at draw: Int) async -> String? {
+            let engine = RoutingEngine(weightedRandomValue: { upperBound in
+                XCTAssertEqual(upperBound, 6)
+                return draw
+            })
+            return await engine.candidates(
+                for: route.alias,
+                routes: [route],
+                providers: [provider],
+                health: health
+            ).first?.model
+        }
+
+        var selected: [String?] = []
+        for draw in [0, 1, 3, 4, 5] {
+            selected.append(await firstModel(at: draw))
+        }
+        XCTAssertEqual(selected, ["a", "b", "b", "c", "c"])
+    }
+
     func testBuiltInDefaultRulesAreExclusiveAndOrderSameModelCandidates() async {
         XCTAssertEqual(DefaultRoutingRule.allCases.count, 3)
         XCTAssertEqual(AppConfiguration().routing.activeRule, .sameModelLowestCost)

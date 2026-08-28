@@ -8,6 +8,29 @@ struct HTTPRequest: Sendable {
     let orderedQueryItems: [HTTPQueryItem]
     let headers: [String: String]
     let body: Data
+    let requestID: String
+
+    init(
+        method: String,
+        path: String,
+        queryItems: [String: String],
+        orderedQueryItems: [HTTPQueryItem],
+        headers: [String: String],
+        body: Data,
+        requestID: String? = nil
+    ) {
+        self.method = method
+        self.path = path
+        self.queryItems = queryItems
+        self.orderedQueryItems = orderedQueryItems
+        self.headers = headers
+        self.body = body
+        self.requestID = HTTPRequestIDPolicy.normalized(
+            requestID
+                ?? headers["x-modelhub-request-id"]
+                ?? headers["x-request-id"]
+        )
+    }
 
     func header(_ name: String) -> String? {
         headers[name.lowercased()]
@@ -21,6 +44,27 @@ struct HTTPRequest: Sendable {
 struct HTTPQueryItem: Sendable, Equatable {
     let name: String
     let value: String?
+}
+
+private enum HTTPRequestIDPolicy {
+    static func normalized(_ candidate: String?) -> String {
+        guard let candidate,
+              (1...80).contains(candidate.utf8.count),
+              candidate.utf8.allSatisfy(isAllowedByte)
+        else {
+            return UUID().uuidString
+        }
+        return candidate
+    }
+
+    private static func isAllowedByte(_ byte: UInt8) -> Bool {
+        (byte >= 48 && byte <= 57)
+            || (byte >= 65 && byte <= 90)
+            || (byte >= 97 && byte <= 122)
+            || byte == 46
+            || byte == 95
+            || byte == 45
+    }
 }
 
 struct HTTPResponse: Sendable {
@@ -37,12 +81,21 @@ struct HTTPResponse: Sendable {
         )
     }
 
+    func addingRequestID(_ requestID: String) -> HTTPResponse {
+        var updatedHeaders = headers.filter {
+            $0.key.caseInsensitiveCompare("X-ModelHub-Request-ID") != .orderedSame
+        }
+        updatedHeaders["X-ModelHub-Request-ID"] = HTTPRequestIDPolicy.normalized(requestID)
+        return HTTPResponse(statusCode: statusCode, headers: updatedHeaders, body: body)
+    }
+
     func serialized() -> Data {
         var allHeaders = headers
         allHeaders["Content-Length"] = String(body.count)
         allHeaders["Connection"] = "close"
         allHeaders["Access-Control-Allow-Origin"] = "http://127.0.0.1"
-        allHeaders["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+        allHeaders["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-ModelHub-Request-ID, X-Request-ID"
+        allHeaders["Access-Control-Expose-Headers"] = "X-ModelHub-Request-ID"
         allHeaders["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
 
         var head = "HTTP/1.1 \(statusCode) \(httpReasonPhrase(statusCode))\r\n"
@@ -61,13 +114,22 @@ struct HTTPStreamResponse: Sendable {
     let headers: [String: String]
     let body: AsyncThrowingStream<Data, Error>
 
+    func addingRequestID(_ requestID: String) -> HTTPStreamResponse {
+        var updatedHeaders = headers.filter {
+            $0.key.caseInsensitiveCompare("X-ModelHub-Request-ID") != .orderedSame
+        }
+        updatedHeaders["X-ModelHub-Request-ID"] = HTTPRequestIDPolicy.normalized(requestID)
+        return HTTPStreamResponse(statusCode: statusCode, headers: updatedHeaders, body: body)
+    }
+
     func serializedHead() -> Data {
         var allHeaders = headers
         allHeaders["Transfer-Encoding"] = "chunked"
         allHeaders["Connection"] = "close"
         allHeaders["Cache-Control"] = "no-cache"
         allHeaders["Access-Control-Allow-Origin"] = "http://127.0.0.1"
-        allHeaders["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+        allHeaders["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-ModelHub-Request-ID, X-Request-ID"
+        allHeaders["Access-Control-Expose-Headers"] = "X-ModelHub-Request-ID"
         var head = "HTTP/1.1 \(statusCode) \(httpReasonPhrase(statusCode))\r\n"
         for (key, value) in allHeaders { head += "\(key): \(value)\r\n" }
         head += "\r\n"
@@ -85,6 +147,7 @@ private func httpReasonPhrase(_ statusCode: Int) -> String {
     case 403: "Forbidden"
     case 404: "Not Found"
     case 405: "Method Not Allowed"
+    case 408: "Request Timeout"
     case 409: "Conflict"
     case 411: "Length Required"
     case 413: "Content Too Large"
@@ -96,6 +159,53 @@ private func httpReasonPhrase(_ statusCode: Int) -> String {
     case 502: "Bad Gateway"
     case 503: "Service Unavailable"
     default: "HTTP Response"
+    }
+}
+
+struct HTTPServerConnectionPolicy: Sendable, Equatable {
+    enum TimeoutReason: Sendable, Equatable {
+        case idle
+        case absoluteRequestDeadline
+        case handlerDeadline
+        case streamIdle
+        case maximumStreamDuration
+    }
+
+    let maximumActiveConnections: Int
+    let idleTimeout: TimeInterval
+    let absoluteRequestDeadline: TimeInterval
+    let handlerDeadline: TimeInterval
+    let streamIdleTimeout: TimeInterval
+    let maximumStreamDuration: TimeInterval
+
+    init(
+        maximumActiveConnections: Int = 128,
+        idleTimeout: TimeInterval = 10,
+        absoluteRequestDeadline: TimeInterval = 30,
+        handlerDeadline: TimeInterval = 660,
+        streamIdleTimeout: TimeInterval = 30,
+        maximumStreamDuration: TimeInterval = 3_600
+    ) {
+        self.maximumActiveConnections = max(1, maximumActiveConnections)
+        self.idleTimeout = max(0.1, idleTimeout)
+        self.absoluteRequestDeadline = max(0.1, absoluteRequestDeadline)
+        self.handlerDeadline = max(0.1, handlerDeadline)
+        self.streamIdleTimeout = max(0.1, streamIdleTimeout)
+        self.maximumStreamDuration = max(0.1, maximumStreamDuration)
+    }
+
+    func admits(activeConnectionCount: Int) -> Bool {
+        activeConnectionCount < maximumActiveConnections
+    }
+
+    func timeoutReason(requestAge: TimeInterval, idleAge: TimeInterval) -> TimeoutReason? {
+        if requestAge >= absoluteRequestDeadline {
+            return .absoluteRequestDeadline
+        }
+        if idleAge >= idleTimeout {
+            return .idle
+        }
+        return nil
     }
 }
 
@@ -118,19 +228,15 @@ struct HTTPRequestParser {
     }
 
     func parse(_ data: Data) -> HTTPRequestParseResult {
-        let separator = Data("\r\n\r\n".utf8)
-        guard let headerRange = data.range(of: separator) else {
-            return data.count > maximumHeaderBytes
-                ? .failure(errorResponse(431, "请求头超过 64 KiB", "request_headers_too_large"))
-                : .incomplete
-        }
-        guard headerRange.lowerBound <= maximumHeaderBytes else {
-            return .failure(errorResponse(431, "请求头超过 64 KiB", "request_headers_too_large"))
-        }
-        guard let headerText = String(
-            data: data[..<headerRange.lowerBound],
-            encoding: .utf8
-        ) else {
+        makeStreamParser().append(data)
+    }
+
+    func makeStreamParser() -> HTTPRequestStreamParser {
+        HTTPRequestStreamParser(parser: self)
+    }
+
+    fileprivate func parseHead(_ data: Data) -> HTTPRequestHeadParseResult {
+        guard let headerText = String(data: data, encoding: .utf8) else {
             return .failure(errorResponse(400, "请求头不是有效 UTF-8", "invalid_request_headers"))
         }
 
@@ -149,7 +255,14 @@ struct HTTPRequestParser {
         var headers: [String: String] = [:]
         var contentLengths: [String] = []
         var transferEncodings: [String] = []
-        let unambiguousHeaders = Set(["authorization", "content-length", "host", "transfer-encoding"])
+        let unambiguousHeaders = Set([
+            "authorization",
+            "content-length",
+            "host",
+            "transfer-encoding",
+            "x-modelhub-request-id",
+            "x-request-id"
+        ])
         for line in lines.dropFirst() {
             guard let colon = line.firstIndex(of: ":") else {
                 return .failure(errorResponse(400, "请求头格式无效", "invalid_request_headers"))
@@ -176,6 +289,14 @@ struct HTTPRequestParser {
             }
         }
 
+        guard headers["x-modelhub-request-id"] == nil || headers["x-request-id"] == nil else {
+            return .failure(errorResponse(
+                400,
+                "X-ModelHub-Request-ID 与 X-Request-ID 不能同时出现",
+                "ambiguous_request_id"
+            ))
+        }
+
         guard !(contentLengths.isEmpty == false && transferEncodings.isEmpty == false) else {
             return .failure(errorResponse(400, "Content-Length 与 Transfer-Encoding 不能同时出现", "ambiguous_request_body"))
         }
@@ -183,7 +304,7 @@ struct HTTPRequestParser {
             return .failure(errorResponse(400, "Content-Length 不能重复", "ambiguous_content_length"))
         }
 
-        let bodyResult: BodyParseResult
+        let bodyMode: HTTPParsedRequestHead.BodyMode
         if let transferEncoding = transferEncodings.first {
             guard transferEncodings.count == 1,
                   transferEncoding
@@ -193,7 +314,7 @@ struct HTTPRequestParser {
             else {
                 return .failure(errorResponse(501, "仅支持 chunked Transfer-Encoding", "unsupported_transfer_encoding"))
             }
-            bodyResult = parseChunkedBody(Data(data[headerRange.upperBound...]))
+            bodyMode = .chunked
         } else if let contentLengthText = contentLengths.first {
             guard let contentLength = Int(contentLengthText), contentLength >= 0 else {
                 return .failure(errorResponse(400, "Content-Length 必须是非负整数", "invalid_content_length"))
@@ -201,80 +322,22 @@ struct HTTPRequestParser {
             guard contentLength <= maximumBodyBytes else {
                 return .failure(errorResponse(413, "请求体超过 32 MiB", "request_too_large"))
             }
-            let bodyStart = headerRange.upperBound
-            guard data.count >= bodyStart + contentLength else { return .incomplete }
-            bodyResult = .body(data.subdata(in: bodyStart..<(bodyStart + contentLength)))
+            bodyMode = .contentLength(contentLength)
         } else {
-            bodyResult = .body(Data())
+            bodyMode = .none
         }
 
-        switch bodyResult {
-        case .incomplete:
-            return .incomplete
-        case .failure(let response):
-            return .failure(response)
-        case .body(let body):
-            return makeRequest(
+        return .head(
+            HTTPParsedRequestHead(
                 method: parts[0].uppercased(),
                 target: parts[1],
                 headers: headers,
-                body: body
+                bodyMode: bodyMode
             )
-        }
+        )
     }
 
-    private func parseChunkedBody(_ encoded: Data) -> BodyParseResult {
-        let lineSeparator = Data("\r\n".utf8)
-        let trailerSeparator = Data("\r\n\r\n".utf8)
-        var cursor = encoded.startIndex
-        var decoded = Data()
-
-        while true {
-            guard let sizeLineRange = encoded.range(
-                of: lineSeparator,
-                in: cursor..<encoded.endIndex
-            ) else { return .incomplete }
-            guard let rawSizeLine = String(
-                data: encoded[cursor..<sizeLineRange.lowerBound],
-                encoding: .ascii
-            ) else {
-                return .failure(errorResponse(400, "Chunk 大小行无效", "invalid_chunked_body"))
-            }
-            let sizeText = rawSizeLine
-                .split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false)[0]
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !sizeText.isEmpty, let chunkSize = Int(sizeText, radix: 16), chunkSize >= 0 else {
-                return .failure(errorResponse(400, "Chunk 大小无效", "invalid_chunked_body"))
-            }
-            cursor = sizeLineRange.upperBound
-
-            if chunkSize == 0 {
-                guard encoded.count >= cursor + lineSeparator.count else { return .incomplete }
-                if encoded[cursor..<(cursor + lineSeparator.count)] == lineSeparator {
-                    return .body(decoded)
-                }
-                guard encoded.range(of: trailerSeparator, in: cursor..<encoded.endIndex) != nil else {
-                    return .incomplete
-                }
-                return .body(decoded)
-            }
-
-            guard decoded.count <= maximumBodyBytes - chunkSize else {
-                return .failure(errorResponse(413, "请求体超过 32 MiB", "request_too_large"))
-            }
-            guard encoded.count >= cursor + chunkSize + lineSeparator.count else {
-                return .incomplete
-            }
-            let chunkEnd = cursor + chunkSize
-            guard encoded[chunkEnd..<(chunkEnd + lineSeparator.count)] == lineSeparator else {
-                return .failure(errorResponse(400, "Chunk 结尾无效", "invalid_chunked_body"))
-            }
-            decoded.append(encoded[cursor..<chunkEnd])
-            cursor = chunkEnd + lineSeparator.count
-        }
-    }
-
-    private func makeRequest(
+    fileprivate func makeRequest(
         method: String,
         target: String,
         headers: [String: String],
@@ -325,7 +388,7 @@ struct HTTPRequestParser {
         return items
     }
 
-    private func errorResponse(_ statusCode: Int, _ message: String, _ code: String) -> HTTPResponse {
+    fileprivate func errorResponse(_ statusCode: Int, _ message: String, _ code: String) -> HTTPResponse {
         .json(
             statusCode: statusCode,
             object: ["error": ["message": message, "type": code, "code": code]]
@@ -340,10 +403,230 @@ struct HTTPRequestParser {
         }
     }
 
-    private enum BodyParseResult {
-        case incomplete
-        case body(Data)
-        case failure(HTTPResponse)
+}
+
+private struct HTTPParsedRequestHead {
+    enum BodyMode {
+        case none
+        case contentLength(Int)
+        case chunked
+    }
+
+    let method: String
+    let target: String
+    let headers: [String: String]
+    let bodyMode: BodyMode
+}
+
+private enum HTTPRequestHeadParseResult {
+    case head(HTTPParsedRequestHead)
+    case failure(HTTPResponse)
+}
+
+final class HTTPRequestStreamParser: @unchecked Sendable {
+    private let parser: HTTPRequestParser
+    private let headerSeparator = Data("\r\n\r\n".utf8)
+    private let lineSeparator = Data("\r\n".utf8)
+    private let trailerSeparator = Data("\r\n\r\n".utf8)
+    private var buffer = Data()
+    private var headerSearchOffset = 0
+    private var head: HTTPParsedRequestHead?
+    private var terminalResult: HTTPRequestParseResult?
+
+    private var decodedChunkedBody = Data()
+    private var chunkCursor = 0
+    private var chunkSizeSearchOffset = 0
+    private var pendingChunkSize: Int?
+    private var readingTrailers = false
+    private var trailerSearchOffset = 0
+
+    private(set) var parsedHeaderCount = 0
+
+    init(parser: HTTPRequestParser) {
+        self.parser = parser
+    }
+
+    var bufferedByteCount: Int {
+        guard let head else { return buffer.count }
+        switch head.bodyMode {
+        case .none:
+            return 0
+        case .contentLength:
+            return buffer.count
+        case .chunked:
+            return decodedChunkedBody.count + max(0, buffer.count - chunkCursor)
+        }
+    }
+
+    func append(_ fragment: Data) -> HTTPRequestParseResult {
+        if let terminalResult { return terminalResult }
+        if !fragment.isEmpty { buffer.append(fragment) }
+
+        if head == nil {
+            return parseHeaderIfPossible()
+        }
+        return parseBodyIfPossible()
+    }
+
+    private func parseHeaderIfPossible() -> HTTPRequestParseResult {
+        let searchStart = min(headerSearchOffset, buffer.endIndex)
+        guard let headerRange = buffer.range(
+            of: headerSeparator,
+            in: searchStart..<buffer.endIndex
+        ) else {
+            if buffer.count > parser.maximumHeaderBytes {
+                return finish(.failure(parser.errorResponse(
+                    431,
+                    "请求头超过 64 KiB",
+                    "request_headers_too_large"
+                )))
+            }
+            headerSearchOffset = max(buffer.startIndex, buffer.endIndex - (headerSeparator.count - 1))
+            return .incomplete
+        }
+        guard headerRange.lowerBound <= parser.maximumHeaderBytes else {
+            return finish(.failure(parser.errorResponse(
+                431,
+                "请求头超过 64 KiB",
+                "request_headers_too_large"
+            )))
+        }
+
+        parsedHeaderCount += 1
+        switch parser.parseHead(Data(buffer[..<headerRange.lowerBound])) {
+        case .failure(let response):
+            return finish(.failure(response))
+        case .head(let parsedHead):
+            head = parsedHead
+            buffer = Data(buffer[headerRange.upperBound...])
+            headerSearchOffset = 0
+            return parseBodyIfPossible()
+        }
+    }
+
+    private func parseBodyIfPossible() -> HTTPRequestParseResult {
+        guard let head else { return .incomplete }
+        switch head.bodyMode {
+        case .none:
+            return complete(head: head, body: Data())
+        case .contentLength(let contentLength):
+            guard buffer.count >= contentLength else { return .incomplete }
+            return complete(head: head, body: Data(buffer.prefix(contentLength)))
+        case .chunked:
+            return parseChunkedBody(head: head)
+        }
+    }
+
+    private func parseChunkedBody(head: HTTPParsedRequestHead) -> HTTPRequestParseResult {
+        while true {
+            if readingTrailers {
+                guard buffer.count >= chunkCursor + lineSeparator.count else { return .incomplete }
+                if buffer[chunkCursor..<(chunkCursor + lineSeparator.count)] == lineSeparator {
+                    return complete(head: head, body: decodedChunkedBody)
+                }
+                let searchStart = min(max(chunkCursor, trailerSearchOffset), buffer.endIndex)
+                guard buffer.range(
+                    of: trailerSeparator,
+                    in: searchStart..<buffer.endIndex
+                ) != nil else {
+                    trailerSearchOffset = max(chunkCursor, buffer.endIndex - (trailerSeparator.count - 1))
+                    return .incomplete
+                }
+                return complete(head: head, body: decodedChunkedBody)
+            }
+
+            if pendingChunkSize == nil {
+                let searchStart = min(max(chunkCursor, chunkSizeSearchOffset), buffer.endIndex)
+                guard let sizeLineRange = buffer.range(
+                    of: lineSeparator,
+                    in: searchStart..<buffer.endIndex
+                ) else {
+                    chunkSizeSearchOffset = max(chunkCursor, buffer.endIndex - (lineSeparator.count - 1))
+                    return .incomplete
+                }
+                guard let rawSizeLine = String(
+                    data: buffer[chunkCursor..<sizeLineRange.lowerBound],
+                    encoding: .ascii
+                ) else {
+                    return finish(.failure(parser.errorResponse(
+                        400,
+                        "Chunk 大小行无效",
+                        "invalid_chunked_body"
+                    )))
+                }
+                let sizeText = rawSizeLine
+                    .split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false)[0]
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !sizeText.isEmpty,
+                      let chunkSize = Int(sizeText, radix: 16),
+                      chunkSize >= 0
+                else {
+                    return finish(.failure(parser.errorResponse(
+                        400,
+                        "Chunk 大小无效",
+                        "invalid_chunked_body"
+                    )))
+                }
+                guard chunkSize <= parser.maximumBodyBytes - decodedChunkedBody.count else {
+                    return finish(.failure(parser.errorResponse(
+                        413,
+                        "请求体超过 32 MiB",
+                        "request_too_large"
+                    )))
+                }
+
+                chunkCursor = sizeLineRange.upperBound
+                chunkSizeSearchOffset = chunkCursor
+                if chunkSize == 0 {
+                    readingTrailers = true
+                    trailerSearchOffset = chunkCursor
+                    continue
+                }
+                pendingChunkSize = chunkSize
+            }
+
+            guard let chunkSize = pendingChunkSize,
+                  buffer.count >= chunkCursor + chunkSize + lineSeparator.count
+            else {
+                return .incomplete
+            }
+            let chunkEnd = chunkCursor + chunkSize
+            guard buffer[chunkEnd..<(chunkEnd + lineSeparator.count)] == lineSeparator else {
+                return finish(.failure(parser.errorResponse(
+                    400,
+                    "Chunk 结尾无效",
+                    "invalid_chunked_body"
+                )))
+            }
+            decodedChunkedBody.append(buffer[chunkCursor..<chunkEnd])
+            chunkCursor = chunkEnd + lineSeparator.count
+            chunkSizeSearchOffset = chunkCursor
+            pendingChunkSize = nil
+            compactChunkBufferIfNeeded()
+        }
+    }
+
+    private func compactChunkBufferIfNeeded() {
+        guard chunkCursor >= 64 * 1_024,
+              chunkCursor >= buffer.count / 2
+        else { return }
+        buffer = Data(buffer[chunkCursor...])
+        chunkCursor = 0
+        chunkSizeSearchOffset = 0
+    }
+
+    private func complete(head: HTTPParsedRequestHead, body: Data) -> HTTPRequestParseResult {
+        finish(parser.makeRequest(
+            method: head.method,
+            target: head.target,
+            headers: head.headers,
+            body: body
+        ))
+    }
+
+    private func finish(_ result: HTTPRequestParseResult) -> HTTPRequestParseResult {
+        terminalResult = result
+        return result
     }
 }
 
@@ -354,17 +637,23 @@ final class LocalAPIServer: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.local.modelhub.http-server")
     private let handler: Handler
     private let streamHandler: StreamHandler?
+    private let connectionPolicy: HTTPServerConnectionPolicy
     private var listener: NWListener?
     private var connections: [ObjectIdentifier: NWConnection] = [:]
-    private var connectionTimeouts: [ObjectIdentifier: DispatchWorkItem] = [:]
+    private var idleTimeouts: [ObjectIdentifier: DispatchWorkItem] = [:]
+    private var absoluteRequestTimeouts: [ObjectIdentifier: DispatchWorkItem] = [:]
     private var connectionTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
     private let requestParser = HTTPRequestParser()
     private let maximumBufferedBytes = 33 * 1_024 * 1_024
-    private let requestTimeout: TimeInterval = 30
 
-    init(handler: @escaping Handler, streamHandler: StreamHandler? = nil) {
+    init(
+        handler: @escaping Handler,
+        streamHandler: StreamHandler? = nil,
+        connectionPolicy: HTTPServerConnectionPolicy = HTTPServerConnectionPolicy()
+    ) {
         self.handler = handler
         self.streamHandler = streamHandler
+        self.connectionPolicy = connectionPolicy
     }
 
     func start(port: UInt16, stateChanged: @escaping @Sendable (Result<UInt16, Error>) -> Void) throws {
@@ -405,8 +694,10 @@ final class LocalAPIServer: @unchecked Sendable {
         queue.sync {
             listener?.cancel()
             listener = nil
-            connectionTimeouts.values.forEach { $0.cancel() }
-            connectionTimeouts.removeAll()
+            idleTimeouts.values.forEach { $0.cancel() }
+            idleTimeouts.removeAll()
+            absoluteRequestTimeouts.values.forEach { $0.cancel() }
+            absoluteRequestTimeouts.removeAll()
             connectionTasks.values.forEach { $0.cancel() }
             connectionTasks.removeAll()
             connections.values.forEach { $0.cancel() }
@@ -415,9 +706,32 @@ final class LocalAPIServer: @unchecked Sendable {
     }
 
     private func accept(_ connection: NWConnection) {
+        guard connectionPolicy.admits(activeConnectionCount: connections.count) else {
+            connection.start(queue: queue)
+            send(
+                HTTPResponse.json(
+                    statusCode: 503,
+                    object: [
+                        "error": [
+                            "message": "活动连接已达上限",
+                            "type": "connection_limit_exceeded",
+                            "code": "connection_limit_exceeded"
+                        ]
+                    ]
+                ).addingRequestID(UUID().uuidString),
+                on: connection
+            )
+            return
+        }
+
         let identifier = ObjectIdentifier(connection)
         connections[identifier] = connection
-        refreshTimeout(for: connection)
+        scheduleAbsoluteTimeout(
+            for: connection,
+            after: connectionPolicy.absoluteRequestDeadline,
+            reason: .absoluteRequestDeadline
+        )
+        refreshIdleTimeout(for: connection)
         connection.stateUpdateHandler = { [weak self] state in
             if case .failed = state {
                 self?.removeConnection(identifier)
@@ -426,58 +740,112 @@ final class LocalAPIServer: @unchecked Sendable {
             }
         }
         connection.start(queue: queue)
-        receive(on: connection, buffer: Data())
+        receive(on: connection, parser: requestParser.makeStreamParser())
     }
 
-    private func refreshTimeout(for connection: NWConnection) {
+    private func scheduleAbsoluteTimeout(
+        for connection: NWConnection,
+        after deadline: TimeInterval,
+        reason: HTTPServerConnectionPolicy.TimeoutReason
+    ) {
         let identifier = ObjectIdentifier(connection)
-        connectionTimeouts.removeValue(forKey: identifier)?.cancel()
+        absoluteRequestTimeouts.removeValue(forKey: identifier)?.cancel()
         let timeout = DispatchWorkItem { [weak self, weak connection] in
-            connection?.cancel()
-            self?.removeConnection(identifier)
+            guard let self, let connection else { return }
+            self.expireRequest(
+                identifier: identifier,
+                connection: connection,
+                reason: reason
+            )
         }
-        connectionTimeouts[identifier] = timeout
-        queue.asyncAfter(deadline: .now() + requestTimeout, execute: timeout)
+        absoluteRequestTimeouts[identifier] = timeout
+        queue.asyncAfter(
+            deadline: .now() + deadline,
+            execute: timeout
+        )
     }
 
-    private func receive(on connection: NWConnection, buffer: Data) {
+    private func refreshIdleTimeout(
+        for connection: NWConnection,
+        after deadline: TimeInterval? = nil,
+        reason: HTTPServerConnectionPolicy.TimeoutReason = .idle
+    ) {
+        let identifier = ObjectIdentifier(connection)
+        idleTimeouts.removeValue(forKey: identifier)?.cancel()
+        let timeout = DispatchWorkItem { [weak self, weak connection] in
+            guard let self, let connection else { return }
+            self.expireRequest(identifier: identifier, connection: connection, reason: reason)
+        }
+        idleTimeouts[identifier] = timeout
+        queue.asyncAfter(
+            deadline: .now() + (deadline ?? connectionPolicy.idleTimeout),
+            execute: timeout
+        )
+    }
+
+    private func expireRequest(
+        identifier: ObjectIdentifier,
+        connection: NWConnection,
+        reason _: HTTPServerConnectionPolicy.TimeoutReason
+    ) {
+        guard connections[identifier] != nil else { return }
+        removeConnection(identifier)
+        connection.cancel()
+    }
+
+    private func receive(on connection: NWConnection, parser: HTTPRequestStreamParser) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 1_048_576) {
             [weak self] data, _, isComplete, error in
             guard let self else { return }
-            var updated = buffer
+            let identifier = ObjectIdentifier(connection)
+            guard self.connections[identifier] != nil else { return }
             if let data, !data.isEmpty {
-                updated.append(data)
-                self.refreshTimeout(for: connection)
+                self.refreshIdleTimeout(for: connection)
             }
-            guard updated.count <= self.maximumBufferedBytes else {
+            let parseResult = parser.append(data ?? Data())
+            guard parser.bufferedByteCount <= self.maximumBufferedBytes else {
                 let response = HTTPResponse.json(
                     statusCode: 413,
                     object: ["error": ["message": "请求体超过 32 MiB", "type": "request_too_large"]]
-                )
+                ).addingRequestID(UUID().uuidString)
+                self.cancelRequestTimeouts(for: connection)
                 self.send(response, on: connection)
                 return
             }
 
-            switch self.requestParser.parse(updated) {
+            switch parseResult {
             case .request(let request):
-                self.cancelTimeout(for: connection)
+                self.cancelRequestTimeouts(for: connection)
+                self.scheduleAbsoluteTimeout(
+                    for: connection,
+                    after: self.connectionPolicy.handlerDeadline,
+                    reason: .handlerDeadline
+                )
                 let identifier = ObjectIdentifier(connection)
                 let task = Task { [weak self, weak connection] in
                     guard let self, let connection else { return }
                     if let streamHandler = self.streamHandler,
                        let response = await streamHandler(request)
                     {
-                        await self.send(response, on: connection)
+                        guard await self.transitionToStreaming(connection) else { return }
+                        await self.send(response.addingRequestID(request.requestID), on: connection)
                     } else {
                         let response = await self.handler(request)
-                        self.send(response, on: connection)
+                        guard !Task.isCancelled else { return }
+                        self.queue.async { [weak self, weak connection] in
+                            guard let self, let connection,
+                                  self.connections[identifier] != nil
+                            else { return }
+                            self.cancelRequestTimeouts(for: connection)
+                            self.send(response.addingRequestID(request.requestID), on: connection)
+                        }
                     }
                 }
                 self.connectionTasks[identifier] = task
                 return
             case .failure(let response):
-                self.cancelTimeout(for: connection)
-                self.send(response, on: connection)
+                self.cancelRequestTimeouts(for: connection)
+                self.send(response.addingRequestID(UUID().uuidString), on: connection)
                 return
             case .incomplete:
                 break
@@ -488,17 +856,17 @@ final class LocalAPIServer: @unchecked Sendable {
                 return
             }
             if isComplete {
-                self.cancelTimeout(for: connection)
+                self.cancelRequestTimeouts(for: connection)
                 self.send(
                     .json(
                         statusCode: 400,
                         object: ["error": ["message": "请求数据不完整", "type": "incomplete_request"]]
-                    ),
+                    ).addingRequestID(UUID().uuidString),
                     on: connection
                 )
                 return
             }
-            self.receive(on: connection, buffer: updated)
+            self.receive(on: connection, parser: parser)
         }
     }
 
@@ -529,23 +897,58 @@ final class LocalAPIServer: @unchecked Sendable {
 
     private func sendData(_ data: Data, on connection: NWConnection) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            connection.send(content: data, completion: .contentProcessed { error in
+            connection.send(content: data, completion: .contentProcessed { [weak self, weak connection] error in
                 if let error {
                     continuation.resume(throwing: error)
                 } else {
+                    if let self, let connection {
+                        self.refreshIdleTimeout(
+                            for: connection,
+                            after: self.connectionPolicy.streamIdleTimeout,
+                            reason: .streamIdle
+                        )
+                    }
                     continuation.resume()
                 }
             })
         }
     }
 
-    private func cancelTimeout(for connection: NWConnection) {
+    private func transitionToStreaming(_ connection: NWConnection) async -> Bool {
         let identifier = ObjectIdentifier(connection)
-        connectionTimeouts.removeValue(forKey: identifier)?.cancel()
+        return await withCheckedContinuation { continuation in
+            queue.async { [weak self, weak connection] in
+                guard let self, let connection,
+                      self.connections[identifier] != nil
+                else {
+                    continuation.resume(returning: false)
+                    return
+                }
+                self.cancelRequestTimeouts(for: connection)
+                self.scheduleAbsoluteTimeout(
+                    for: connection,
+                    after: self.connectionPolicy.maximumStreamDuration,
+                    reason: .maximumStreamDuration
+                )
+                self.refreshIdleTimeout(
+                    for: connection,
+                    after: self.connectionPolicy.streamIdleTimeout,
+                    reason: .streamIdle
+                )
+                continuation.resume(returning: true)
+            }
+        }
+    }
+
+    private func cancelRequestTimeouts(for connection: NWConnection) {
+        let identifier = ObjectIdentifier(connection)
+        idleTimeouts.removeValue(forKey: identifier)?.cancel()
+        absoluteRequestTimeouts.removeValue(forKey: identifier)?.cancel()
     }
 
     private func removeConnection(_ identifier: ObjectIdentifier) {
-        connectionTimeouts.removeValue(forKey: identifier)?.cancel()
+        idleTimeouts.removeValue(forKey: identifier)?.cancel()
+        absoluteRequestTimeouts.removeValue(forKey: identifier)?.cancel()
         connectionTasks.removeValue(forKey: identifier)?.cancel()
         connections.removeValue(forKey: identifier)
     }

@@ -8,8 +8,9 @@ APP_NAME=ModelHub
 WIDGET_NAME=ModelHubWidget
 ACP_NAME=ModelHubACP
 APP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${PROJECT_ROOT}/packaging/Info.plist")
-DIST_APP_DIR="${PROJECT_ROOT}/dist/${APP_NAME}.app"
-ZIP_PATH="${PROJECT_ROOT}/dist/${APP_NAME}-${APP_VERSION}-macos-universal.zip"
+DIST_DIR=${MODELHUB_DIST_DIR:-${PROJECT_ROOT}/dist}
+DIST_APP_DIR="${DIST_DIR}/${APP_NAME}.app"
+ZIP_PATH="${DIST_DIR}/${APP_NAME}-${APP_VERSION}-macos-universal.zip"
 SIGNING_IDENTITY=${MODELHUB_SIGNING_IDENTITY:--}
 TIMESTAMP_URL=${MODELHUB_TIMESTAMP_URL:-http://timestamp.apple.com/ts01}
 STAGING_ROOT=$(mktemp -d /private/tmp/modelhub-package.XXXXXX)
@@ -42,7 +43,7 @@ cd "${PROJECT_ROOT}"
 remove_item "${PACKAGE_CLANG_CACHE_DIR}"
 remove_item "${PACKAGE_SWIFTPM_CACHE_DIR}"
 remove_item "${PACKAGE_SCRATCH_DIR}"
-mkdir -p "${PACKAGE_CLANG_CACHE_DIR}" "${PACKAGE_SWIFTPM_CACHE_DIR}" dist
+mkdir -p "${PACKAGE_CLANG_CACHE_DIR}" "${PACKAGE_SWIFTPM_CACHE_DIR}" "${DIST_DIR}"
 
 for triple in arm64-apple-macosx x86_64-apple-macosx; do
     env CLANG_MODULE_CACHE_PATH="${PACKAGE_CLANG_CACHE_DIR}" \

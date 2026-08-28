@@ -3,6 +3,173 @@ import XCTest
 @testable import ModelHubCore
 
 final class ModelHealthTests: XCTestCase {
+    func testHealthFreshnessDefaultsToTwentyFourHours() {
+        XCTAssertEqual(
+            ModelHealthFreshnessPolicy.defaultFreshWindow,
+            24 * 60 * 60
+        )
+        XCTAssertEqual(
+            ModelHealthFreshnessPolicy().freshWindow,
+            ModelHealthFreshnessPolicy.defaultFreshWindow
+        )
+    }
+
+    func testHealthFreshnessDistinguishesNeverFreshAndStaleWithFixedTime() {
+        let providerID = UUID()
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        let policy = ModelHealthFreshnessPolicy(freshWindow: 24 * 60 * 60)
+
+        XCTAssertEqual(
+            ModelHealthIndex(records: []).freshness(
+                providerID: providerID,
+                model: "never-checked",
+                at: now,
+                policy: policy
+            ),
+            .never
+        )
+
+        let freshIndex = ModelHealthIndex(records: [ModelHealthRecord(
+            providerID: providerID,
+            model: "fresh-model",
+            status: .available,
+            checkedAt: now.addingTimeInterval(-(24 * 60 * 60))
+        )])
+        XCTAssertEqual(
+            freshIndex.freshness(
+                providerID: providerID,
+                model: "fresh-model",
+                at: now,
+                policy: policy
+            ),
+            .fresh
+        )
+
+        let staleIndex = ModelHealthIndex(records: [ModelHealthRecord(
+            providerID: providerID,
+            model: "stale-model",
+            status: .available,
+            checkedAt: now.addingTimeInterval(-(24 * 60 * 60) - 0.001)
+        )])
+        XCTAssertEqual(
+            staleIndex.freshness(
+                providerID: providerID,
+                model: "stale-model",
+                at: now,
+                policy: policy
+            ),
+            .stale
+        )
+    }
+
+    func testStaleHealthIsWarningOnlyAndDoesNotChangeAvailabilityOrRoutingOrder() {
+        let providerID = UUID()
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        let index = ModelHealthIndex(records: [
+            ModelHealthRecord(
+                providerID: providerID,
+                model: "stale-available",
+                status: .available,
+                checkedAt: now.addingTimeInterval(-172_800)
+            ),
+            ModelHealthRecord(
+                providerID: providerID,
+                model: "fresh-unavailable",
+                status: .unavailable,
+                checkedAt: now
+            )
+        ])
+
+        XCTAssertEqual(
+            index.freshness(providerID: providerID, model: "stale-available", at: now),
+            .stale
+        )
+        XCTAssertEqual(index.status(providerID: providerID, model: "stale-available"), .available)
+        XCTAssertEqual(
+            index.order(models: ["fresh-unavailable", "stale-available"], providerID: providerID),
+            ["stale-available", "fresh-unavailable"]
+        )
+    }
+
+    func testRuntimeHealthPreservesVerifiedModelForRequestAndTransientFailures() {
+        let existing = ModelHealthRecord(
+            providerID: UUID(),
+            model: "stable-model",
+            status: .available,
+            statusCode: 200,
+            detail: "在线验真"
+        )
+
+        for statusCode in [400, 408, 409, 413, 422, 429, 500, 502, 503, 504] {
+            XCTAssertTrue(
+                RuntimeHealthUpdatePolicy.shouldPreserve(
+                    existing: existing,
+                    proposedStatus: .unavailable,
+                    statusCode: statusCode,
+                    isTransportFailure: false
+                ),
+                "HTTP \(statusCode) must not permanently quarantine a verified model"
+            )
+        }
+        XCTAssertTrue(
+            RuntimeHealthUpdatePolicy.shouldPreserve(
+                existing: existing,
+                proposedStatus: .unavailable,
+                statusCode: nil,
+                isTransportFailure: true
+            )
+        )
+    }
+
+    func testRuntimeHealthStillAppliesSuccessAndModelLevelEvidence() {
+        let existing = ModelHealthRecord(
+            providerID: UUID(),
+            model: "stable-model",
+            status: .available,
+            statusCode: 200,
+            detail: "在线验真"
+        )
+
+        XCTAssertFalse(RuntimeHealthUpdatePolicy.shouldPreserve(
+            existing: existing,
+            proposedStatus: .available,
+            statusCode: 200,
+            isTransportFailure: false
+        ))
+        XCTAssertFalse(RuntimeHealthUpdatePolicy.shouldPreserve(
+            existing: existing,
+            proposedStatus: .configurationRequired,
+            statusCode: 401,
+            isTransportFailure: false
+        ))
+        XCTAssertFalse(RuntimeHealthUpdatePolicy.shouldPreserve(
+            existing: existing,
+            proposedStatus: .unavailable,
+            statusCode: 404,
+            isTransportFailure: false
+        ))
+        XCTAssertFalse(RuntimeHealthUpdatePolicy.shouldPreserve(
+            existing: existing,
+            proposedStatus: .unavailable,
+            statusCode: 400,
+            detail: "HTTP 400 · code=model_not_found · message=model removed",
+            isTransportFailure: false
+        ))
+        XCTAssertFalse(RuntimeHealthUpdatePolicy.shouldPreserve(
+            existing: existing,
+            proposedStatus: .unavailable,
+            statusCode: 429,
+            detail: "HTTP 429 · code=unsupported_model",
+            isTransportFailure: false
+        ))
+        XCTAssertFalse(RuntimeHealthUpdatePolicy.shouldPreserve(
+            existing: nil,
+            proposedStatus: .unavailable,
+            statusCode: 502,
+            isTransportFailure: false
+        ))
+    }
+
     func testMiniMaxExactNativeModelIDsMapToDedicatedProtocols() {
         let provider = ProviderConfig(
             name: "MiniMax 中国站",

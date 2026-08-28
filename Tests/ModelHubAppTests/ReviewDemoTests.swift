@@ -105,4 +105,22 @@ final class ReviewDemoTests: XCTestCase {
         XCTAssertTrue(model.consoleOutput.contains("未访问上游"))
         XCTAssertEqual(model.logs.first?.provider, "Review Demo")
     }
+
+    func testConsoleModelPickerOnlyIncludesCurrentlyRoutableModels() {
+        let model = AppModel()
+        model.enterReviewDemoMode()
+
+        let modelIDs = model.availableModelIDsForConsole(operation: .chat)
+
+        XCTAssertTrue(modelIDs.contains("smart"))
+        XCTAssertFalse(modelIDs.contains("Review Cloud/review-text-1"))
+        XCTAssertTrue(modelIDs.contains("Review Edge/review-text-1"))
+        XCTAssertFalse(modelIDs.contains("creative-media"))
+        XCTAssertFalse(modelIDs.contains("Review Cloud/review-music-1"))
+
+        let musicModelIDs = model.availableModelIDsForConsole(operation: .musicGeneration)
+        XCTAssertTrue(musicModelIDs.contains("creative-media"))
+        XCTAssertTrue(musicModelIDs.contains("Review Cloud/review-music-1"))
+        XCTAssertFalse(musicModelIDs.contains("smart"))
+    }
 }

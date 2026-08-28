@@ -535,15 +535,68 @@ public struct ModelProxyAssignment: Codable, Hashable, Sendable, Identifiable {
     public var providerID: UUID
     public var model: String
     public var nodeID: String
+    /// Explicit, ordered fallback candidates. `nodeID` remains the primary
+    /// node for source and persisted-configuration compatibility.
+    public var candidateNodeIDs: [String]
 
     public var id: String {
         "\(providerID.uuidString.lowercased())::\(model)"
     }
 
-    public init(providerID: UUID, model: String, nodeID: String) {
+    public init(
+        providerID: UUID,
+        model: String,
+        nodeID: String,
+        candidateNodeIDs: [String] = []
+    ) {
         self.providerID = providerID
         self.model = model.trimmingCharacters(in: .whitespacesAndNewlines)
         self.nodeID = nodeID.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.candidateNodeIDs = Self.normalizedCandidateNodeIDs(
+            candidateNodeIDs,
+            excluding: self.nodeID
+        )
+    }
+
+    public var orderedNodeIDs: [String] {
+        nodeID.isEmpty ? candidateNodeIDs : [nodeID] + candidateNodeIDs
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case providerID, model, nodeID, candidateNodeIDs
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            providerID: try container.decode(UUID.self, forKey: .providerID),
+            model: try container.decode(String.self, forKey: .model),
+            nodeID: try container.decode(String.self, forKey: .nodeID),
+            candidateNodeIDs: try container.decodeIfPresent(
+                [String].self,
+                forKey: .candidateNodeIDs
+            ) ?? []
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(providerID, forKey: .providerID)
+        try container.encode(model, forKey: .model)
+        try container.encode(nodeID, forKey: .nodeID)
+        try container.encode(candidateNodeIDs, forKey: .candidateNodeIDs)
+    }
+
+    private static func normalizedCandidateNodeIDs(
+        _ nodeIDs: [String],
+        excluding primaryNodeID: String
+    ) -> [String] {
+        var seen: Set<String> = primaryNodeID.isEmpty ? [] : [primaryNodeID]
+        return nodeIDs.compactMap { rawNodeID in
+            let nodeID = rawNodeID.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !nodeID.isEmpty, seen.insert(nodeID).inserted else { return nil }
+            return nodeID
+        }
     }
 }
 
@@ -556,6 +609,32 @@ public struct ProviderProxyEndpoint: Hashable, Sendable {
         self.kind = kind
         self.host = host
         self.port = port
+    }
+}
+
+public struct ModelProxyAutomaticFailoverSettings: Codable, Hashable, Sendable {
+    public static let defaultConsecutiveFailureThreshold = 2
+    public static let maximumConsecutiveFailureThreshold = 10
+
+    public var enabled: Bool
+    public var consecutiveFailureThreshold: Int
+
+    public init(
+        enabled: Bool = false,
+        consecutiveFailureThreshold: Int = Self.defaultConsecutiveFailureThreshold
+    ) {
+        self.enabled = enabled
+        self.consecutiveFailureThreshold = consecutiveFailureThreshold
+    }
+
+    public var sanitized: ModelProxyAutomaticFailoverSettings {
+        ModelProxyAutomaticFailoverSettings(
+            enabled: enabled,
+            consecutiveFailureThreshold: min(
+                max(consecutiveFailureThreshold, 1),
+                Self.maximumConsecutiveFailureThreshold
+            )
+        )
     }
 }
 
@@ -572,6 +651,7 @@ public struct ModelProxySettings: Codable, Hashable, Sendable {
     public var subscriptions: [ProxySubscription]
     public var nodes: [ProxySubscriptionNode]
     public var assignments: [ModelProxyAssignment]
+    public var automaticFailover: ModelProxyAutomaticFailoverSettings
 
     public init(
         enabled: Bool = false,
@@ -581,7 +661,8 @@ public struct ModelProxySettings: Codable, Hashable, Sendable {
         selections: [ModelProxySelection] = [],
         subscriptions: [ProxySubscription] = [],
         nodes: [ProxySubscriptionNode] = [],
-        assignments: [ModelProxyAssignment] = []
+        assignments: [ModelProxyAssignment] = [],
+        automaticFailover: ModelProxyAutomaticFailoverSettings = .init()
     ) {
         self.enabled = enabled
         self.kind = kind
@@ -591,10 +672,12 @@ public struct ModelProxySettings: Codable, Hashable, Sendable {
         self.subscriptions = subscriptions
         self.nodes = nodes
         self.assignments = assignments
+        self.automaticFailover = automaticFailover
     }
 
     private enum CodingKeys: String, CodingKey {
         case enabled, kind, host, port, selections, subscriptions, nodes, assignments
+        case automaticFailover
     }
 
     public init(from decoder: Decoder) throws {
@@ -619,6 +702,10 @@ public struct ModelProxySettings: Codable, Hashable, Sendable {
             [ModelProxyAssignment].self,
             forKey: .assignments
         ) ?? []
+        automaticFailover = try container.decodeIfPresent(
+            ModelProxyAutomaticFailoverSettings.self,
+            forKey: .automaticFailover
+        ) ?? .init()
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -631,6 +718,7 @@ public struct ModelProxySettings: Codable, Hashable, Sendable {
         try container.encode(subscriptions, forKey: .subscriptions)
         try container.encode(nodes, forKey: .nodes)
         try container.encode(assignments, forKey: .assignments)
+        try container.encode(automaticFailover, forKey: .automaticFailover)
     }
 
     public var validationMessage: String? {
@@ -664,6 +752,7 @@ public struct ModelProxySettings: Codable, Hashable, Sendable {
     public var sanitized: ModelProxySettings {
         var copy = self
         copy.host = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        copy.automaticFailover = automaticFailover.sanitized
         var unique: [String: ModelProxySelection] = [:]
         for selection in selections {
             let normalized = ModelProxySelection(
@@ -711,7 +800,8 @@ public struct ModelProxySettings: Codable, Hashable, Sendable {
             let normalized = ModelProxyAssignment(
                 providerID: assignment.providerID,
                 model: assignment.model,
-                nodeID: assignment.nodeID
+                nodeID: assignment.nodeID,
+                candidateNodeIDs: assignment.candidateNodeIDs.filter(validNodeIDs.contains)
             )
             guard !normalized.model.isEmpty, validNodeIDs.contains(normalized.nodeID) else { continue }
             uniqueAssignments[normalized.id] = normalized
@@ -724,7 +814,7 @@ public struct ModelProxySettings: Codable, Hashable, Sendable {
     }
 
     public var activeNodeIDs: [String] {
-        Array(Set(assignments.map(\.nodeID))).sorted()
+        Array(Set(assignments.flatMap(\.orderedNodeIDs))).sorted()
     }
 
     public var nodePortMap: [String: Int] {
@@ -804,6 +894,261 @@ public struct ModelProxySettings: Codable, Hashable, Sendable {
             enabled = true
         }
         return normalizedModels.count
+    }
+}
+
+/// Immutable hot-path lookup derived from a fully sanitized proxy snapshot.
+/// Configuration validation remains centralized in `ModelProxySettings`; each
+/// upstream request only pays for a normalized dictionary lookup.
+public struct ModelProxyEndpointIndex: Sendable {
+    private struct Key: Hashable, Sendable {
+        let providerID: UUID
+        let model: String
+    }
+
+    private let endpoints: [Key: ProviderProxyEndpoint]
+
+    public init(settings rawSettings: ModelProxySettings) {
+        let settings = rawSettings.sanitized
+        guard settings.enabled, settings.validationMessage == nil else {
+            endpoints = [:]
+            return
+        }
+
+        var indexed: [Key: ProviderProxyEndpoint] = [:]
+        indexed.reserveCapacity(settings.selections.count + settings.assignments.count)
+        let manualEndpoint = ProviderProxyEndpoint(
+            kind: settings.kind,
+            host: settings.host,
+            port: settings.port
+        )
+        for selection in settings.selections {
+            indexed[Self.key(
+                providerID: selection.providerID,
+                model: selection.model
+            )] = manualEndpoint
+        }
+        let ports = settings.nodePortMap
+        for assignment in settings.assignments {
+            guard let port = ports[assignment.nodeID] else { continue }
+            indexed[Self.key(
+                providerID: assignment.providerID,
+                model: assignment.model
+            )] = ProviderProxyEndpoint(
+                kind: .http,
+                host: "127.0.0.1",
+                port: port
+            )
+        }
+        endpoints = indexed
+    }
+
+    public func endpoint(providerID: UUID, model: String) -> ProviderProxyEndpoint? {
+        endpoints[Self.key(providerID: providerID, model: model)]
+    }
+
+    private static func key(providerID: UUID, model: String) -> Key {
+        Key(
+            providerID: providerID,
+            model: model.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+    }
+}
+
+public enum ModelProxyFailoverEvent: Hashable, Sendable {
+    case succeeded
+    case nonTransientFailure
+    case transportFailure
+    case httpStatus(Int)
+
+    fileprivate var isTransientNodeFailure: Bool {
+        switch self {
+        case .transportFailure:
+            return true
+        case .httpStatus(let statusCode):
+            return (500...599).contains(statusCode)
+        case .succeeded, .nonTransientFailure:
+            return false
+        }
+    }
+}
+
+public enum ModelProxyFailoverOutcome: String, Hashable, Sendable {
+    case stayed
+    case switched
+    case exhausted
+}
+
+public struct ModelProxyFailoverState: Hashable, Sendable {
+    public var providerID: UUID
+    public var model: String
+    public var activeNodeID: String
+    public var consecutiveTransientFailures: Int
+
+    public init(
+        providerID: UUID,
+        model: String,
+        activeNodeID: String,
+        consecutiveTransientFailures: Int = 0
+    ) {
+        self.providerID = providerID
+        self.model = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.activeNodeID = activeNodeID.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.consecutiveTransientFailures = max(consecutiveTransientFailures, 0)
+    }
+}
+
+public struct ModelProxyFailoverTransition: Hashable, Sendable {
+    public let state: ModelProxyFailoverState
+    public let outcome: ModelProxyFailoverOutcome
+
+    public init(state: ModelProxyFailoverState, outcome: ModelProxyFailoverOutcome) {
+        self.state = state
+        self.outcome = outcome
+    }
+}
+
+/// Pure, immutable state machine for explicitly configured proxy candidates.
+/// It never synthesizes a direct or manual-proxy fallback when candidates are
+/// absent, invalid, disabled, dead, or exhausted.
+public struct ModelProxyFailoverIndex: Sendable {
+    private struct Key: Hashable, Sendable {
+        let providerID: UUID
+        let model: String
+    }
+
+    private struct Entry: Sendable {
+        let nodeIDs: [String]
+        let endpointsByNodeID: [String: ProviderProxyEndpoint]
+    }
+
+    private let entries: [Key: Entry]
+    private let failureThreshold: Int
+
+    public init(settings rawSettings: ModelProxySettings) {
+        let settings = rawSettings.sanitized
+        let automaticFailover = settings.automaticFailover.sanitized
+        failureThreshold = automaticFailover.consecutiveFailureThreshold
+        guard settings.enabled,
+              automaticFailover.enabled,
+              settings.validationMessage == nil
+        else {
+            entries = [:]
+            return
+        }
+
+        let enabledSubscriptionIDs = Set(
+            settings.subscriptions.lazy.filter(\.enabled).map(\.id)
+        )
+        let allowedNodeIDs = Set(settings.nodes.lazy.filter {
+            $0.isAlive && enabledSubscriptionIDs.contains($0.subscriptionID)
+        }.map(\.id))
+        let ports = settings.nodePortMap
+        var indexed: [Key: Entry] = [:]
+        indexed.reserveCapacity(settings.assignments.count)
+        for assignment in settings.assignments {
+            let nodeIDs = assignment.orderedNodeIDs.filter {
+                allowedNodeIDs.contains($0) && ports[$0] != nil
+            }
+            guard !nodeIDs.isEmpty else { continue }
+            let endpoints: [String: ProviderProxyEndpoint] = Dictionary(
+                uniqueKeysWithValues: nodeIDs.compactMap { nodeID in
+                    guard let port = ports[nodeID] else { return nil }
+                    return (nodeID, ProviderProxyEndpoint(
+                        kind: .http,
+                        host: "127.0.0.1",
+                        port: port
+                    ))
+                }
+            )
+            indexed[Self.key(
+                providerID: assignment.providerID,
+                model: assignment.model
+            )] = Entry(nodeIDs: nodeIDs, endpointsByNodeID: endpoints)
+        }
+        entries = indexed
+    }
+
+    public func initialState(
+        providerID: UUID,
+        model: String
+    ) -> ModelProxyFailoverState? {
+        let normalizedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let nodeID = entries[Self.key(
+            providerID: providerID,
+            model: normalizedModel
+        )]?.nodeIDs.first else { return nil }
+        return ModelProxyFailoverState(
+            providerID: providerID,
+            model: normalizedModel,
+            activeNodeID: nodeID
+        )
+    }
+
+    public func endpoint(for state: ModelProxyFailoverState) -> ProviderProxyEndpoint? {
+        guard let entry = entries[Self.key(
+            providerID: state.providerID,
+            model: state.model
+        )], entry.nodeIDs.contains(state.activeNodeID) else { return nil }
+        return entry.endpointsByNodeID[state.activeNodeID]
+    }
+
+    public func transition(
+        from state: ModelProxyFailoverState,
+        event: ModelProxyFailoverEvent
+    ) -> ModelProxyFailoverTransition? {
+        guard let entry = entries[Self.key(
+            providerID: state.providerID,
+            model: state.model
+        )], let activeIndex = entry.nodeIDs.firstIndex(of: state.activeNodeID)
+        else { return nil }
+
+        guard event.isTransientNodeFailure else {
+            var resetState = state
+            resetState.consecutiveTransientFailures = 0
+            return ModelProxyFailoverTransition(state: resetState, outcome: .stayed)
+        }
+
+        let failures = min(
+            min(state.consecutiveTransientFailures, failureThreshold - 1) + 1,
+            failureThreshold
+        )
+        guard failures >= failureThreshold else {
+            var pendingState = state
+            pendingState.consecutiveTransientFailures = failures
+            return ModelProxyFailoverTransition(state: pendingState, outcome: .stayed)
+        }
+
+        let nextIndex = activeIndex + 1
+        guard entry.nodeIDs.indices.contains(nextIndex) else {
+            var exhaustedState = state
+            exhaustedState.consecutiveTransientFailures = failureThreshold
+            return ModelProxyFailoverTransition(state: exhaustedState, outcome: .exhausted)
+        }
+
+        var switchedState = state
+        switchedState.activeNodeID = entry.nodeIDs[nextIndex]
+        switchedState.consecutiveTransientFailures = 0
+        return ModelProxyFailoverTransition(state: switchedState, outcome: .switched)
+    }
+
+    /// Applies feedback only when it belongs to the node that is still active.
+    /// This prevents late completions from an older attempt from resetting or
+    /// incrementing the failure streak of a node selected in the meantime.
+    public func transition(
+        from state: ModelProxyFailoverState,
+        attemptedNodeID: String,
+        event: ModelProxyFailoverEvent
+    ) -> ModelProxyFailoverTransition? {
+        guard state.activeNodeID == attemptedNodeID else { return nil }
+        return transition(from: state, event: event)
+    }
+
+    private static func key(providerID: UUID, model: String) -> Key {
+        Key(
+            providerID: providerID,
+            model: model.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
     }
 }
 

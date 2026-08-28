@@ -1,12 +1,13 @@
 openapi: 3.1.0
 info:
   title: ModelHub Local Gateway API
-  version: 1.9.2
+  version: 1.9.4
   description: >
     模型枢纽提供的本机统一接口，覆盖聊天、图像、视频、音乐、语音、转录、
     Embedding 与 Rerank。服务仅监听 127.0.0.1，客户端使用应用中生成的
     Bearer 令牌访问。请求体支持 Content-Length 和 chunked；请求头上限
     64 KiB，解码后请求体上限 32 MiB，已知路径的错误方法返回 405。
+    所有 HTTP 响应都使用 X-ModelHub-Request-ID 返回有界请求关联标识。
 servers:
   - url: http://127.0.0.1:11435
 security:
@@ -19,6 +20,9 @@ paths:
       responses:
         "200":
           description: 服务可用
+          headers:
+            X-ModelHub-Request-ID:
+              $ref: "#/components/headers/RequestID"
           content:
             application/json:
               schema:
@@ -259,13 +263,16 @@ paths:
   /v1/images/generations:
     post:
       summary: 创建图像生成任务
-      description: 保留供应商原生扩展字段，并将路由别名替换为真实模型名。
+      description: >
+        保留供应商原生扩展字段，并将路由别名替换为真实模型名。
+        image_url 是单张参考图的网关字段；千问图片模型会把它转换为
+        input.messages[].content[].image。也可直接提交供应商原生 input。
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/NativeJSONRequest"
+              $ref: "#/components/schemas/ImageGenerationRequest"
       responses:
         "200":
           $ref: "#/components/responses/NativeResponse"
@@ -449,6 +456,12 @@ components:
       type: http
       scheme: bearer
       bearerFormat: ModelHub token
+  headers:
+    RequestID:
+      description: 用于将本次响应与本地请求日志关联；最长 80 个安全 ASCII 字符。
+      schema:
+        type: string
+        maxLength: 80
   responses:
     NativeResponse:
       description: 供应商原生响应，状态码和 Content-Type 保持不变
@@ -492,7 +505,7 @@ components:
   schemas:
     Health:
       type: object
-      required: [status, service, providers, routes]
+      required: [status, service, providers, routes, observability]
       properties:
         status:
           const: ok
@@ -504,6 +517,12 @@ components:
         routes:
           type: integer
           minimum: 0
+        observability:
+          type: object
+          additionalProperties: true
+          description: >
+            仅包含有界聚合计数：响应缓存命中/淘汰、代理会话复用/淘汰、
+            限流/并发/熔断以及模型验证新鲜度；不包含密钥、提示词或高基数请求 ID 标签。
     Model:
       type: object
       required: [id, object, created, owned_by]
@@ -522,6 +541,15 @@ components:
           enum: [unknown, available, unavailable, configurationRequired, unsupported]
         quarantined:
           type: boolean
+        verification_freshness:
+          type: string
+          enum: [fresh, stale, never]
+          description: >
+            最近真实验证的时效性；stale 只作告警，不会自动隔离、恢复或发起请求。
+        verified_at:
+          type: string
+          format: date-time
+          description: 直连模型的验证时间，或路由当前可用目标中最早的验证时间。
         capabilities:
           type: array
           items:
@@ -548,10 +576,13 @@ components:
         audio.sample_rates_hz、parameters、source 与 updated_at；未发布的字段不猜测。
     ModelList:
       type: object
-      required: [object, data]
+      required: [object, available_count, data]
       properties:
         object:
           const: list
+        available_count:
+          type: integer
+          minimum: 0
         data:
           type: array
           items:
@@ -616,6 +647,30 @@ components:
           examples:
             - APIMart Seedance/doubao-seedance-2.0
             - Agnes AI/agnes-image-2.1-flash
+    ImageGenerationRequest:
+      type: object
+      required: [model, prompt]
+      additionalProperties: true
+      properties:
+        model:
+          type: string
+          description: 可用模型名、供应商/模型或路由别名
+        prompt:
+          type: string
+          maxLength: 20000
+        size:
+          type: string
+        quality:
+          type: string
+        image_url:
+          type: string
+          description: >
+            可选的单张参考图；使用供应商支持的 HTTPS URL 或 data:image/...;base64,...，
+            不接受本机 file URL。千问图片适配会将其放入多模态消息的 image 内容块。
+        input:
+          type: object
+          additionalProperties: true
+          description: 可选的供应商原生输入；存在非空 messages 时会优先保留。
     MusicGenerationRequest:
       type: object
       required: [model, prompt]

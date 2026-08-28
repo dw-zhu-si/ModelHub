@@ -3,6 +3,236 @@ import XCTest
 @testable import ModelHubCore
 
 final class OperationalCoreTests: XCTestCase {
+    func testUsageRecordingPerformanceBaseline() {
+        let providerID = UUID()
+        let date = Date(timeIntervalSince1970: 1_775_865_600)
+        var aggregates = (0..<1_000).map { index in
+            UsageAggregate(
+                month: UsageAccounting.monthKey(for: date),
+                requestedModel: "request-\(index)",
+                providerID: providerID,
+                providerName: "Performance",
+                model: "model-\(index)",
+                requests: 1,
+                successfulRequests: 1,
+                totalLatencyMilliseconds: 100,
+                lastUsedAt: date,
+                recentLatencyMilliseconds: [100]
+            )
+        }
+        let clock = ContinuousClock()
+        let started = clock.now
+
+        for _ in 0..<10_000 {
+            aggregates = UsageAccounting.recording(
+                aggregates: aggregates,
+                requestedModel: "request-999",
+                providerID: providerID,
+                providerName: "Performance",
+                model: "model-999",
+                statusCode: 200,
+                latencyMilliseconds: 120,
+                tokens: UsageTokenCounts(input: 10, output: 5),
+                estimatedCostUSD: 0.001,
+                contextCharactersSaved: 2,
+                date: date
+            )
+        }
+
+        let duration = started.duration(to: clock.now)
+        XCTAssertEqual(aggregates.count, 1_000)
+        XCTAssertEqual(aggregates.last?.requests, 10_001)
+        print("USAGE_RECORDING_BASELINE workload=1000_aggregates_10000_updates duration=\(duration)")
+#if !DEBUG
+        XCTAssertLessThan(duration, .seconds(1))
+#endif
+    }
+
+    func testUsageRecordingKeepsRotatingHotSetAtTail() {
+        let providerID = UUID()
+        let date = Date(timeIntervalSince1970: 1_775_865_600)
+        var aggregates = (0..<1_000).map { index in
+            UsageAggregate(
+                month: UsageAccounting.monthKey(for: date),
+                requestedModel: "request-\(index)",
+                providerID: providerID,
+                providerName: "Performance",
+                model: "model-\(index)",
+                requests: 1,
+                successfulRequests: 1,
+                lastUsedAt: date
+            )
+        }
+        let clock = ContinuousClock()
+        let started = clock.now
+
+        for update in 0..<10_000 {
+            let key = update % 10
+            aggregates = UsageAccounting.recording(
+                aggregates: aggregates,
+                requestedModel: "request-\(key)",
+                providerID: providerID,
+                providerName: "Performance",
+                model: "model-\(key)",
+                statusCode: 200,
+                latencyMilliseconds: 20,
+                tokens: .init(),
+                estimatedCostUSD: nil,
+                contextCharactersSaved: 0,
+                date: date
+            )
+        }
+
+        let duration = started.duration(to: clock.now)
+        let hotRows = aggregates.suffix(10)
+        XCTAssertEqual(Set(hotRows.map(\.model)), Set((0..<10).map { "model-\($0)" }))
+        XCTAssertEqual(hotRows.reduce(0) { $0 + $1.requests }, 10_010)
+        print("USAGE_ROTATING_HOT_SET workload=1000_aggregates_10_hot_keys_10000_updates duration=\(duration)")
+#if !DEBUG
+        XCTAssertLessThan(duration, .seconds(1))
+#endif
+    }
+
+    func testUsageMonthComponentUsesUTCAndCrossesYearBoundary() {
+        let january = UsageMonth(date: Date(timeIntervalSince1970: 1_767_225_600))
+
+        XCTAssertEqual(january.key, "2026-01")
+        XCTAssertEqual(january.adding(months: -1).key, "2025-12")
+        XCTAssertEqual(january.adding(months: 12).key, "2027-01")
+    }
+
+    func testUsageRecordingPreservesArrayCodableContractAndRetentionOrder() throws {
+        let providerID = UUID()
+        let date = Date(timeIntervalSince1970: 1_775_865_600)
+        let old = UsageAggregate(
+            month: "2024-01",
+            requestedModel: "old",
+            providerID: providerID,
+            providerName: "Performance",
+            model: "old-model"
+        )
+        let current = UsageAggregate(
+            month: UsageAccounting.monthKey(for: date),
+            requestedModel: "current",
+            providerID: providerID,
+            providerName: "Performance",
+            model: "current-model",
+            requests: 2
+        )
+
+        let recorded = UsageAccounting.recording(
+            aggregates: [old, current],
+            requestedModel: "current",
+            providerID: providerID,
+            providerName: "Performance",
+            model: "current-model",
+            statusCode: 200,
+            latencyMilliseconds: 50,
+            tokens: .init(),
+            estimatedCostUSD: nil,
+            contextCharactersSaved: 0,
+            date: date,
+            retentionMonths: 12
+        )
+        let encoded = try JSONEncoder().encode(recorded)
+        let decoded = try JSONDecoder().decode([UsageAggregate].self, from: encoded)
+
+        XCTAssertEqual(decoded.map(\.id), [current.id])
+        XCTAssertEqual(decoded.first?.requests, 3)
+    }
+
+    func testProxyEndpointIndexMatchesValidatedSettingsForAssignedAndManualModels() {
+        let subscription = ProxySubscription(
+            name: "性能测试订阅",
+            sourceHost: "example.invalid"
+        )
+        let node = ProxySubscriptionNode(
+            subscriptionID: subscription.id,
+            name: "节点 A",
+            type: "Direct"
+        )
+        let assignedProviderID = UUID()
+        let manualProviderID = UUID()
+        let settings = ModelProxySettings(
+            enabled: true,
+            kind: .socks5,
+            host: "127.0.0.1",
+            port: 7890,
+            selections: [ModelProxySelection(
+                providerID: manualProviderID,
+                model: "manual-model"
+            )],
+            subscriptions: [subscription],
+            nodes: [node],
+            assignments: [ModelProxyAssignment(
+                providerID: assignedProviderID,
+                model: "assigned-model",
+                nodeID: node.id
+            )]
+        )
+
+        let index = ModelProxyEndpointIndex(settings: settings)
+
+        XCTAssertEqual(
+            index.endpoint(providerID: assignedProviderID, model: "assigned-model"),
+            settings.endpoint(providerID: assignedProviderID, model: "assigned-model")
+        )
+        XCTAssertEqual(
+            index.endpoint(providerID: manualProviderID, model: "manual-model"),
+            settings.endpoint(providerID: manualProviderID, model: "manual-model")
+        )
+        XCTAssertNil(index.endpoint(providerID: manualProviderID, model: "other-model"))
+    }
+
+    func testProxyEndpointIndexLargeLookupBaseline() {
+        let subscription = ProxySubscription(
+            name: "Synthetic",
+            sourceHost: "example.invalid"
+        )
+        let nodes = (0..<2).map {
+            ProxySubscriptionNode(
+                subscriptionID: subscription.id,
+                name: "Node \($0)",
+                type: "Direct"
+            )
+        }
+        let providerID = UUID()
+        let assignments = (0..<768).map { index in
+            ModelProxyAssignment(
+                providerID: providerID,
+                model: "model-\(index)",
+                nodeID: nodes[index % nodes.count].id
+            )
+        }
+        let settings = ModelProxySettings(
+            enabled: true,
+            subscriptions: [subscription],
+            nodes: nodes,
+            assignments: assignments
+        )
+        let index = ModelProxyEndpointIndex(settings: settings)
+        let clock = ContinuousClock()
+
+        let legacyStart = clock.now
+        for lookup in 0..<1_000 {
+            XCTAssertNotNil(settings.endpoint(
+                providerID: providerID,
+                model: "model-\(lookup % assignments.count)"
+            ))
+        }
+        let legacy = legacyStart.duration(to: clock.now)
+
+        let indexedStart = clock.now
+        for lookup in 0..<1_000 {
+            XCTAssertNotNil(index.endpoint(
+                providerID: providerID,
+                model: "model-\(lookup % assignments.count)"
+            ))
+        }
+        let indexed = indexedStart.duration(to: clock.now)
+        print("PROXY_ENDPOINT_LOOKUP legacy=\(legacy) indexed=\(indexed)")
+    }
+
     func testBulkProxyNodeAssignmentDeduplicatesModelsAndPreservesOtherProviders() {
         let subscriptionID = UUID()
         let providerID = UUID()

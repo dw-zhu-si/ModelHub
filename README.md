@@ -75,9 +75,15 @@ ModelHub 本机网关（127.0.0.1:11435）
 - 不会无条件重放一次可能已计费的请求；
 - 路由目标会自动排除隔离模型，手动解除隔离才会恢复调用资格。
 
+本机网关把 HTTP 解析、缓存键计算、请求 JSON/上下文处理、路由、非交互钥匙串读取、上游 I/O 与用量解析放在 UI 主执行器之外；主执行器只处理鉴权/配额状态快照和有界的界面观测回写。连接最多同时接受 128 个；入站请求读取采用 10 秒空闲与 30 秒总期限，完整请求进入普通处理后最多 660 秒，流式响应采用 30 秒写空闲与 1 小时总期限，避免失联上游长期耗尽本机连接。
+
+模型代理可为每个“供应商 + 精确模型 ID”保存一个主节点和有序备选节点。自动切换默认关闭；用户显式开启后，只在连续代理传输失败或上游 5xx 达到阈值时按卡片顺序切换。客户端/Model 级 4xx 会证明节点传输已成功，不计入节点故障。候选耗尽后保持最后一个显式节点并失败关闭，绝不静默改为直连。
+
 ### 模型健康与隔离
 
 模型状态会记录最近检测时间、延迟、HTTP 状态码和可读原因。当前界面使用“可用”“待验证 · 已隔离”“不可用”“需配置/待处理”等明确状态，不再把空白状态当作可用。
+
+最近一次验证超过 24 小时时，界面与模型目录会标记 `stale`；从未验证的条目标记 `never`。新鲜度只是可观测告警，不会自动调用上游、改写可用性或改变路由资格。
 
 批量检测会先为每个供应商选择普通文本模型作为 canary。超时、DNS、断连或 TLS 建连失败只执行一次有界重试；重试后仍属于供应商级网络故障时，本轮暂停该供应商的其余探测，并保留上一轮明确为“可用”的记录。证书不受信任等安全错误不会通过关闭证书校验来绕过，模型自身的 HTTP、权限、配额或协议错误仍按实际结果更新。
 
@@ -113,6 +119,8 @@ ModelHub 本机网关（127.0.0.1:11435）
 
 “路由与协议”中可选择开启有界内存缓存。它只处理完全相同的非流式 `Chat Completions` 与 `Responses` 成功请求，默认关闭；缓存键为请求摘要，并按主访问令牌或虚拟密钥隔离，响应正文只驻留进程内存、不写入磁盘。缓存使用 TTL、条目数、总字节数和 LRU 淘汰形成明确上限。若上游返回 5xx，可在用户配置的时限内回退旧响应，并通过 `X-ModelHub-Cache: STALE` 明确标识，避免把旧结果伪装成实时生成。
 
+`GET /health` 会返回缓存命中/淘汰、代理会话创建/复用/淘汰、限流/熔断以及模型验证新鲜度的有界聚合计数。每个普通或流式 HTTP 响应都带 `X-ModelHub-Request-ID`，请求日志可用同一 ID 关联缓存与上游结果；指标不使用请求 ID 作为高基数标签。
+
 ### 支持的供应商与协议
 
 | 类型 | 已覆盖范围 |
@@ -146,7 +154,7 @@ ModelHub 本机网关（127.0.0.1:11435）
 
 ### 普通用户：下载已公证 DMG
 
-从 [GitHub Releases](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.3-build63) 下载 `ModelHub-1.9.3-macos-universal.dmg`，打开后把 `ModelHub.app` 拖到“应用程序”文件夹。该 DMG 与其中的 App 均使用 Developer ID 签名，并已通过 Apple 公证、票据装订、镜像完整性和 Gatekeeper 验证。
+从 [GitHub Releases](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.4) 下载 `ModelHub-1.9.4-macos-universal.dmg`，打开后把 `ModelHub.app` 拖到“应用程序”文件夹。该 DMG 与其中的 App 均使用 Developer ID 签名，并已通过 Apple 公证、票据装订、镜像完整性和 Gatekeeper 验证。
 
 也可以下载同一 Release 中的 Universal ZIP，解压后手动移动到“应用程序”。
 
@@ -158,15 +166,11 @@ ModelHub 本机网关（127.0.0.1:11435）
 
 ### 校验安装包
 
-```text
-1bddfa2393d20c4b76724b43231b2f194f8a8922848ba9dd126dd0e970ebb0d9  ModelHub-1.9.1-macos-universal.zip
-860e1da3e71dbe4394669cc0f86fd34928c5398bb234bbeb1dcce22b891d6aac  ModelHub-1.9.1-macos-universal.dmg
-```
-
-下载 Release 中的 `ModelHub-1.9.1-SHA256.txt` 后，可执行：
+下载同一 Release 中的 `ModelHub-1.9.4-macos-universal.zip.sha256` 与 `ModelHub-1.9.4-macos-universal.dmg.sha256` 后，可执行：
 
 ```bash
-shasum -a 256 -c ModelHub-1.9.1-SHA256.txt
+shasum -a 256 -c ModelHub-1.9.4-macos-universal.zip.sha256
+shasum -a 256 -c ModelHub-1.9.4-macos-universal.dmg.sha256
 ```
 
 ## 五分钟开始使用
@@ -218,6 +222,23 @@ curl http://127.0.0.1:11435/v1/models/available \
 # 读取模型的图片尺寸、视频分辨率/时长、音频格式及其他参数约束；不访问上游
 curl http://127.0.0.1:11435/v1/models/qwen-image-3.0-pro/capabilities \
   -H "Authorization: Bearer YOUR_MODELHUB_TOKEN"
+```
+
+### 带参考图的图片任务
+
+`image_url` 是 ModelHub 的单张参考图网关字段。千问图片模型会把它转换为供应商要求的多模态 `content.image`；也可以提交供应商原生的 `input.messages`。只使用供应商支持的 HTTPS URL 或 `data:image/...;base64,...`，不要传本机 `file://` 路径。
+
+```bash
+curl http://127.0.0.1:11435/v1/images/generations \
+  -H "Authorization: Bearer YOUR_MODELHUB_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "千问AI平台（按量付费）/qwen-image-3.0-pro",
+    "prompt": "保留参考图主体，调整为雨夜电影光效",
+    "image_url": "data:image/jpeg;base64,...",
+    "size": "1024*1024",
+    "confirm_billable": true
+  }'
 ```
 
 ### 视频任务示例

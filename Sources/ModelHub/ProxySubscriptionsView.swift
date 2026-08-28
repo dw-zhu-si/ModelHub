@@ -386,6 +386,9 @@ struct ProxyNodeAssignmentView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedProviderID: UUID?
     @State private var selectedNodeID: String?
+    @State private var candidateNodeIDs: [String] = []
+    @State private var automaticFailoverEnabled = false
+    @State private var failoverThreshold = ModelProxyAutomaticFailoverSettings.defaultConsecutiveFailureThreshold
     @State private var scope: ProxyAssignmentScope
     @State private var query = ""
     @State private var nodeQuery = ""
@@ -422,6 +425,7 @@ struct ProxyNodeAssignmentView: View {
         .onAppear(perform: prepareInitialSelection)
         .onChange(of: selectedProviderID) {
             selectedModels.removeAll()
+            candidateNodeIDs.removeAll()
         }
         .onChange(of: scope) {
             selectedModels.removeAll()
@@ -491,6 +495,21 @@ struct ProxyNodeAssignmentView: View {
 
             nodeCardGrid
 
+            HStack(spacing: 12) {
+                Toggle("启用有序节点自动切换", isOn: $automaticFailoverEnabled)
+                    .toggleStyle(.switch)
+                Stepper(
+                    L10n.format("连续瞬态故障 %d 次后切换", failoverThreshold),
+                    value: $failoverThreshold,
+                    in: 1...ModelProxyAutomaticFailoverSettings.maximumConsecutiveFailureThreshold
+                )
+                .disabled(!automaticFailoverEnabled)
+                Spacer()
+                Text("只使用卡片中显式加入的备选节点；候选耗尽后失败关闭，绝不静默直连。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             HStack(spacing: 10) {
                 Label(
                     selectedNode.map {
@@ -537,11 +556,13 @@ struct ProxyNodeAssignmentView: View {
 
     private func nodeCard(_ node: ProxySubscriptionNode) -> some View {
         let selected = selectedNodeID == node.id
+        let candidateIndex = candidateNodeIDs.firstIndex(of: node.id)
         let testing = model.testingProxyNodeIDs.contains(node.id)
         let result = model.proxyNodeLatencyResults[node.id]
         return VStack(alignment: .leading, spacing: 8) {
             Button {
                 selectedNodeID = node.id
+                candidateNodeIDs.removeAll { $0 == node.id }
             } label: {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 7) {
@@ -569,6 +590,7 @@ struct ProxyNodeAssignmentView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .disabled(!node.isAlive)
 
             Divider()
 
@@ -599,6 +621,26 @@ struct ProxyNodeAssignmentView: View {
             }
             .font(.caption)
             .foregroundStyle(latencyColor(result))
+
+            Button {
+                guard node.id != selectedNodeID else { return }
+                if candidateIndex != nil {
+                    candidateNodeIDs.removeAll { $0 == node.id }
+                } else {
+                    candidateNodeIDs.append(node.id)
+                }
+            } label: {
+                Label(
+                    candidateIndex.map { L10n.format("备选 #%d", $0 + 1) }
+                        ?? L10n.text("加入有序备选"),
+                    systemImage: candidateIndex == nil
+                        ? "plus.circle" : "arrow.triangle.branch"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(selected || !node.isAlive)
         }
         .padding(11)
         .background(
@@ -673,7 +715,9 @@ struct ProxyNodeAssignmentView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("已选择 \(selectedModels.count) 个模型")
                     .font(.headline)
-                Text("节点按精确模型保存；未分配的模型继续直连。")
+                Text(automaticFailoverEnabled
+                    ? "主节点与有序备选按精确模型保存；自动切换绝不回退直连。"
+                    : "节点按精确模型保存；未分配的模型继续直连。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -690,15 +734,20 @@ struct ProxyNodeAssignmentView: View {
 
             Button("应用并启用节点") {
                 guard let providerID = selectedProviderID else { return }
-                model.assignProxyNode(
-                    selectedNodeID,
+                model.assignProxyNodes(
+                    primaryNodeID: selectedNodeID,
+                    candidateNodeIDs: candidateNodeIDs,
                     providerID: providerID,
                     models: Array(selectedModels),
-                    enableWhenAssigned: true
+                    enableWhenAssigned: true,
+                    automaticFailover: ModelProxyAutomaticFailoverSettings(
+                        enabled: automaticFailoverEnabled,
+                        consecutiveFailureThreshold: failoverThreshold
+                    )
                 )
             }
             .buttonStyle(.borderedProminent)
-            .disabled(selectedModels.isEmpty || selectedProviderID == nil || selectedNodeID == nil)
+            .disabled(selectedModels.isEmpty || selectedProviderID == nil || selectedNode?.isAlive != true)
 
             Button("复验已选文字模型") {
                 showsProbeConfirmation = true
@@ -848,18 +897,21 @@ struct ProxyNodeAssignmentView: View {
     }
 
     private func prepareInitialSelection() {
+        let failover = model.proxyAutomaticFailoverSettings
+        automaticFailoverEnabled = failover.enabled
+        failoverThreshold = failover.consecutiveFailureThreshold
         if selectedProviderID == nil {
             selectedProviderID = model.providers.first?.id
         }
         guard selectedNodeID == nil else { return }
         if let initialSubscriptionID,
            let node = model.proxySubscriptionNodes.first(where: {
-               $0.subscriptionID == initialSubscriptionID
+               $0.subscriptionID == initialSubscriptionID && $0.isAlive
            })
         {
             selectedNodeID = node.id
         } else {
-            selectedNodeID = model.proxySubscriptionNodes.first?.id
+            selectedNodeID = model.proxySubscriptionNodes.first(where: \.isAlive)?.id
         }
     }
 }

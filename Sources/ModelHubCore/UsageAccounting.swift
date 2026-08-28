@@ -1,5 +1,41 @@
 import Foundation
 
+public struct UsageMonth: Hashable, Comparable, Sendable {
+    private static let calendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Locale(identifier: "en_US_POSIX")
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }()
+
+    private let ordinal: Int
+
+    public init(date: Date) {
+        let components = Self.calendar.dateComponents([.year, .month], from: date)
+        let year = components.year ?? 0
+        let month = components.month ?? 1
+        ordinal = year * 12 + month - 1
+    }
+
+    private init(ordinal: Int) {
+        self.ordinal = ordinal
+    }
+
+    public var key: String {
+        let year = ordinal >= 0 ? ordinal / 12 : (ordinal - 11) / 12
+        let month = ordinal - (year * 12) + 1
+        return String(format: "%04d-%02d", year, month)
+    }
+
+    public func adding(months: Int) -> UsageMonth {
+        UsageMonth(ordinal: ordinal + months)
+    }
+
+    public static func < (lhs: UsageMonth, rhs: UsageMonth) -> Bool {
+        lhs.ordinal < rhs.ordinal
+    }
+}
+
 public enum UsageAccounting {
     public static func tokenCounts(from responseBody: Data) -> UsageTokenCounts {
         guard let root = try? JSONSerialization.jsonObject(with: responseBody) as? [String: Any],
@@ -53,16 +89,11 @@ public enum UsageAccounting {
     }
 
     public static func monthKey(for date: Date = .now) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM"
-        return formatter.string(from: date)
+        UsageMonth(date: date).key
     }
 
     public static func recording(
-        aggregates: [UsageAggregate],
+        aggregates: consuming [UsageAggregate],
         requestedModel: String,
         providerID: UUID,
         providerName: String,
@@ -75,29 +106,53 @@ public enum UsageAccounting {
         date: Date = .now,
         retentionMonths: Int = 12
     ) -> [UsageAggregate] {
-        let month = monthKey(for: date)
+        let currentMonth = UsageMonth(date: date)
+        let month = currentMonth.key
+        let months = max(1, retentionMonths)
+        let cutoffMonth = currentMonth.adding(months: -(months - 1)).key
         var result = aggregates
-        if let index = result.firstIndex(where: {
-            $0.month == month
-                && $0.requestedModel == requestedModel
-                && $0.providerID == providerID
-                && $0.model == model
-        }) {
-            result[index].requests += 1
-            result[index].successfulRequests += (200..<300).contains(statusCode) ? 1 : 0
-            result[index].totalLatencyMilliseconds += max(0, latencyMilliseconds)
-            result[index].inputTokens += max(0, tokens.input)
-            result[index].outputTokens += max(0, tokens.output)
+        result.removeAll { $0.month < cutoffMonth }
+
+        func matches(_ aggregate: UsageAggregate) -> Bool {
+            aggregate.month == month
+                && aggregate.requestedModel == requestedModel
+                && aggregate.providerID == providerID
+                && aggregate.model == model
+        }
+        // Usage is naturally bursty. Keep the most recently updated aggregate
+        // at the tail and inspect a bounded hot window before falling back to a
+        // full scan. This preserves the persisted array schema while making a
+        // rotating working set independent of the full history size.
+        let hotWindowSize = 64
+        let hotWindowStart = max(result.startIndex, result.endIndex - hotWindowSize)
+        let index = result.indices[hotWindowStart...].reversed().first {
+            matches(result[$0])
+        } ?? result.indices[..<hotWindowStart].first {
+            matches(result[$0])
+        }
+        if let index {
+            var aggregate = result[index]
+            aggregate.requests += 1
+            aggregate.successfulRequests += (200..<300).contains(statusCode) ? 1 : 0
+            aggregate.totalLatencyMilliseconds += max(0, latencyMilliseconds)
+            aggregate.inputTokens += max(0, tokens.input)
+            aggregate.outputTokens += max(0, tokens.output)
             if let estimatedCostUSD {
-                result[index].pricedRequests += 1
-                result[index].estimatedCostUSD += max(0, estimatedCostUSD)
+                aggregate.pricedRequests += 1
+                aggregate.estimatedCostUSD += max(0, estimatedCostUSD)
             }
-            result[index].contextCharactersSaved += max(0, contextCharactersSaved)
-            result[index].lastUsedAt = date
-            var samples = result[index].recentLatencyMilliseconds ?? []
+            aggregate.contextCharactersSaved += max(0, contextCharactersSaved)
+            aggregate.lastUsedAt = date
+            var samples = aggregate.recentLatencyMilliseconds ?? []
             samples.append(max(0, latencyMilliseconds))
             if samples.count > 100 { samples.removeFirst(samples.count - 100) }
-            result[index].recentLatencyMilliseconds = samples
+            aggregate.recentLatencyMilliseconds = samples
+            if index == result.indices.last {
+                result[index] = aggregate
+            } else {
+                result.remove(at: index)
+                result.append(aggregate)
+            }
         } else {
             result.append(UsageAggregate(
                 month: month,
@@ -118,11 +173,7 @@ public enum UsageAccounting {
             ))
         }
 
-        let months = max(1, retentionMonths)
-        let calendar = Calendar(identifier: .gregorian)
-        let cutoff = calendar.date(byAdding: .month, value: -(months - 1), to: date) ?? date
-        let cutoffMonth = monthKey(for: cutoff)
-        return result.filter { $0.month >= cutoffMonth }
+        return result
     }
 
     public static func currentMonthCost(
@@ -141,7 +192,9 @@ public enum UsageAccounting {
     ) -> Int {
         let month = monthKey(for: date)
         return aggregates.lazy.filter {
-            $0.month == month && $0.providerID == providerID && $0.model == model
+            $0.month == month
+                && $0.providerID == providerID
+                && $0.model == model
         }.reduce(0) { $0 + $1.inputTokens + $1.outputTokens }
     }
 

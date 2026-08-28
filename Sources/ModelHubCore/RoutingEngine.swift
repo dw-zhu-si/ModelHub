@@ -1,9 +1,63 @@
 import Foundation
 
+public struct UsageMetricIndex: Sendable {
+    public static let empty = UsageMetricIndex(usage: [])
+
+    private struct Key: Hashable, Sendable {
+        let providerID: UUID
+        let model: String
+    }
+
+    private struct Metrics: Sendable {
+        var p90LatencyMilliseconds: Int?
+        var requests = 0
+        var successfulRequests = 0
+    }
+
+    private let metrics: [Key: Metrics]
+
+    public init(usage: [UsageAggregate]) {
+        var indexed: [Key: Metrics] = [:]
+        indexed.reserveCapacity(usage.count)
+        for aggregate in usage {
+            let key = Key(providerID: aggregate.providerID, model: aggregate.model)
+            var value = indexed[key] ?? Metrics()
+            if let latency = aggregate.p90LatencyMilliseconds {
+                value.p90LatencyMilliseconds = max(
+                    value.p90LatencyMilliseconds ?? latency,
+                    latency
+                )
+            }
+            value.requests += aggregate.requests
+            value.successfulRequests += aggregate.successfulRequests
+            indexed[key] = value
+        }
+        metrics = indexed
+    }
+
+    public func p90LatencyMilliseconds(providerID: UUID, model: String) -> Int? {
+        metrics[Key(providerID: providerID, model: model)]?.p90LatencyMilliseconds
+    }
+
+    public func stability(providerID: UUID, model: String) -> Double? {
+        guard let value = metrics[Key(providerID: providerID, model: model)],
+              value.requests > 0
+        else { return nil }
+        return Double(value.successfulRequests) / Double(value.requests)
+    }
+}
+
 public actor RoutingEngine {
     private var roundRobinCounters: [UUID: Int] = [:]
+    private let weightedRandomValue: @Sendable (Int) -> Int
 
-    public init() {}
+    public init() {
+        weightedRandomValue = { upperBound in Int.random(in: 0..<upperBound) }
+    }
+
+    init(weightedRandomValue: @escaping @Sendable (Int) -> Int) {
+        self.weightedRandomValue = weightedRandomValue
+    }
 
     public func candidates(
         for requestedModel: String,
@@ -43,6 +97,11 @@ public actor RoutingEngine {
             $0.enabled && $0.alias.caseInsensitiveCompare(requestedModel) == .orderedSame
         }) {
             let providerIndex = Dictionary(uniqueKeysWithValues: providers.map { ($0.id, $0) })
+            let needsUsageMetrics: Bool = switch route.strategy {
+            case .lowestLatency, .highestStability, .balanced: true
+            default: route.constraints?.maximumP90LatencyMilliseconds != nil
+            }
+            let policyUsageMetrics = needsUsageMetrics ? UsageMetricIndex(usage: usage) : nil
             let targets = route.targets.map { target in
                 guard target.profile == nil,
                       let inherited = providerIndex[target.providerID]?.modelProfiles?[target.model]
@@ -60,6 +119,7 @@ public actor RoutingEngine {
                     provider: provider,
                     health: health,
                     usage: usage,
+                    usageMetrics: policyUsageMetrics,
                     requiredCapabilities: requiredCapabilities,
                     constraints: route.constraints,
                     access: accessPolicy
@@ -70,7 +130,7 @@ public actor RoutingEngine {
                 route: route,
                 providers: providers,
                 health: health,
-                usage: usage,
+                usageMetrics: policyUsageMetrics ?? .empty,
                 defaultRule: defaultRule
             )
         }
@@ -106,6 +166,9 @@ public actor RoutingEngine {
             }
         let healthOrdered = health.order(targets: directMatches)
         let originalOrder = Dictionary(uniqueKeysWithValues: healthOrdered.enumerated().map { ($0.element.id, $0.offset) })
+        let usageMetrics = defaultRule == .sameModelLowestLatency
+            ? UsageMetricIndex(usage: usage)
+            : .empty
         let ordered = healthOrdered
             .sorted {
                 let leftCapability = capabilityRank($0.profile, required: requiredCapabilities)
@@ -121,7 +184,7 @@ public actor RoutingEngine {
                     $1,
                     providers: providers,
                     health: health,
-                    usage: usage,
+                    usageMetrics: usageMetrics,
                     defaultRule: defaultRule
                 )
             }
@@ -150,7 +213,7 @@ public actor RoutingEngine {
         route: RouteConfig,
         providers: [ProviderConfig],
         health: ModelHealthIndex,
-        usage: [UsageAggregate],
+        usageMetrics: UsageMetricIndex,
         defaultRule: DefaultRoutingRule
     ) -> [RouteTarget] {
         guard !targets.isEmpty else { return [] }
@@ -181,23 +244,21 @@ public actor RoutingEngine {
             }
         case .weightedRandom:
             return tiers.flatMap { tier in
-                let weighted = tier.flatMap { target in
-                    Array(repeating: target, count: max(1, min(target.weight, 100)))
-                }
-                guard let first = weighted.randomElement() else { return tier }
+                guard let first = weightedRandomTarget(in: tier) else { return tier }
                 return [first] + tier.filter { $0.id != first.id }
             }
         case .lowestLatency:
             return tiers.flatMap { tier in
                 tier.sorted {
-                    latency(for: $0, health: health, usage: usage)
-                        < latency(for: $1, health: health, usage: usage)
+                    latency(for: $0, health: health, usageMetrics: usageMetrics)
+                        < latency(for: $1, health: health, usageMetrics: usageMetrics)
                 }
             }
         case .highestStability:
             return tiers.flatMap { tier in
                 tier.sorted {
-                    stability(for: $0, usage: usage) > stability(for: $1, usage: usage)
+                    stability(for: $0, usageMetrics: usageMetrics)
+                        > stability(for: $1, usageMetrics: usageMetrics)
                 }
             }
         case .lowestCost:
@@ -213,11 +274,26 @@ public actor RoutingEngine {
         case .balanced:
             return tiers.flatMap { tier in
                 tier.sorted {
-                    balancedScore(for: $0, health: health, usage: usage)
-                        < balancedScore(for: $1, health: health, usage: usage)
+                    balancedScore(for: $0, health: health, usageMetrics: usageMetrics)
+                        < balancedScore(for: $1, health: health, usageMetrics: usageMetrics)
                 }
             }
         }
+    }
+
+    private func weightedRandomTarget(in targets: [RouteTarget]) -> RouteTarget? {
+        guard !targets.isEmpty else { return nil }
+        let totalWeight = targets.reduce(into: 0) { total, target in
+            total += max(1, min(target.weight, 100))
+        }
+        guard totalWeight > 0 else { return targets.first }
+        let randomValue = min(max(weightedRandomValue(totalWeight), 0), totalWeight - 1)
+        var cumulativeWeight = 0
+        for target in targets {
+            cumulativeWeight += max(1, min(target.weight, 100))
+            if randomValue < cumulativeWeight { return target }
+        }
+        return targets.last
     }
 
     private func compare(
@@ -225,7 +301,7 @@ public actor RoutingEngine {
         _ rhs: RouteTarget,
         providers: [ProviderConfig],
         health: ModelHealthIndex,
-        usage: [UsageAggregate],
+        usageMetrics: UsageMetricIndex,
         defaultRule: DefaultRoutingRule
     ) -> Bool {
         let leftModel = lhs.model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -239,8 +315,8 @@ public actor RoutingEngine {
             let right = estimatedUnitCost(for: rhs)
             if left != right { return left < right }
         case .sameModelLowestLatency:
-            let left = latency(for: lhs, health: health, usage: usage)
-            let right = latency(for: rhs, health: health, usage: usage)
+            let left = latency(for: lhs, health: health, usageMetrics: usageMetrics)
+            let right = latency(for: rhs, health: health, usageMetrics: usageMetrics)
             if left != right { return left < right }
         case .sameModelOfficial:
             let left = leftProvider?.kind.isOfficialProvider(for: lhs.model) == true
@@ -253,11 +329,12 @@ public actor RoutingEngine {
     private func latency(
         for target: RouteTarget,
         health: ModelHealthIndex,
-        usage: [UsageAggregate] = []
+        usageMetrics: UsageMetricIndex
     ) -> Int {
-        let p90 = usage.filter {
-            $0.providerID == target.providerID && $0.model == target.model
-        }.compactMap(\.p90LatencyMilliseconds).max()
+        let p90 = usageMetrics.p90LatencyMilliseconds(
+            providerID: target.providerID,
+            model: target.model
+        )
         if let p90, p90 > 0 { return p90 }
         let measured = health.record(providerID: target.providerID, model: target.model)?
             .latencyMilliseconds
@@ -271,28 +348,28 @@ public actor RoutingEngine {
         return profile.configuredUnitCostUSD
     }
 
-    private func stability(for target: RouteTarget, usage: [UsageAggregate]) -> Double {
-        let matching = usage.filter {
-            $0.providerID == target.providerID && $0.model == target.model
-        }
-        let requests = matching.reduce(0) { $0 + $1.requests }
-        guard requests > 0 else { return -1 }
-        let success = matching.reduce(0) { $0 + $1.successfulRequests }
-        return Double(success) / Double(requests)
+    private func stability(
+        for target: RouteTarget,
+        usageMetrics: UsageMetricIndex
+    ) -> Double {
+        usageMetrics.stability(providerID: target.providerID, model: target.model) ?? -1
     }
 
     private func balancedScore(
         for target: RouteTarget,
         health: ModelHealthIndex,
-        usage: [UsageAggregate]
+        usageMetrics: UsageMetricIndex
     ) -> Double {
-        let latencyScore = Double(min(latency(for: target, health: health, usage: usage), 60_000)) / 1_000
+        let latencyScore = Double(min(
+            latency(for: target, health: health, usageMetrics: usageMetrics),
+            60_000
+        )) / 1_000
         let cost = estimatedUnitCost(for: target)
         let costScore = cost.isFinite ? min(cost, 1_000) : 100
         let context = Double(target.profile?.contextWindow ?? 0)
         let contextCredit = min(context / 100_000, 20)
         let priorityPenalty = Double(max(target.priority, 0)) * 2
-        let stabilityCredit = max(0, stability(for: target, usage: usage)) * 20
+        let stabilityCredit = max(0, stability(for: target, usageMetrics: usageMetrics)) * 20
         return latencyScore + costScore + priorityPenalty - contextCredit - stabilityCredit
     }
 }

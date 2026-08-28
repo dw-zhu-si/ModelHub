@@ -1,4 +1,5 @@
 import Foundation
+import ModelHubCore
 import XCTest
 @testable import ModelHub
 
@@ -19,7 +20,58 @@ private final class PortBox: @unchecked Sendable {
     }
 }
 
+private actor StreamingCompletionProbe {
+    private(set) var observed = false
+    private(set) var inFlightAtObservation: Int?
+
+    func markObserved(inFlight: Int) {
+        observed = true
+        inFlightAtObservation = inFlight
+    }
+
+    func observation() -> (observed: Bool, inFlight: Int?) {
+        (observed, inFlightAtObservation)
+    }
+}
+
 final class StreamingServerTests: XCTestCase {
+    func testTargetSlotAndProxyOutcomeFinalizeBeforeStreamEOF() async {
+        let resilience = ResilienceController()
+        let runtimeKey = TargetRuntimeKey(providerID: UUID(), model: "stream-model")
+        let settings = ResilienceSettings(maxConcurrentRequestsPerTarget: 1)
+        let probe = StreamingCompletionProbe()
+
+        let firstAdmission = await resilience.beginTarget(runtimeKey, settings: settings)
+        XCTAssertEqual(firstAdmission, .allowed)
+        await GatewayStreamingTargetFinalizer.finishBeforeEOF(
+            resilience: resilience,
+            runtimeKey: runtimeKey,
+            succeeded: true,
+            transientFailure: false,
+            settings: settings,
+            observeProxyOutcome: {
+                let snapshot = await resilience.snapshot(for: runtimeKey)
+                await probe.markObserved(inFlight: snapshot.inFlight)
+            }
+        )
+
+        let observation = await probe.observation()
+        let finalizedSnapshot = await resilience.snapshot(for: runtimeKey)
+        let nextAdmission = await resilience.beginTarget(runtimeKey, settings: settings)
+        XCTAssertTrue(observation.observed)
+        XCTAssertEqual(
+            observation.inFlight,
+            1,
+            "节点结果必须在旧请求仍占有 target slot 时提交"
+        )
+        XCTAssertEqual(finalizedSnapshot.inFlight, 0)
+        XCTAssertEqual(
+            nextAdmission,
+            .allowed,
+            "客户端观察 EOF 后立即发起的下一请求必须拿到已释放的 target slot"
+        )
+    }
+
     func testStreamHeadUsesChunkedTransferWithoutContentLength() {
         let response = HTTPStreamResponse(
             statusCode: 200,

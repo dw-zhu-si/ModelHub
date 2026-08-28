@@ -5,6 +5,21 @@ import Darwin
 @testable import ModelHubCore
 
 final class ProxySubscriptionRuntimeTests: XCTestCase {
+    func testProviderProxySessionDoesNotWaitIndefinitelyForUnavailableLocalRuntime() {
+        let endpoint = ProviderProxyEndpoint(
+            kind: .http,
+            host: "127.0.0.1",
+            port: ModelProxySettings.firstNodePort
+        )
+
+        let configuration = ProviderNetworkSession.proxyConfiguration(endpoint)
+
+        XCTAssertFalse(
+            configuration.waitsForConnectivity,
+            "A stopped managed proxy must fail promptly instead of leaving a batch probe at 0/N."
+        )
+    }
+
     func testSubscriptionPayloadInspectorRecognizesMihomoSupportedFormats() throws {
         let yaml = Data("proxies:\n  - name: Synthetic\n    type: direct\n".utf8)
         let uriList = Data("ss://synthetic@example.invalid:443#Synthetic\n".utf8)

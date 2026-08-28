@@ -37,6 +37,17 @@ public enum ResponseCacheKey {
     }
 }
 
+public struct ResponseCacheMetrics: Equatable, Sendable {
+    public let entries: Int
+    public let bytes: Int
+    public let freshLookups: UInt64
+    public let staleLookups: UInt64
+    public let misses: UInt64
+    public let insertions: UInt64
+    public let evictions: UInt64
+    public let clears: UInt64
+}
+
 public actor BoundedResponseCache {
     private struct Entry: Sendable {
         let response: CachedGatewayResponse
@@ -47,6 +58,12 @@ public actor BoundedResponseCache {
 
     private var entries: [String: Entry] = [:]
     private var totalBytes = 0
+    private var freshLookups: UInt64 = 0
+    private var staleLookups: UInt64 = 0
+    private var misses: UInt64 = 0
+    private var insertions: UInt64 = 0
+    private var evictions: UInt64 = 0
+    private var clears: UInt64 = 0
 
     public init() {}
 
@@ -56,17 +73,23 @@ public actor BoundedResponseCache {
         now: Date = .now
     ) -> ResponseCacheLookup {
         let settings = rawSettings.sanitized
-        guard var entry = entries[key] else { return .miss }
+        guard var entry = entries[key] else {
+            misses &+= 1
+            return .miss
+        }
         let age = max(0, now.timeIntervalSince(entry.storedAt))
         guard age <= Double(settings.staleFallbackSeconds) else {
             remove(key)
+            misses &+= 1
             return .miss
         }
         entry.lastAccessedAt = now
         entries[key] = entry
         if age <= Double(settings.timeToLiveSeconds) {
+            freshLookups &+= 1
             return .fresh(entry.response)
         }
+        staleLookups &+= 1
         return .stale(entry.response)
     }
 
@@ -81,16 +104,27 @@ public actor BoundedResponseCache {
         remove(key)
         entries[key] = Entry(response: response, storedAt: now, lastAccessedAt: now)
         totalBytes += response.body.count
+        insertions &+= 1
         evictIfNeeded(settings: settings)
     }
 
     public func removeAll() {
         entries.removeAll(keepingCapacity: false)
         totalBytes = 0
+        clears &+= 1
     }
 
-    public func metrics() -> (entries: Int, bytes: Int) {
-        (entries.count, totalBytes)
+    public func metrics() -> ResponseCacheMetrics {
+        ResponseCacheMetrics(
+            entries: entries.count,
+            bytes: totalBytes,
+            freshLookups: freshLookups,
+            staleLookups: staleLookups,
+            misses: misses,
+            insertions: insertions,
+            evictions: evictions,
+            clears: clears
+        )
     }
 
     private func remove(_ key: String) {
@@ -104,6 +138,7 @@ public actor BoundedResponseCache {
                 $0.value.lastAccessedAt < $1.value.lastAccessedAt
             })?.key else { break }
             remove(oldest)
+            evictions &+= 1
         }
     }
 }

@@ -923,6 +923,7 @@ public struct GatewayLogEntry: Identifiable, Sendable {
     public let statusCode: Int
     public let latencyMilliseconds: Int
     public let detail: String
+    public let requestID: String?
 
     public init(
         id: UUID = UUID(),
@@ -931,7 +932,8 @@ public struct GatewayLogEntry: Identifiable, Sendable {
         provider: String,
         statusCode: Int,
         latencyMilliseconds: Int,
-        detail: String
+        detail: String,
+        requestID: String? = nil
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -940,5 +942,6 @@ public struct GatewayLogEntry: Identifiable, Sendable {
         self.statusCode = statusCode
         self.latencyMilliseconds = latencyMilliseconds
         self.detail = detail
+        self.requestID = requestID
     }
 }

@@ -1494,6 +1494,16 @@ private struct ModelHealthRow: View {
                                 ? .green : .orange
                         )
                     }
+                    if let record,
+                       ModelHealthFreshnessPolicy().freshness(
+                        checkedAt: record.checkedAt,
+                        at: .now
+                       ) == .stale
+                    {
+                        Label("验证已过期", systemImage: "clock.badge.exclamationmark")
+                            .foregroundStyle(.orange)
+                            .help("最近一次真实验证已超过 24 小时；仅提示，不会自动隔离或发起调用。")
+                    }
                     if let record {
                         if let latency = record.latencyMilliseconds {
                             Text("\(latency) ms")
@@ -3614,11 +3624,7 @@ struct ConsoleView: View {
     @State private var confirmsMusicGeneration = false
 
     private var availableModels: [String] {
-        let aliases = model.routes.filter(\.enabled).map(\.alias)
-        let direct = model.providers.filter(\.enabled).flatMap { provider in
-            model.orderedModels(for: provider).map { "\(provider.name)/\($0)" }
-        }
-        return aliases + direct
+        model.availableModelIDsForConsole(operation: operation)
     }
 
     var body: some View {
@@ -3753,6 +3759,13 @@ struct LogsView: View {
                         Text(entry.model)
                             .font(.system(.body, design: .monospaced))
                     }
+                    TableColumn("请求 ID") { entry in
+                        Text(entry.requestID ?? "—")
+                            .font(.system(.caption, design: .monospaced))
+                            .lineLimit(1)
+                            .help(entry.requestID ?? "无请求关联 ID")
+                    }
+                    .width(min: 110, ideal: 170, max: 220)
                     TableColumn("上游") { entry in
                         Text(entry.provider)
                     }

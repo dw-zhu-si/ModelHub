@@ -71,5 +71,35 @@ final class ResponseCacheTests: XCTestCase {
         let metrics = await cache.metrics()
         XCTAssertEqual(metrics.entries, 2)
         XCTAssertEqual(metrics.bytes, 2)
+        XCTAssertEqual(metrics.freshLookups, 1)
+        XCTAssertEqual(metrics.misses, 1)
+        XCTAssertEqual(metrics.evictions, 1)
+    }
+
+    func testCacheMetricsSeparateFreshStaleAndExpiredLookups() async {
+        let cache = BoundedResponseCache()
+        let settings = ResponseCacheSettings(
+            enabled: true,
+            timeToLiveSeconds: 10,
+            staleFallbackSeconds: 20,
+            maximumEntries: 10,
+            maximumBytes: 1_048_576
+        )
+        let response = CachedGatewayResponse(statusCode: 200, headers: [:], body: Data("x".utf8))
+        let start = Date(timeIntervalSince1970: 1_000)
+        await cache.insert(key: "key", response: response, settings: settings, now: start)
+        _ = await cache.lookup(key: "key", settings: settings, now: start.addingTimeInterval(5))
+        _ = await cache.lookup(key: "key", settings: settings, now: start.addingTimeInterval(15))
+        _ = await cache.lookup(key: "key", settings: settings, now: start.addingTimeInterval(21))
+        await cache.removeAll()
+
+        let metrics = await cache.metrics()
+        XCTAssertEqual(metrics.freshLookups, 1)
+        XCTAssertEqual(metrics.staleLookups, 1)
+        XCTAssertEqual(metrics.misses, 1)
+        XCTAssertEqual(metrics.insertions, 1)
+        XCTAssertEqual(metrics.clears, 1)
+        XCTAssertEqual(metrics.entries, 0)
+        XCTAssertEqual(metrics.bytes, 0)
     }
 }

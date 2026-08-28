@@ -144,7 +144,7 @@ On a clean installation with no configured providers, the Overview screen offers
 
 ## Install
 
-Download the notarized [v1.9.3 build 63 release](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.3-build63), open `ModelHub-1.9.3-macos-universal.dmg`, and drag `ModelHub.app` to Applications. The DMG and the app are Developer ID signed and passed Apple notarization, ticket stapling, image integrity, and Gatekeeper checks. A Universal ZIP is also available in the same release.
+Download the notarized [v1.9.4 release](https://github.com/dw-zhu-si/ModelHub/releases/tag/v1.9.4), open `ModelHub-1.9.4-macos-universal.dmg`, and drag `ModelHub.app` to Applications. The DMG and the app are Developer ID signed and passed Apple notarization, ticket stapling, image integrity, and Gatekeeper checks. A Universal ZIP is also available in the same release.
 
 ### Requirements
 
@@ -154,13 +154,9 @@ Download the notarized [v1.9.3 build 63 release](https://github.com/dw-zhu-si/Mo
 
 ### Verify the release
 
-```text
-d23bd9b32faeed0f71f1b7c4525de2d811ced3821e93f0204ccd351bb13bd567  ModelHub-1.9.1-macos-universal.zip
-acb7fe18620941ade1dbee0df275383514878ff87b52e1e42b6dc9e0e29080a6  ModelHub-1.9.1-macos-universal.dmg
-```
-
 ```bash
-shasum -a 256 -c ModelHub-1.9.1-SHA256.txt
+shasum -a 256 -c ModelHub-1.9.4-macos-universal.zip.sha256
+shasum -a 256 -c ModelHub-1.9.4-macos-universal.dmg.sha256
 ```
 
 ## Quick start

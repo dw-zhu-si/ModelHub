@@ -209,6 +209,7 @@ public enum RoutingPolicyEvaluator {
         provider: ProviderConfig,
         health: ModelHealthIndex,
         usage: [UsageAggregate],
+        usageMetrics: UsageMetricIndex? = nil,
         requiredCapabilities: Set<ModelCapability>,
         constraints: RouteConstraints?,
         access: RoutingAccessPolicy
@@ -255,8 +256,13 @@ public enum RoutingPolicyEvaluator {
             reasons.append("不是模型官方供应商")
         }
         if let maximum = constraints?.maximumP90LatencyMilliseconds {
-            let p90 = usage.filter { $0.providerID == provider.id && $0.model == target.model }
-                .compactMap(\.p90LatencyMilliseconds).max()
+            let p90 = usageMetrics?.p90LatencyMilliseconds(
+                providerID: provider.id,
+                model: target.model
+            ) ?? usage.lazy
+                .filter { $0.providerID == provider.id && $0.model == target.model }
+                .compactMap(\.p90LatencyMilliseconds)
+                .max()
             if p90 == nil || p90! > maximum { reasons.append("P90 延迟未知或超过上限") }
         }
         let privacy = provider.privacyProfile ?? .init()
@@ -288,6 +294,8 @@ public enum SecurityAuditAction: String, Codable, Sendable {
     case cacheCleared
     case taskSubmitted
     case taskCancelled
+    case proxyNodeSwitched
+    case proxyNodeExhausted
 }
 
 public struct SecurityAuditEvent: Codable, Hashable, Identifiable, Sendable {

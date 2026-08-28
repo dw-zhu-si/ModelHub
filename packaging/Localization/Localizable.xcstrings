@@ -4467,7 +4467,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CSV only accepts UTF-8 encoded .csv files. Required columns: model (also supports \"model name\"); optional columns: endpoint, each protocol endpoint, input_price, output_price, price_source. The price unit is USD/million Tokens."
+            "value" : "CSV import accepts only UTF-8 .csv files. Required: model (or 模型名称). Optional: endpoint, protocol-specific endpoints, input_price, output_price, and price_source. Prices are USD per million tokens."
           }
         },
         "es" : {
@@ -4609,7 +4609,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CSV supports UTF-8, UTF-16 and Excel delimiter declarations. Required columns: model (model_id, model name is also supported); optional columns: endpoint, each protocol endpoint, input_price, output_price, request_price, price_source. Token price unit is USD/million Token, request_price is USD/time."
+            "value" : "CSV supports UTF-8, UTF-16, and Excel separator declarations. Required: model (also model_id or 模型名称). Optional: endpoint, protocol endpoints, input_price, output_price, request_price, and price_source. Token prices use USD per million tokens; request_price uses USD per request."
           }
         },
         "es" : {
@@ -5390,7 +5390,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CSV header must contain model or model name column"
+            "value" : "The CSV header must include a model or 模型名称 column"
           }
         },
         "es" : {
@@ -11319,7 +11319,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "上下文優化"
+            "value" : "上下文最佳化"
           }
         }
       }
@@ -11673,6 +11673,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "上游響應"
+          }
+        }
+      }
+    },
+    "上游失败，已回退到过期缓存" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فشلت الخدمة العلوية؛ تم الرجوع إلى ذاكرة التخزين المنتهية"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upstream fehlgeschlagen; veralteter Cache wurde verwendet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upstream failed; fell back to stale cache"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Falló el servicio de origen; se usó la caché obsoleta"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Échec du service amont ; repli sur le cache expiré"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上流エラーのため期限切れキャッシュにフォールバックしました"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "업스트림 실패로 만료된 캐시로 대체했습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Falha no upstream; foi usado o cache expirado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сбой вышестоящего сервиса; использован устаревший кэш"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上游失败，已回退到过期缓存"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上游失敗，已回退到過期緩存"
           }
         }
       }
@@ -12806,6 +12877,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "為單個客戶端創建可撤銷、可限額的本地訪問權。"
+          }
+        }
+      }
+    },
+    "主节点与有序备选按精确模型保存；自动切换绝不回退直连。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تُحفظ العقدة الرئيسية والعقد البديلة المرتبة لكل نموذج دقيق؛ ولا يعود التجاوز التلقائي إلى اتصال مباشر."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primär- und geordnete Ersatzknoten werden pro exaktem Modell gespeichert; automatisches Failover fällt nie auf eine Direktverbindung zurück."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primary and ordered fallback nodes are saved per exact model; automatic failover never falls back to a direct connection."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los nodos principal y alternativos ordenados se guardan por modelo exacto; la conmutación automática nunca vuelve a una conexión directa."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les nœuds principal et de secours ordonnés sont enregistrés par modèle exact ; le basculement automatique ne revient jamais à une connexion directe."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プライマリと順序付き候補は正確なモデルごとに保存されます。自動切り替えで直接接続に戻ることはありません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기본 및 순서가 있는 후보 노드는 정확한 모델별로 저장됩니다. 자동 장애 조치는 절대 직접 연결로 되돌아가지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os nós principal e alternativos ordenados são salvos por modelo exato; o failover automático nunca volta para conexão direta."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Основной и упорядоченные резервные узлы сохраняются для точной модели; автопереключение не переходит на прямое соединение."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主节点与有序备选按精确模型保存；自动切换绝不回退直连。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主節點與有序備選按精確模型保存；自動切換絕不回退直連。"
           }
         }
       }
@@ -19169,7 +19311,7 @@
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "兼容 API Base URL"
+            "value" : "相容 API Base URL"
           }
         }
       }
@@ -19945,6 +20087,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "最小上下文窗口"
+          }
+        }
+      }
+    },
+    "最近一次真实验证已超过 24 小时；仅提示，不会自动隔离或发起调用。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مضى أكثر من 24 ساعة على آخر تحقق فعلي؛ هذا تحذير فقط ولن يعزل النموذج أو يستدعيه تلقائيًا."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die letzte echte Prüfung ist älter als 24 Stunden; dies ist nur eine Warnung und führt weder zur Quarantäne noch zu einem automatischen Aufruf."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The latest real verification is over 24 hours old; this is only a warning and will not quarantine or call the model automatically."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La última verificación real tiene más de 24 horas; es solo un aviso y no aislará ni llamará al modelo automáticamente."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La dernière vérification réelle date de plus de 24 heures ; il s’agit seulement d’un avertissement, sans quarantaine ni appel automatique."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最後の実検証から 24 時間以上経過しています。これは警告のみで、自動的な隔離や呼び出しは行いません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "마지막 실제 검증이 24시간을 초과했습니다. 경고일 뿐 자동으로 격리하거나 호출하지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A última verificação real tem mais de 24 horas; é apenas um aviso e não isola nem chama o modelo automaticamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Последняя реальная проверка была более 24 часов назад; это только предупреждение, без автоматической изоляции или вызова."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近一次真实验证已超过 24 小时；仅提示，不会自动隔离或发起调用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近一次真實驗證已超過 24 小時；僅提示，不會自動隔離或發起調用。"
           }
         }
       }
@@ -22134,6 +22347,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "前往供應商"
+          }
+        }
+      }
+    },
+    "加入有序备选" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إضافة بديل مرتب"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geordneten Ersatz hinzufügen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Ordered Fallback"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir alternativa ordenada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter un secours ordonné"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "順序付き候補に追加"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "순서가 있는 후보에 추가"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adicionar alternativa ordenada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить упорядоченный резерв"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加入有序备选"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加入有序備選"
           }
         }
       }
@@ -25046,6 +25330,77 @@
         }
       }
     },
+    "只使用卡片中显式加入的备选节点；候选耗尽后失败关闭，绝不静默直连。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا تُستخدم إلا العقد البديلة المضافة صراحةً في البطاقات؛ وعند نفادها يُغلق الفشل ولا يتم اتصال مباشر بصمت."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es werden nur explizit auf den Karten hinzugefügte Ersatzknoten verwendet; bei Erschöpfung wird sicher abgebrochen und nie still direkt verbunden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only fallback nodes explicitly added on the cards are used; exhaustion fails closed and never silently connects directly."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo se usan los nodos alternativos añadidos explícitamente en las tarjetas; si se agotan, se cierra de forma segura y nunca se conecta directamente en silencio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seuls les nœuds de secours explicitement ajoutés sur les cartes sont utilisés ; leur épuisement entraîne un échec fermé, sans connexion directe silencieuse."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カードで明示的に追加した候補ノードだけを使用します。候補が尽きた場合はフェイルクローズし、直接接続へ黙って切り替えません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "카드에서 명시적으로 추가한 후보 노드만 사용합니다. 후보가 소진되면 실패 폐쇄하며 절대 조용히 직접 연결하지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Somente os nós alternativos adicionados explicitamente nos cartões são usados; ao esgotar, falha de forma fechada e nunca conecta diretamente em silêncio."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Используются только явно добавленные на карточках резервные узлы; при исчерпании система закрывается и не переходит на прямое соединение."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只使用卡片中显式加入的备选节点；候选耗尽后失败关闭，绝不静默直连。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只使用卡片中顯式加入的備選節點；候選耗盡後失敗關閉，絕不靜默直連。"
+          }
+        }
+      }
+    },
     "只允许导入 .csv 格式的文件。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -27733,6 +28088,77 @@
         }
       }
     },
+    "启用有序节点自动切换" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تمكين التجاوز التلقائي المرتب للعقد"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geordnetes automatisches Knoten-Failover aktivieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable Ordered Node Failover"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activar conmutación automática ordenada de nodos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activer le basculement automatique ordonné des nœuds"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "順序付きノード自動切り替えを有効化"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "순서가 있는 노드 자동 장애 조치 활성화"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ativar failover automático ordenado de nós"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Включить упорядоченное автопереключение узлов"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启用有序节点自动切换"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "啓用有序節點自動切換"
+          }
+        }
+      }
+    },
     "启用模型专用代理" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -29849,6 +30275,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "備份文件超過 10 MiB 上限"
+          }
+        }
+      }
+    },
+    "备选 #%d" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البديل #%d"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ersatz #%d"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fallback #%d"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alternativa n.º %d"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Secours n° %d"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "候補 #%d"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "후보 #%d"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alternativa nº %d"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Резерв #%d"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "备选 #%d"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "備選 #%d"
           }
         }
       }
@@ -35226,6 +35723,77 @@
         }
       }
     },
+    "已为 %d 个模型保存主节点和 %d 个有序备选；只在连续瞬态故障后切换，不会直连。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم حفظ عقد رئيسية لـ %d نماذج مع %d عقد بديلة مرتبة لكل منها؛ ولا يتم التبديل إلا بعد إخفاقات عابرة متتالية ودون اتصال مباشر."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primärknoten wurden für %d Modelle mit jeweils %d geordneten Ersatzknoten gespeichert; gewechselt wird nur nach aufeinanderfolgenden temporären Fehlern und nie direkt verbunden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved primary nodes for %d models with %d ordered fallbacks each; switching occurs only after consecutive transient failures and never connects directly."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se guardaron nodos principales para %d modelos con %d alternativas ordenadas cada uno; solo se cambia tras fallos transitorios consecutivos y nunca se conecta directamente."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Des nœuds principaux ont été enregistrés pour %d modèles avec %d secours ordonnés chacun ; le basculement n’a lieu qu’après des échecs transitoires consécutifs, sans connexion directe."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 個のモデルにプライマリと %d 個の順序付き候補を保存しました。連続する一時的障害後のみ切り替え、直接接続しません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d개 모델에 기본 노드와 %d개의 순서가 있는 후보를 저장했습니다. 연속 일시적 실패 후에만 전환하며 직접 연결하지 않습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nós principais foram salvos para %d modelos com %d alternativas ordenadas cada; a troca ocorre somente após falhas transitórias consecutivas e nunca conecta diretamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Основные узлы сохранены для %d моделей с %d упорядоченными резервами для каждой; переключение только после последовательных временных сбоев, без прямого соединения."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已为 %d 个模型保存主节点和 %d 个有序备选；只在连续瞬态故障后切换，不会直连。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已為 %d 個模型保存主節點和 %d 個有序備選；只在連續瞬態故障後切換，不會直連。"
+          }
+        }
+      }
+    },
     "已为 %d 个模型保存节点分配；启用模型专用代理后生效。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -35789,6 +36357,219 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已內置該供應商的官方連接預設；通常只需填寫 API Key 即可拉取模型並使用支持的協議。"
+          }
+        }
+      }
+    },
+    "已分配节点的模型代理恢复失败，本轮检测未开始，也没有改为直连：%@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذرت استعادة وكيل النموذج المعيّن؛ لم يبدأ هذا التحقق ولم يتحول إلى اتصال مباشر: %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der zugewiesene Modellproxy konnte nicht wiederhergestellt werden; diese Prüfung startete nicht und wechselte nicht auf direkte Verbindung: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Failed to restore the assigned model proxy; this verification run did not start and did not switch to direct: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo restaurar el proxy asignado; esta verificación no se inició ni cambió a conexión directa: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de restaurer le proxy attribué ; cette vérification n’a pas démarré et n’est pas passée en connexion directe : %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "割り当て済みモデルプロキシの復元に失敗しました。この検証は開始されず、直接接続にも切り替えていません：%@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "할당된 모델 프록시 복구에 실패했습니다. 이번 검증은 시작되지 않았고 직접 연결로 바뀌지 않았습니다: %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Falha ao restaurar o proxy atribuído; esta verificação não iniciou nem mudou para conexão direta: %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось восстановить назначенный прокси; проверка не запущена и не перешла на прямое соединение: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已分配节点的模型代理恢复失败，本轮检测未开始，也没有改为直连：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已分配節點的模型代理恢復失敗，本輪檢測未開始，也沒有改為直連：%@"
+          }
+        }
+      }
+    },
+    "已分配节点的模型代理未就绪，本轮检测未开始，也没有改为直连。请先更新订阅或完成钥匙串授权。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وكيل النموذج المعيّن غير جاهز؛ لم يبدأ التحقق ولم يتحول إلى اتصال مباشر. حدّث الاشتراك أو فوّض سلسلة المفاتيح أولاً."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der zugewiesene Modellproxy ist nicht bereit; die Prüfung startete nicht und wechselte nicht auf direkte Verbindung. Aktualisieren Sie das Abo oder autorisieren Sie den Schlüsselbund."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The assigned model proxy is not ready; verification did not start or switch to direct. Update the subscription or authorize Keychain first."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El proxy asignado no está listo; la verificación no se inició ni cambió a conexión directa. Actualiza la suscripción o autoriza el llavero."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le proxy attribué n’est pas prêt ; la vérification n’a pas démarré et n’est pas passée en connexion directe. Actualisez l’abonnement ou autorisez le trousseau."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "割り当て済みモデルプロキシの準備ができていません。検証は開始されず、直接接続にも切り替えていません。まずサブスクリプションを更新するか、キーチェーンを承認してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "할당된 모델 프록시가 준비되지 않았습니다. 검증은 시작되지 않았고 직접 연결로 바뀌지 않았습니다. 먼저 구독을 업데이트하거나 키체인을 승인하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O proxy atribuído não está pronto; a verificação não iniciou nem mudou para conexão direta. Atualize a assinatura ou autorize as Chaves."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назначенный прокси не готов; проверка не началась и не перешла на прямое соединение. Обновите подписку или разрешите доступ к Связке ключей."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已分配节点的模型代理未就绪，本轮检测未开始，也没有改为直连。请先更新订阅或完成钥匙串授权。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已分配節點的模型代理未就緒，本輪檢測未開始，也沒有改為直連。請先更新訂閱或完成鑰匙串授權。"
+          }
+        }
+      }
+    },
+    "已分配节点的模型代理配置不完整，本轮检测未开始，也没有改为直连。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إعداد وكيل النموذج المعيّن غير مكتمل؛ لم يبدأ التحقق ولم يتحول إلى اتصال مباشر."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Konfiguration des zugewiesenen Modellproxys ist unvollständig; die Prüfung startete nicht und wechselte nicht auf direkte Verbindung."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The assigned model proxy configuration is incomplete; verification did not start or switch to direct."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La configuración del proxy asignado está incompleta; la verificación no se inició ni cambió a conexión directa."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La configuration du proxy attribué est incomplète ; la vérification n’a pas démarré et n’est pas passée en connexion directe."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "割り当て済みモデルプロキシの設定が不完全です。検証は開始されず、直接接続にも切り替えていません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "할당된 모델 프록시 구성이 불완전합니다. 검증은 시작되지 않았고 직접 연결로 바뀌지 않았습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A configuração do proxy atribuído está incompleta; a verificação não iniciou nem mudou para conexão direta."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Конфигурация назначенного прокси неполна; проверка не началась и не перешла на прямое соединение."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已分配节点的模型代理配置不完整，本轮检测未开始，也没有改为直连。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已分配節點的模型代理配置不完整，本輪檢測未開始，也沒有改為直連。"
           }
         }
       }
@@ -43864,6 +44645,77 @@
         }
       }
     },
+    "无请求关联 ID" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا يوجد معرّف ارتباط للطلب"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Anfrage-Korrelations-ID"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No request correlation ID"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin ID de correlación de solicitud"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun ID de corrélation de requête"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リクエスト相関 ID なし"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "요청 상관관계 ID 없음"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sem ID de correlação da solicitação"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет ID корреляции запроса"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无请求关联 ID"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無請求關聯 ID"
+          }
+        }
+      }
+    },
     "无需密钥" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -46972,6 +47824,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "本地信任"
+          }
+        }
+      }
+    },
+    "本地响应缓存命中" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إصابة ذاكرة تخزين الاستجابة المحلية"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lokaler Antwort-Cache-Treffer"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local response cache hit"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acierto de caché de respuesta local"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réponse trouvée dans le cache local"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ローカル応答キャッシュヒット"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "로컬 응답 캐시 적중"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acerto no cache de resposta local"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Попадание в локальный кэш ответов"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地响应缓存命中"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地響應緩存命中"
           }
         }
       }
@@ -50092,6 +51015,77 @@
         }
       }
     },
+    "模型代理运行时未就绪，检测已安全停止，已完成 %d/%d；已分配节点的模型没有改为直连。请先更新订阅或完成钥匙串授权后重试。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وكيل النماذج غير جاهز؛ توقف التحقق بأمان عند %d/%d. لم تتحول النماذج المعيّنة إلى اتصال مباشر. حدّث الاشتراك أو فوّض سلسلة المفاتيح ثم أعد المحاولة."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Modellproxy ist nicht bereit; die Prüfung wurde sicher bei %d/%d gestoppt. Zugewiesene Modelle wechselten nicht auf direkte Verbindung. Aktualisieren Sie das Abo oder autorisieren Sie den Schlüsselbund und versuchen Sie es erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The model proxy runtime is not ready; verification stopped safely at %d/%d. Assigned models did not switch to direct. Update the subscription or authorize Keychain, then retry."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El proxy no está listo; la verificación se detuvo de forma segura en %d/%d. Los modelos asignados no cambiaron a conexión directa. Actualiza la suscripción o autoriza el llavero y vuelve a intentarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le proxy n’est pas prêt ; la vérification s’est arrêtée en sécurité à %d/%d. Les modèles attribués ne sont pas passés en connexion directe. Actualisez l’abonnement ou autorisez le trousseau, puis réessayez."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "モデルプロキシランタイムの準備ができていないため、検証は %d/%d で安全に停止しました。割り当て済みモデルは直接接続に切り替えていません。サブスクリプションを更新するかキーチェーンを承認して再試行してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모델 프록시 런타임이 준비되지 않아 검증이 %d/%d에서 안전하게 중지되었습니다. 할당된 모델은 직접 연결로 바뀌지 않았습니다. 구독을 업데이트하거나 키체인을 승인한 후 다시 시도하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O proxy não está pronto; a verificação parou com segurança em %d/%d. Os modelos atribuídos não mudaram para conexão direta. Atualize a assinatura ou autorize as Chaves e tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Прокси моделей не готов; проверка безопасно остановлена на %d/%d. Назначенные модели не перешли на прямое соединение. Обновите подписку или разрешите доступ к Связке ключей и повторите."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型代理运行时未就绪，检测已安全停止，已完成 %d/%d；已分配节点的模型没有改为直连。请先更新订阅或完成钥匙串授权后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型代理運行時未就緒，檢測已安全停止，已完成 %d/%d；已分配節點的模型沒有改為直連。請先更新訂閱或完成鑰匙串授權後重試。"
+          }
+        }
+      }
+    },
     "模型价格自动更新" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -51438,6 +52432,77 @@
         }
       }
     },
+    "模型检测已停止，尚未发起模型请求。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "توقف التحقق قبل إرسال أي طلب إلى النموذج."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Modellprüfung wurde gestoppt, bevor eine Modellanfrage gesendet wurde."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Model verification stopped before any model request was sent."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La verificación se detuvo antes de enviar solicitudes al modelo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La vérification s’est arrêtée avant l’envoi de toute requête au modèle."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "モデルリクエストを送信する前に検証を停止しました。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모델 요청을 보내기 전에 검증이 중지되었습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A verificação foi interrompida antes de enviar qualquer solicitação ao modelo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверка остановлена до отправки любого запроса модели."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型检测已停止，尚未发起模型请求。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型檢測已停止，尚未發起模型請求。"
+          }
+        }
+      }
+    },
     "模型检测已停止，已完成 %d/%d。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -51859,6 +52924,219 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在從供應商模型目錄讀取價格…"
+          }
+        }
+      }
+    },
+    "正在停止模型检测…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جارٍ إيقاف التحقق من النماذج…"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modellprüfung wird gestoppt…"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stopping model verification…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deteniendo la verificación de modelos…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêt de la vérification des modèles…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "モデル検証を停止中…"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모델 검증 중지 중…"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parando a verificação de modelos…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Остановка проверки моделей…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在停止模型检测…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在停止模型檢測…"
+          }
+        }
+      }
+    },
+    "正在启动" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جارٍ البدء"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wird gestartet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starting"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iniciando"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Démarrage"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "起動中"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "시작 중"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iniciando"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запуск"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在启动"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在啓動"
+          }
+        }
+      }
+    },
+    "正在恢复已分配的模型代理节点" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جارٍ استعادة عقد وكيل النماذج المعيّنة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zugewiesene Modellproxy-Knoten werden wiederhergestellt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restoring assigned model proxy nodes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurando nodos proxy asignados"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restauration des nœuds proxy attribués"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "割り当て済みモデルプロキシノードを復元中"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "할당된 모델 프록시 노드 복구 중"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurando nós proxy atribuídos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Восстановление назначенных прокси-узлов"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在恢复已分配的模型代理节点"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在恢復已分配的模型代理節點"
           }
         }
       }
@@ -54053,6 +55331,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "沒有支持 Responses API 的可用目標"
+          }
+        }
+      }
+    },
+    "活动连接已达上限" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم بلوغ حد الاتصالات النشطة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limit aktiver Verbindungen erreicht"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Active connection limit reached"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se alcanzó el límite de conexiones activas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limite de connexions actives atteinte"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アクティブ接続の上限に達しました"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "활성 연결 한도에 도달했습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limite de conexões ativas atingido"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Достигнут лимит активных соединений"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "活动连接已达上限"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "活動連接已達上限"
           }
         }
       }
@@ -57158,13 +58507,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "熔断冷却：%1$arg 秒"
+            "value" : "熔断冷却：%arg 秒"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "熔斷冷卻：%1$arg 秒"
+            "value" : "熔斷冷卻：%arg 秒"
           }
         }
       }
@@ -68567,6 +69916,77 @@
         }
       }
     },
+    "请求 ID" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "معرّف الطلب"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anfrage-ID"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request ID"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ID de solicitud"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ID de requête"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リクエスト ID"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "요청 ID"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ID da solicitação"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ID запроса"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求 ID"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請求 ID"
+          }
+        }
+      }
+    },
     "请求 JSON 无效或缺少 model" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -73234,6 +74654,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "連續失敗熔斷閾值：%1$arg"
+          }
+        }
+      }
+    },
+    "连续瞬态故障 %d 次后切换" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التبديل بعد %d إخفاقات عابرة متتالية"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nach %d aufeinanderfolgenden temporären Fehlern wechseln"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switch after %d consecutive transient failures"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambiar tras %d fallos transitorios consecutivos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Basculer après %d échecs transitoires consécutifs"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d 回の連続する一時的障害後に切り替え"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d회 연속 일시적 실패 후 전환"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trocar após %d falhas transitórias consecutivas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Переключать после %d последовательных временных сбоев"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连续瞬态故障 %d 次后切换"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "連續瞬態故障 %d 次後切換"
           }
         }
       }
@@ -79032,6 +80523,77 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "預覽並導入 ModelHub 本地備份"
+          }
+        }
+      }
+    },
+    "验证已过期" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انتهت صلاحية التحقق"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prüfung abgelaufen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verification Expired"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verificación caducada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vérification expirée"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "検証期限切れ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "검증 만료"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verificação expirada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Срок проверки истёк"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "验证已过期"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "驗證已過期"
           }
         }
       }

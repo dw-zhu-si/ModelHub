@@ -57,6 +57,36 @@ public enum ModelQuarantineCause: String, Codable, CaseIterable, Sendable {
     case unknownFailure
 }
 
+/// Describes only the age of the latest persisted verification. Freshness is
+/// intentionally independent from availability so an old successful check can
+/// be presented as a warning without silently removing a model from routing.
+public enum ModelHealthFreshness: String, Codable, CaseIterable, Sendable {
+    case fresh
+    case stale
+    case never
+}
+
+public struct ModelHealthFreshnessPolicy: Codable, Hashable, Sendable {
+    /// Default warning window. Consumers may supply a different policy without
+    /// changing the persisted availability or routing behavior.
+    public static let defaultFreshWindow: TimeInterval = 24 * 60 * 60
+
+    public var freshWindow: TimeInterval
+
+    public init(freshWindow: TimeInterval = Self.defaultFreshWindow) {
+        if freshWindow.isFinite {
+            self.freshWindow = max(freshWindow, 0)
+        } else {
+            self.freshWindow = Self.defaultFreshWindow
+        }
+    }
+
+    public func freshness(checkedAt: Date?, at now: Date) -> ModelHealthFreshness {
+        guard let checkedAt else { return .never }
+        return now.timeIntervalSince(checkedAt) <= freshWindow ? .fresh : .stale
+    }
+}
+
 public struct ModelHealthRecord: Codable, Hashable, Identifiable, Sendable {
     public var providerID: UUID
     public var model: String
@@ -96,6 +126,7 @@ public struct ModelHealthRecord: Codable, Hashable, Identifiable, Sendable {
         if normalizedDetail.contains("model_not_found")
             || normalizedDetail.contains("modelnotfound")
             || normalizedDetail.contains("invalid_api_type")
+            || normalizedDetail.contains("unsupported_model")
             || normalizedDetail.contains("unsupported model")
         {
             return .endpointOrModelNotFound
@@ -227,6 +258,18 @@ public struct ModelHealthIndex: Sendable {
         record(providerID: providerID, model: model)?.status ?? .unavailable
     }
 
+    public func freshness(
+        providerID: UUID,
+        model: String,
+        at now: Date,
+        policy: ModelHealthFreshnessPolicy = .init()
+    ) -> ModelHealthFreshness {
+        policy.freshness(
+            checkedAt: record(providerID: providerID, model: model)?.checkedAt,
+            at: now
+        )
+    }
+
     public mutating func upsert(_ record: ModelHealthRecord) {
         recordsByKey[Self.key(providerID: record.providerID, model: record.model)] = record
     }
@@ -264,5 +307,45 @@ public struct ModelHealthIndex: Sendable {
             providerID: providerID,
             model: model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         )
+    }
+}
+
+/// Decides whether a normal gateway request has enough evidence to replace a
+/// previously verified health record. Request-specific failures and transient
+/// transport failures belong to resilience/fallback telemetry, not permanent
+/// model quarantine.
+public enum RuntimeHealthUpdatePolicy {
+    public static func shouldPreserve(
+        existing: ModelHealthRecord?,
+        proposedStatus: ModelAvailability,
+        statusCode: Int?,
+        detail: String = "",
+        isTransportFailure: Bool
+    ) -> Bool {
+        guard existing?.status == .available,
+              proposedStatus != .available,
+              proposedStatus != .configurationRequired
+        else { return false }
+
+        let proposedCause = ModelHealthRecord(
+            providerID: existing?.providerID ?? UUID(),
+            model: existing?.model ?? "runtime-update",
+            status: proposedStatus,
+            statusCode: statusCode,
+            detail: detail
+        ).quarantineCause
+        if proposedCause == .endpointOrModelNotFound
+            || proposedCause == .unsupportedProtocol
+        {
+            return false
+        }
+        if isTransportFailure { return true }
+        guard let statusCode else { return false }
+        switch statusCode {
+        case 400, 408, 409, 413, 422, 429, 500...599:
+            return true
+        default:
+            return false
+        }
     }
 }

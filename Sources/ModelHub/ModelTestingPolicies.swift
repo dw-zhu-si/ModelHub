@@ -205,3 +205,17 @@ enum ModelTestCircuitDiagnostics {
         return latestRelevantProbe
     }
 }
+
+/// Keeps stream setup and mid-stream failures aligned with the same explicit
+/// proxy failover contract used by non-streaming requests. Local validation or
+/// credential failures reset a pending node-failure streak but never advance
+/// to another node; client cancellation provides no node-health evidence.
+enum StreamingProxyFailoverPolicy {
+    static func event(for error: ProviderClientError) -> ModelProxyFailoverEvent {
+        error.isTransportFailure ? .transportFailure : .nonTransientFailure
+    }
+
+    static func transportEvent(isCancelled: Bool) -> ModelProxyFailoverEvent? {
+        isCancelled ? nil : .transportFailure
+    }
+}

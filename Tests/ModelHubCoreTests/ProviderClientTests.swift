@@ -2,6 +2,14 @@ import XCTest
 @testable import ModelHubCore
 
 final class ProviderClientTests: XCTestCase {
+    func testProxySessionPoolCoversAllManagedNodesWithoutCancellingInflightTasks() {
+        XCTAssertEqual(
+            ProviderProxySessionPoolPolicy.maximumSessionCount,
+            ModelProxySettings.maximumActiveNodes + 1
+        )
+        XCTAssertFalse(ProviderProxySessionPoolPolicy.cancelsInflightTasksOnEviction)
+    }
+
     func testDirectSessionExplicitlyDisablesSystemProxyInheritance() {
         let dictionary = ProviderNetworkSession.directConfiguration().connectionProxyDictionary
 
@@ -949,6 +957,73 @@ final class ProviderClientTests: XCTestCase {
         let input = try XCTUnwrap(json["input"] as? [String: Any])
         XCTAssertNotNil(input["messages"] as? [[String: Any]])
         XCTAssertEqual((json["parameters"] as? [String: Any])?["size"] as? String, "2K")
+    }
+
+    func testQianwenImageMapsGatewayReferenceIntoMultimodalContent() throws {
+        let provider = ProviderConfig(
+            name: "千问AI平台（按量付费）",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+        let reference = "data:image/jpeg;base64,AQID"
+        let rawBody = try JSONSerialization.data(withJSONObject: [
+            "prompt": "按照参考图生成",
+            "image_url": reference,
+            "size": "1024*1024"
+        ])
+
+        let request = try ProviderClient().nativeRequest(
+            rawBody: rawBody,
+            targetModel: "qwen-image-3.0-pro",
+            provider: provider,
+            apiKey: "test-key",
+            operation: .imageGeneration
+        )
+
+        let json = try jsonBody(request)
+        let input = try XCTUnwrap(json["input"] as? [String: Any])
+        let messages = try XCTUnwrap(input["messages"] as? [[String: Any]])
+        let content = try XCTUnwrap(messages.first?["content"] as? [[String: Any]])
+        XCTAssertEqual(content.count, 2)
+        XCTAssertEqual(content.first?["image"] as? String, reference)
+        XCTAssertEqual(content.last?["text"] as? String, "按照参考图生成")
+        XCTAssertNil(json["image_url"])
+    }
+
+    func testQianwenImagePreservesNativeMultimodalInput() throws {
+        let provider = ProviderConfig(
+            name: "千问AI平台（按量付费）",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+        let reference = "data:image/png;base64,AQID"
+        let rawBody = try JSONSerialization.data(withJSONObject: [
+            "prompt": "兼容提示词",
+            "input": [
+                "messages": [[
+                    "role": "user",
+                    "content": [
+                        ["image": reference],
+                        ["text": "原生多模态提示词"]
+                    ]
+                ]]
+            ]
+        ])
+
+        let request = try ProviderClient().nativeRequest(
+            rawBody: rawBody,
+            targetModel: "qwen-image-3.0-pro",
+            provider: provider,
+            apiKey: "test-key",
+            operation: .imageGeneration
+        )
+
+        let json = try jsonBody(request)
+        let input = try XCTUnwrap(json["input"] as? [String: Any])
+        let messages = try XCTUnwrap(input["messages"] as? [[String: Any]])
+        let content = try XCTUnwrap(messages.first?["content"] as? [[String: Any]])
+        XCTAssertEqual(content.first?["image"] as? String, reference)
+        XCTAssertEqual(content.last?["text"] as? String, "原生多模态提示词")
     }
 
     func testBailianSpeechNormalizesCompatibleStyleInput() throws {

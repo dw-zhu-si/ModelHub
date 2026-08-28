@@ -5,7 +5,10 @@ public enum ProviderNetworkSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         configuration.urlCache = nil
-        configuration.waitsForConnectivity = true
+        // A gateway request already has an explicit request timeout and the
+        // local server has a bounded handler lifecycle. Do not keep scarce
+        // inbound connections parked while the network is unavailable.
+        configuration.waitsForConnectivity = false
         configuration.connectionProxyDictionary = [
             "HTTPEnable": 0,
             "HTTPSEnable": 0,
@@ -18,6 +21,11 @@ public enum ProviderNetworkSession {
         _ endpoint: ProviderProxyEndpoint
     ) -> URLSessionConfiguration {
         let configuration = directConfiguration()
+        // A managed proxy is a local, already-running dependency. Waiting for
+        // connectivity here can suspend a request indefinitely after Mihomo
+        // exits, leaving model health probes stuck at 0/N. Fail promptly so
+        // the caller can recover the runtime or stop without routing direct.
+        configuration.waitsForConnectivity = false
         switch endpoint.kind {
         case .http:
             configuration.connectionProxyDictionary = [
@@ -42,26 +50,68 @@ public enum ProviderNetworkSession {
     }
 }
 
+enum ProviderProxySessionPoolPolicy {
+    static let maximumSessionCount = ModelProxySettings.maximumActiveNodes + 1
+    static let cancelsInflightTasksOnEviction = false
+}
+
+public struct ProviderProxySessionPoolMetrics: Equatable, Sendable {
+    public let activeSessions: Int
+    public let capacity: Int
+    public let createdSessions: UInt64
+    public let reusedSessions: UInt64
+    public let evictions: UInt64
+}
+
 private actor ProviderProxySessionPool {
     static let shared = ProviderProxySessionPool()
     private var sessions: [ProviderProxyEndpoint: URLSession] = [:]
     private var insertionOrder: [ProviderProxyEndpoint] = []
-    private let maximumSessionCount = 4
+    private let maximumSessionCount = ProviderProxySessionPoolPolicy.maximumSessionCount
+    private var createdSessions: UInt64 = 0
+    private var reusedSessions: UInt64 = 0
+    private var evictions: UInt64 = 0
 
     func session(for endpoint: ProviderProxyEndpoint) -> URLSession {
-        if let existing = sessions[endpoint] { return existing }
+        if let existing = sessions[endpoint] {
+            reusedSessions &+= 1
+            insertionOrder.removeAll { $0 == endpoint }
+            insertionOrder.append(endpoint)
+            return existing
+        }
         if sessions.count >= maximumSessionCount,
            let oldest = insertionOrder.first
         {
             insertionOrder.removeFirst()
-            sessions.removeValue(forKey: oldest)?.invalidateAndCancel()
+            sessions.removeValue(forKey: oldest)?.finishTasksAndInvalidate()
+            evictions &+= 1
         }
         let created = URLSession(
             configuration: ProviderNetworkSession.proxyConfiguration(endpoint)
         )
         sessions[endpoint] = created
         insertionOrder.append(endpoint)
+        createdSessions &+= 1
         return created
+    }
+
+    func metrics() -> ProviderProxySessionPoolMetrics {
+        ProviderProxySessionPoolMetrics(
+            activeSessions: sessions.count,
+            capacity: maximumSessionCount,
+            createdSessions: createdSessions,
+            reusedSessions: reusedSessions,
+            evictions: evictions
+        )
+    }
+
+    func resetForTesting() {
+        sessions.values.forEach { $0.finishTasksAndInvalidate() }
+        sessions.removeAll()
+        insertionOrder.removeAll()
+        createdSessions = 0
+        reusedSessions = 0
+        evictions = 0
     }
 }
 
@@ -116,6 +166,7 @@ public struct NativeQueryItem: Sendable, Equatable {
 public enum ProviderClientError: LocalizedError {
     case invalidBaseURL
     case missingAPIKey
+    case credentialAccessUnavailable
     case credentialMismatch(String)
     case invalidRequest(String)
     case nonHTTPResponse
@@ -124,6 +175,7 @@ public enum ProviderClientError: LocalizedError {
         switch self {
         case .invalidBaseURL: "供应商 Base URL 无效"
         case .missingAPIKey: "供应商 API Key 未配置"
+        case .credentialAccessUnavailable: "钥匙串暂时不可读，请解锁本机后重试"
         case .credentialMismatch(let message): message
         case .invalidRequest(let detail): "请求无法转换：\(detail)"
         case .nonHTTPResponse: "供应商返回了非 HTTP 响应"
@@ -143,6 +195,22 @@ public enum ProviderClientError: LocalizedError {
         default: false
         }
     }
+
+    public var isTransportFailure: Bool {
+        if case .nonHTTPResponse = self { return true }
+        return false
+    }
+
+    public var gatewayStatusCode: Int {
+        if isInvalidClientRequest { return 400 }
+        if case .credentialAccessUnavailable = self { return 503 }
+        return 502
+    }
+
+    public var isCredentialAccessUnavailable: Bool {
+        if case .credentialAccessUnavailable = self { return true }
+        return false
+    }
 }
 
 public struct ProviderClient: Sendable {
@@ -154,6 +222,18 @@ public struct ProviderClient: Sendable {
         self.catalogRecoverySessionFactory = {
             URLSession(configuration: ProviderNetworkSession.directConfiguration())
         }
+    }
+
+    public static func proxySessionMetrics() async -> ProviderProxySessionPoolMetrics {
+        await ProviderProxySessionPool.shared.metrics()
+    }
+
+    static func proxySessionForTesting(_ endpoint: ProviderProxyEndpoint) async -> URLSession {
+        await ProviderProxySessionPool.shared.session(for: endpoint)
+    }
+
+    static func resetProxySessionMetricsForTesting() async {
+        await ProviderProxySessionPool.shared.resetForTesting()
     }
 
     public init(session: URLSession) {
@@ -606,14 +686,27 @@ public struct ProviderClient: Sendable {
         for key in ["size", "n", "negative_prompt", "prompt_extend", "watermark", "seed"] {
             if let value = original[key] { parameters[key] = value }
         }
-        return [
-            "model": model,
-            "input": [
+        let input: [String: Any]
+        if let nativeInput = original["input"] as? [String: Any],
+           let messages = nativeInput["messages"] as? [Any],
+           !messages.isEmpty {
+            input = nativeInput
+        } else {
+            var content: [[String: Any]] = []
+            if let imageURL = original["image_url"] as? String, !imageURL.isEmpty {
+                content.append(["image": imageURL])
+            }
+            content.append(["text": prompt])
+            input = [
                 "messages": [[
                     "role": "user",
-                    "content": [["text": prompt]]
+                    "content": content
                 ]]
-            ],
+            ]
+        }
+        return [
+            "model": model,
+            "input": input,
             "parameters": parameters
         ]
     }

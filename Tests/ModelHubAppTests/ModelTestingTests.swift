@@ -3,6 +3,156 @@ import XCTest
 @testable import ModelHubCore
 
 final class ModelTestingTests: XCTestCase {
+    func testStreamingProxyFailoverClassifiesSetupAndMidstreamFailures() {
+        XCTAssertEqual(
+            StreamingProxyFailoverPolicy.event(for: .nonHTTPResponse),
+            .transportFailure
+        )
+        XCTAssertEqual(
+            StreamingProxyFailoverPolicy.event(for: .missingAPIKey),
+            .nonTransientFailure
+        )
+        XCTAssertEqual(
+            StreamingProxyFailoverPolicy.transportEvent(isCancelled: false),
+            .transportFailure
+        )
+        XCTAssertNil(StreamingProxyFailoverPolicy.transportEvent(isCancelled: true))
+    }
+
+    func testBatchProbeRequiresManagedRuntimeRecoveryForExactNodeAssignment() {
+        let providerID = UUID()
+        let subscription = ProxySubscription(
+            name: "Synthetic",
+            sourceHost: "example.invalid"
+        )
+        let node = ProxySubscriptionNode(
+            subscriptionID: subscription.id,
+            name: "Synthetic Node",
+            type: "Direct"
+        )
+        let settings = ModelProxySettings(
+            enabled: true,
+            subscriptions: [subscription],
+            nodes: [node],
+            assignments: [ModelProxyAssignment(
+                providerID: providerID,
+                model: "assigned-model",
+                nodeID: node.id
+            )]
+        )
+
+        XCTAssertEqual(
+            ModelTestProxyPreflightPolicy.decision(
+                settings: settings,
+                providerID: providerID,
+                model: "assigned-model",
+                managedRuntimeIsRunning: false
+            ),
+            .requiresManagedRuntimeRecovery
+        )
+        XCTAssertEqual(
+            ModelTestProxyPreflightPolicy.decision(
+                settings: settings,
+                providerID: providerID,
+                model: "assigned-model",
+                managedRuntimeIsRunning: true
+            ),
+            .ready
+        )
+    }
+
+    func testBatchProbeDoesNotRequireManagedRuntimeForUnassignedOrDisabledProxy() {
+        let providerID = UUID()
+        let otherProviderID = UUID()
+        let subscription = ProxySubscription(
+            name: "Synthetic",
+            sourceHost: "example.invalid"
+        )
+        let node = ProxySubscriptionNode(
+            subscriptionID: subscription.id,
+            name: "Synthetic Node",
+            type: "Direct"
+        )
+        let enabled = ModelProxySettings(
+            enabled: true,
+            subscriptions: [subscription],
+            nodes: [node],
+            assignments: [ModelProxyAssignment(
+                providerID: otherProviderID,
+                model: "other-model",
+                nodeID: node.id
+            )]
+        )
+        var disabled = enabled
+        disabled.enabled = false
+
+        XCTAssertEqual(
+            ModelTestProxyPreflightPolicy.decision(
+                settings: enabled,
+                providerID: providerID,
+                model: "direct-model",
+                managedRuntimeIsRunning: false
+            ),
+            .ready
+        )
+        XCTAssertEqual(
+            ModelTestProxyPreflightPolicy.decision(
+                settings: disabled,
+                providerID: otherProviderID,
+                model: "other-model",
+                managedRuntimeIsRunning: false
+            ),
+            .ready
+        )
+    }
+
+    @MainActor
+    func testBatchProbeStopsBeforeAnyModelRequestWhenManagedRuntimeCannotRecover() async throws {
+        let provider = ProviderConfig(
+            name: "Synthetic Ollama",
+            kind: .ollama,
+            baseURL: "http://127.0.0.1:65534/v1",
+            models: ["assigned-model"],
+            endpointURLs: [:]
+        )
+        let subscription = ProxySubscription(
+            name: "Missing Synthetic Subscription",
+            sourceHost: "example.invalid"
+        )
+        let node = ProxySubscriptionNode(
+            subscriptionID: subscription.id,
+            name: "Synthetic Node",
+            type: "Direct"
+        )
+        let settings = ModelProxySettings(
+            enabled: true,
+            subscriptions: [subscription],
+            nodes: [node],
+            assignments: [ModelProxyAssignment(
+                providerID: provider.id,
+                model: "assigned-model",
+                nodeID: node.id
+            )]
+        )
+        let model = AppModel()
+        model.configuration = AppConfiguration(
+            providers: [provider],
+            operational: OperationalSettings(modelProxy: settings)
+        )
+
+        model.startTestingAllModels()
+        for _ in 0..<100 where model.isTestingModels {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertFalse(model.isTestingModels)
+        XCTAssertEqual(model.modelTestProgress?.completed, 0)
+        XCTAssertFalse(model.modelTestProgress?.isCancelled == true)
+        XCTAssertTrue(model.configuration.modelHealth.isEmpty)
+        XCTAssertTrue(model.configuration.modelHealthActivities.isEmpty)
+        XCTAssertTrue(model.notice?.contains("没有改为直连") == true)
+    }
+
     func testSingleModelProbeDoesNotRefreshCatalogBeforeTestingSavedModel() {
         XCTAssertFalse(
             ModelTestCatalogRefreshPolicy.shouldRefreshCatalog(for: .singleModel)
