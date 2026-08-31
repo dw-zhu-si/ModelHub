@@ -1,13 +1,15 @@
 openapi: 3.1.0
 info:
   title: ModelHub Local Gateway API
-  version: 1.9.5
+  version: 1.10.0
   description: >
     模型枢纽提供的本机统一接口，覆盖聊天、图像、视频、音乐、语音、转录、
     Embedding 与 Rerank。服务仅监听 127.0.0.1，客户端使用应用中生成的
     Bearer 令牌访问。请求体支持 Content-Length 和 chunked；请求头上限
     64 KiB，解码后请求体上限 32 MiB，已知路径的错误方法返回 405。
     所有 HTTP 响应都使用 X-ModelHub-Request-ID 返回有界请求关联标识。
+    可能计费的非流式 POST 请求可使用 Idempotency-Key；路由请求可使用
+    X-ModelHub-Session-ID 提供只保存摘要的会话亲和提示。
 servers:
   - url: http://127.0.0.1:11435
 security:
@@ -110,6 +112,70 @@ paths:
                 additionalProperties: true
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /v1/analytics/ledger:
+    get:
+      summary: 分页读取逐请求本地用量账本
+      description: >
+        按 UTC 月份读取；不返回提示词、响应正文、请求头或凭证秘密。
+        credential_id 仅为不可用于认证的本地 UUID。
+      parameters:
+        - name: month
+          in: query
+          required: false
+          description: UTC 月份，格式 yyyy-MM；默认当前 UTC 月
+          schema:
+            type: string
+            pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        - name: cursor
+          in: query
+          required: false
+          description: >
+            上一页 next_cursor 返回的不透明游标。为兼容 1.9.x，仍接受已弃用的非负整数行偏移输入。
+          schema:
+            oneOf:
+              - type: string
+                minLength: 1
+              - type: integer
+                minimum: 0
+                deprecated: true
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        "200":
+          description: 隐私最小化的逐请求账本页
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [object, month, stores_request_bodies, data]
+                properties:
+                  object:
+                    type: string
+                    const: local.usage_ledger
+                  month:
+                    type: string
+                  stores_request_bodies:
+                    type: boolean
+                    const: false
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  next_cursor:
+                    type: string
+                    description: 下一页使用的不透明游标；末页省略。
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /v1/native:
     post:
       summary: 透传供应商专用原生协议
@@ -118,6 +184,7 @@ paths:
         provider 只能选择已配置供应商，path 只能是该供应商主机内的绝对路径。
         运行时同时支持 GET、POST、PUT、PATCH、DELETE。
       parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
         - name: provider
           in: query
           required: true
@@ -173,6 +240,9 @@ paths:
       description: >
         model 可以是路由别名，也可以是“供应商名称/模型名称”。
         路由遇到网络错误、HTTP 429 或 5xx 时按配置尝试下一个目标。
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/SessionID"
       requestBody:
         required: true
         content:
@@ -182,6 +252,9 @@ paths:
       responses:
         "200":
           description: 通用兼容聊天补全响应
+          headers:
+            X-ModelHub-Idempotent-Replay:
+              $ref: "#/components/headers/IdempotentReplay"
           content:
             application/json:
               schema:
@@ -209,6 +282,9 @@ paths:
     post:
       summary: 创建 通用协议 Responses API 响应
       description: 保留工具调用与多模态输入；stream=true 时以真正增量的 SSE 分块转发。
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/SessionID"
       requestBody:
         required: true
         content:
@@ -223,6 +299,9 @@ paths:
       responses:
         "200":
           description: Responses API JSON 或 SSE 响应
+          headers:
+            X-ModelHub-Idempotent-Replay:
+              $ref: "#/components/headers/IdempotentReplay"
           content:
             application/json:
               schema: { type: object, additionalProperties: true }
@@ -232,6 +311,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "409":
           description: 模型已隔离，未调用上游
+        "422":
+          description: 流式响应不能与 Idempotency-Key 同时使用
   /mcp:
     post:
       summary: 本机只读 MCP Streamable HTTP 入口
@@ -267,6 +348,9 @@ paths:
         保留供应商原生扩展字段，并将路由别名替换为真实模型名。
         image_url 是单张参考图的网关字段；千问图片模型会把它转换为
         input.messages[].content[].image。也可直接提交供应商原生 input。
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/SessionID"
       requestBody:
         required: true
         content:
@@ -287,6 +371,9 @@ paths:
         将 model 路由别名替换为真实模型名，并保留 lyrics、style、title、
         duration、instrumental 以及供应商扩展字段。上游只使用用户保存的
         精确音乐端点或精确 Base URL，ModelHub 不猜测供应商路径。
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/SessionID"
       requestBody:
         required: true
         content:
@@ -325,6 +412,9 @@ paths:
       description: >
         APIMart 转发到 /v1/videos/generations，Agnes 转发到 /v1/videos；
         供应商原生参数原样保留。
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/SessionID"
       requestBody:
         required: true
         content:
@@ -341,6 +431,9 @@ paths:
   /v1/videos:
     post:
       summary: 创建视频生成任务（兼容别名）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/SessionID"
       requestBody:
         required: true
         content:
@@ -384,6 +477,9 @@ paths:
       description: >
         通用兼容供应商使用 /v1/audio/speech；千问AI平台按模型系列转发至
         SpeechSynthesizer 或 multimodal-generation 原生 HTTP 接口。
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/SessionID"
       requestBody:
         required: true
         content:
@@ -402,6 +498,8 @@ paths:
         JSON 请求从正文读取 model；multipart/form-data 请求需同时在
         查询参数中提供 model，正文与 Content-Type 原样转发。
       parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/SessionID"
         - name: model
           in: query
           required: false
@@ -425,6 +523,9 @@ paths:
   /v1/embeddings:
     post:
       summary: 创建向量
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/SessionID"
       requestBody:
         required: true
         content:
@@ -439,6 +540,9 @@ paths:
   /v1/rerank:
     post:
       summary: 文档重排
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/SessionID"
       requestBody:
         required: true
         content:
@@ -462,6 +566,11 @@ components:
       schema:
         type: string
         maxLength: 80
+    IdempotentReplay:
+      description: true 表示该响应来自同一访问作用域内已完成请求的内存重放。
+      schema:
+        type: string
+        enum: ["true", "false"]
   responses:
     NativeResponse:
       description: 供应商原生响应，状态码和 Content-Type 保持不变
@@ -489,6 +598,29 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
   parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: >
+        1–128 个安全 ASCII 字符。仅用于可能计费的非流式 POST；同一访问作用域、
+        相同 Key 与相同请求只执行一次。同一 Key 用于不同请求返回 409。
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: '^[A-Za-z0-9._:-]+$'
+    SessionID:
+      name: X-ModelHub-Session-ID
+      in: header
+      required: false
+      description: >
+        路由会话亲和提示；ModelHub 只保存摘要并受 TTL/LRU 上限约束，原始值不写日志。
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: '^[!-~]+$'
     TaskID:
       name: task_id
       in: path
@@ -521,8 +653,9 @@ components:
           type: object
           additionalProperties: true
           description: >
-            仅包含有界聚合计数：响应缓存命中/淘汰、代理会话复用/淘汰、
-            限流/并发/熔断以及模型验证新鲜度；不包含密钥、提示词或高基数请求 ID 标签。
+            仅包含有界聚合计数：响应缓存、代理会话、限流/排队/熔断、
+            幂等协调、会话亲和、被动健康、媒体批处理以及模型验证新鲜度；
+            不包含密钥、提示词或高基数请求/会话 ID 标签。
     Model:
       type: object
       required: [id, object, created, owned_by]

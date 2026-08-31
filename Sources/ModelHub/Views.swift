@@ -477,6 +477,7 @@ struct ProvidersView: View {
     @State private var providerToDelete: ProviderConfig?
     @State private var selectedProviderID: UUID?
     @State private var pendingTestScope: ModelTestScope?
+    @State private var showingCredentialPools = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -485,6 +486,13 @@ struct ProvidersView: View {
                 subtitle: "聊天模型执行在线检测；生成类模型显示已接入的原生协议，密钥仅存储在 macOS 钥匙串。",
                 trailing: AnyView(
                     HStack(spacing: 8) {
+                        Button {
+                            showingCredentialPools = true
+                        } label: {
+                            Label("凭证池", systemImage: "key.horizontal")
+                        }
+                        .buttonStyle(.bordered)
+
                         Button {
                             pendingTestScope = .all
                         } label: {
@@ -626,6 +634,20 @@ struct ProvidersView: View {
         .sheet(isPresented: $showingNewProvider) {
             ProviderEditorView(provider: nil)
                 .environmentObject(model)
+        }
+        .sheet(isPresented: $showingCredentialPools) {
+            CredentialPoolsView(
+                providers: model.providers,
+                pools: model.configuration.credentialPools,
+                onAddEntry: model.addCredentialPoolEntry,
+                saveSecret: model.saveCredentialPoolSecret,
+                beginGeminiOAuth: model.beginGeminiDeveloperOAuth,
+                onUpdateEntry: model.updateCredentialPoolEntry,
+                onDeleteEntry: model.deleteCredentialPoolEntry,
+                onSetMode: model.setCredentialPoolMode,
+                onSelectManual: model.selectCredentialPoolEntry
+            )
+            .frame(minWidth: 880, minHeight: 640)
         }
         .sheet(item: $editingProvider) { provider in
             ProviderEditorView(provider: provider)
@@ -2316,9 +2338,11 @@ struct ProviderEditorView: View {
             isPresented: $showingDeleteKeyConfirmation
         ) {
             Button("删除 API Key", role: .destructive) {
-                model.deleteAPIKey(for: provider)
-                apiKey = ""
-                testResult = "API Key 已删除；后续检测不会发起上游请求。"
+                Task { @MainActor in
+                    let deleted = await model.deleteAPIKey(for: provider)
+                    testResult = model.notice ?? ""
+                    if deleted { apiKey = "" }
+                }
             }
             Button("取消", role: .cancel) {}
         } message: {
@@ -2577,9 +2601,21 @@ struct ProviderEditorView: View {
             },
             set: { proposed in
                 var updated = proposed
+                let existing = provider.modelProfiles?.first(where: {
+                    $0.key.caseInsensitiveCompare(modelName) == .orderedSame
+                })?.value
                 updated.inputCostPerMillionTokens = validPrice(updated.inputCostPerMillionTokens)
                 updated.outputCostPerMillionTokens = validPrice(updated.outputCostPerMillionTokens)
                 updated.requestCostUSD = validPrice(updated.requestCostUSD)
+                let editedReferenceAmount = existing.map {
+                    ReferenceModelPricingRegistry.isReferenceSource($0.pricingSource)
+                        && ($0.inputCostPerMillionTokens != updated.inputCostPerMillionTokens
+                            || $0.outputCostPerMillionTokens != updated.outputCostPerMillionTokens
+                            || $0.requestCostUSD != updated.requestCostUSD)
+                } ?? false
+                if editedReferenceAmount {
+                    updated.pricingSource = "手动配置（原内置参考价已覆盖）"
+                }
                 if updated.hasKnownPrice {
                     if updated.pricingSource.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         updated.pricingSource = "手动配置"
@@ -3621,80 +3657,145 @@ struct ConsoleView: View {
     @State private var selectedModel = ""
     @State private var prompt = "请用一句话介绍你自己。"
     @State private var operation: ConsoleOperation = .chat
-    @State private var confirmsMusicGeneration = false
+    @State private var confirmsMediaGeneration = false
+    @State private var mediaBatchCount = 1
 
     private var availableModels: [String] {
         model.availableModelIDsForConsole(operation: operation)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            PageHeader(title: "API 调试", subtitle: "从应用内部调用同一个本地 HTTP 接口，验证完整路由链路。")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                PageHeader(title: "API 调试", subtitle: "从应用内部调用同一个本地 HTTP 接口，验证完整路由链路。")
 
-            HStack(spacing: 14) {
-                Picker("协议", selection: $operation) {
-                    ForEach(ConsoleOperation.allCases) { operation in
-                        Text(operation.title).tag(operation)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 220)
-                Picker("模型", selection: $selectedModel) {
-                    Text("请选择").tag("")
-                    ForEach(availableModels, id: \.self) { model in
-                        Text(model).tag(model)
-                    }
-                }
-                .frame(maxWidth: 420)
-                Spacer()
-                Button {
-                    if operation == .musicGeneration {
-                        confirmsMusicGeneration = true
-                    } else {
-                        Task {
-                            await model.runConsole(
-                                model: selectedModel,
-                                prompt: prompt,
-                                operation: operation
-                            )
+                HStack(spacing: 14) {
+                    Picker("协议", selection: $operation) {
+                        ForEach(ConsoleOperation.allCases) { operation in
+                            Text(operation.title).tag(operation)
                         }
                     }
-                } label: {
-                    if model.consoleIsRunning {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Label("发送请求", systemImage: "paperplane")
+                    .pickerStyle(.segmented)
+                    .frame(width: 420)
+                    Picker("模型", selection: $selectedModel) {
+                        Text("请选择").tag("")
+                        ForEach(availableModels, id: \.self) { model in
+                            Text(model).tag(model)
+                        }
+                    }
+                    .frame(maxWidth: 420)
+                    Spacer()
+                    Button {
+                        if operation.mediaBatchKind != nil {
+                            confirmsMediaGeneration = true
+                        } else {
+                            Task {
+                                await model.runConsole(
+                                    model: selectedModel,
+                                    prompt: prompt,
+                                    operation: operation
+                                )
+                            }
+                        }
+                    } label: {
+                        if model.consoleIsRunning {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Label("发送请求", systemImage: "paperplane")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(selectedModel.isEmpty || prompt.isEmpty || model.consoleIsRunning)
+                }
+                .mhSurface(.secondary, padding: 16)
+
+                if operation.mediaBatchKind != nil {
+                    HStack(spacing: 16) {
+                        Stepper("批量任务：\(mediaBatchCount)", value: $mediaBatchCount, in: 1...20)
+                        Spacer()
+                        Button(model.mediaBatchPaused ? "继续队列" : "暂停队列") {
+                            model.setMediaBatchPaused(!model.mediaBatchPaused)
+                        }
+                        .disabled(model.mediaBatchJobs.allSatisfy { $0.state.isTerminal })
+                    }
+                    .mhSurface(.secondary, padding: 14)
+                }
+
+                GroupBox(operation == .chat ? "用户消息" : "媒体生成描述") {
+                    TextEditor(text: $prompt)
+                        .font(.body)
+                        .frame(minHeight: 110)
+                        .padding(8)
+                        .background(MHDesign.insetSurface, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay { RoundedRectangle(cornerRadius: 10).stroke(MHDesign.border) }
+                }
+
+                GroupBox("响应") {
+                    ScrollView {
+                        Text(model.consoleOutput.isEmpty ? "响应将在这里显示。" : model.consoleOutput)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(model.consoleOutput.isEmpty ? .secondary : .primary)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .textSelection(.enabled)
+                            .padding(8)
+                    }
+                    .frame(minHeight: 220, maxHeight: 320)
+                }
+
+                if !model.mediaBatchJobs.isEmpty {
+                    GroupBox("媒体批处理队列") {
+                        ScrollView {
+                            LazyVStack(spacing: 0) {
+                                ForEach(model.mediaBatchJobs.reversed()) { job in
+                                    HStack(spacing: 12) {
+                                        Image(systemName: mediaBatchSymbol(job.metadata.kind))
+                                            .foregroundStyle(mediaBatchColor(job.state))
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(job.metadata.modelID)
+                                                .font(.subheadline.weight(.medium))
+                                            Text(mediaBatchStatus(job.state))
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                            if !job.result.artifacts.isEmpty {
+                                                Text("已验证 \(job.result.artifacts.count) 个结果制品")
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.green)
+                                            }
+                                        }
+                                        Spacer()
+                                        if let artifact = job.result.artifacts.first,
+                                           let openURL = artifact.openURL
+                                        {
+                                            Button("打开") { NSWorkspace.shared.open(openURL) }
+                                                .buttonStyle(.borderless)
+                                            if let remoteURL = artifact.remoteURL {
+                                                Button("复制链接") {
+                                                    NSPasteboard.general.clearContents()
+                                                    NSPasteboard.general.setString(
+                                                        remoteURL.absoluteString,
+                                                        forType: .string
+                                                    )
+                                                }
+                                                .buttonStyle(.borderless)
+                                            }
+                                        } else if !job.state.isTerminal {
+                                            Button("取消") { model.cancelMediaBatchJob(job.id) }
+                                                .buttonStyle(.borderless)
+                                        }
+                                    }
+                                    .padding(.vertical, 8)
+                                    Divider()
+                                }
+                            }
+                        }
+                        .frame(maxHeight: 300)
                     }
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(selectedModel.isEmpty || prompt.isEmpty || model.consoleIsRunning)
             }
-            .mhSurface(.secondary, padding: 16)
-
-            GroupBox(operation == .musicGeneration ? "音乐描述" : "用户消息") {
-                TextEditor(text: $prompt)
-                    .font(.body)
-                    .frame(minHeight: 110)
-                    .padding(8)
-                    .background(MHDesign.insetSurface, in: RoundedRectangle(cornerRadius: 10))
-                    .overlay { RoundedRectangle(cornerRadius: 10).stroke(MHDesign.border) }
-            }
-
-            GroupBox("响应") {
-                ScrollView {
-                    Text(model.consoleOutput.isEmpty ? "响应将在这里显示。" : model.consoleOutput)
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundStyle(model.consoleOutput.isEmpty ? .secondary : .primary)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .textSelection(.enabled)
-                        .padding(8)
-                }
-                .frame(maxHeight: .infinity)
-            }
+            .padding(MHDesign.pagePadding)
         }
-        .padding(MHDesign.pagePadding)
         .onAppear {
             if selectedModel.isEmpty { selectedModel = availableModels.first ?? "" }
         }
@@ -3702,23 +3803,61 @@ struct ConsoleView: View {
             if !models.contains(selectedModel) { selectedModel = models.first ?? "" }
         }
         .onChange(of: operation) { _, newValue in
-            prompt = newValue == .musicGeneration
-                ? "温暖、轻快的钢琴与弦乐，适合清晨。"
-                : "请用一句话介绍你自己。"
+            prompt = switch newValue {
+            case .chat: "请用一句话介绍你自己。"
+            case .imageGeneration: "清晨的未来城市，柔和天光，细节清晰。"
+            case .musicGeneration: "温暖、轻快的钢琴与弦乐，适合清晨。"
+            case .videoGeneration: "镜头缓慢穿过雨后的未来城市，电影感光影。"
+            }
         }
-        .alert("确认音乐生成", isPresented: $confirmsMusicGeneration) {
+        .alert("确认媒体批处理", isPresented: $confirmsMediaGeneration) {
             Button("取消", role: .cancel) {}
-            Button("确认并发送") {
-                Task {
-                    await model.runConsole(
+            Button("确认费用并入队") {
+                if let kind = operation.mediaBatchKind {
+                    model.enqueueMediaBatch(
+                        kind: kind,
                         model: selectedModel,
                         prompt: prompt,
-                        operation: operation
+                        count: mediaBatchCount,
+                        feeConfirmed: true
                     )
                 }
             }
         } message: {
-            Text("音乐生成可能产生供应商费用。只有确认当前模型、精确端点和费用后才会发送请求；隔离模型仍会被网关拒绝。")
+            Text("图像、音乐和视频生成可能按次或按量计费。队列最多并发 2 个任务；创建请求绝不自动重试，只对已创建任务的状态查询做有界重试。")
+        }
+    }
+
+    private func mediaBatchSymbol(_ kind: MediaBatchKind) -> String {
+        switch kind {
+        case .image: "photo"
+        case .music: "music.note"
+        case .video: "video"
+        }
+    }
+
+    private func mediaBatchColor(_ state: MediaBatchJobState) -> Color {
+        switch state {
+        case .succeeded: .green
+        case .failed: .red
+        case .cancelled: .secondary
+        case .queued, .creating, .polling: .blue
+        }
+    }
+
+    private func mediaBatchStatus(_ state: MediaBatchJobState) -> String {
+        switch state {
+        case .queued: "等待中"
+        case .creating: "正在创建（不自动重试）"
+        case .polling(_, let attempt): "正在查询状态 · 第 \(attempt) 次"
+        case .succeeded: "已完成"
+        case .failed(let failure):
+            switch failure {
+            case .creationFailed: "失败 · 创建请求未成功（未自动重试）"
+            case .remoteFailed: "失败 · 上游任务返回失败状态"
+            case .pollingExhausted(let attempts): "失败 · 查询 \(attempts) 次后仍未完成"
+            }
+        case .cancelled: "已取消"
         }
     }
 }
@@ -3858,7 +3997,7 @@ struct AnalyticsView: View {
                                 } else {
                                     Image(systemName: "arrow.triangle.2.circlepath")
                                 }
-                                Text("一键同步官方价格")
+                                Text("同步可验证价格")
                             }
                         }
                         .buttonStyle(.borderedProminent)
@@ -3876,7 +4015,7 @@ struct AnalyticsView: View {
             } else if let message = model.configuration.operational.pricingUpdate?.lastMessage,
                       !message.isEmpty
             {
-                Label(message, systemImage: "checkmark.circle.fill")
+                Label(message, systemImage: "info.circle.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
@@ -4001,12 +4140,68 @@ struct OperationsView: View {
             Section("韧性控制") {
                 Stepper("每分钟请求上限：\(settings.resilience.requestsPerMinute)", value: $settings.resilience.requestsPerMinute, in: 10...10_000, step: 10)
                 Stepper("单目标并发上限：\(settings.resilience.maxConcurrentRequestsPerTarget)", value: $settings.resilience.maxConcurrentRequestsPerTarget, in: 1...64)
+                Toggle(
+                    "并发满时进入公平等待队列",
+                    isOn: Binding(
+                        get: { settings.targetQueue?.enabled ?? false },
+                        set: { enabled in
+                            var queue = settings.targetQueue ?? TargetQueueSettings()
+                            queue.enabled = enabled
+                            if enabled && queue.capacityPerTarget == 0 {
+                                queue.capacityPerTarget = 16
+                            }
+                            settings.targetQueue = queue.sanitized
+                        }
+                    )
+                )
+                if settings.targetQueue?.enabled == true {
+                    Stepper(
+                        "单目标等待上限：\(settings.targetQueue?.capacityPerTarget ?? 16)",
+                        value: Binding(
+                            get: { settings.targetQueue?.capacityPerTarget ?? 16 },
+                            set: { value in
+                                var queue = settings.targetQueue ?? TargetQueueSettings()
+                                queue.capacityPerTarget = value
+                                settings.targetQueue = queue.sanitized
+                            }
+                        ),
+                        in: 1...128
+                    )
+                    Stepper(
+                        "最长等待：\((settings.targetQueue?.maximumWaitMilliseconds ?? 5_000) / 1_000) 秒",
+                        value: Binding(
+                            get: { settings.targetQueue?.maximumWaitMilliseconds ?? 5_000 },
+                            set: { value in
+                                var queue = settings.targetQueue ?? TargetQueueSettings()
+                                queue.maximumWaitMilliseconds = value
+                                settings.targetQueue = queue.sanitized
+                            }
+                        ),
+                        in: 1_000...30_000,
+                        step: 1_000
+                    )
+                    Text("不同虚拟密钥之间轮转，同一密钥内部保持 FIFO；队列容量、等待时间和取消清理均有硬上限。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Stepper("连续失败熔断阈值：\(settings.resilience.failureThreshold)", value: $settings.resilience.failureThreshold, in: 1...10)
                 Stepper("熔断冷却：\(settings.resilience.cooldownSeconds) 秒", value: $settings.resilience.cooldownSeconds, in: 5...600, step: 5)
                 Stepper("最多回退目标：\(settings.resilience.maxFallbackAttempts)", value: $settings.resilience.maxFallbackAttempts, in: 1...10)
                 Stepper("退避基数：\(settings.resilience.backoffBaseMilliseconds) ms", value: $settings.resilience.backoffBaseMilliseconds, in: 0...2_000, step: 50)
                 Text("只在不同目标之间回退，同一目标不会自动重复计费调用。429、5xx 与网络错误计入熔断。")
                     .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section("被动健康与本地提醒") {
+                Toggle(
+                    "连续失败、高延迟或恢复时发送本地通知",
+                    isOn: Binding(
+                        get: { model.localHealthAlertsEnabled },
+                        set: { model.setLocalHealthAlertsEnabled($0) }
+                    )
+                )
+                Text("默认关闭；只使用真实网关请求的状态码与延迟做本机窗口判定，通知不包含模型名、请求正文、凭证或 URL。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("预算与上下文") {

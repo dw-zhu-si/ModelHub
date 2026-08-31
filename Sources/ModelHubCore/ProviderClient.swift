@@ -63,6 +63,84 @@ public struct ProviderProxySessionPoolMetrics: Equatable, Sendable {
     public let evictions: UInt64
 }
 
+/// Ephemeral upstream authorization. Values are supplied from Keychain at the
+/// request boundary and must never be persisted, logged or exported.
+public enum UpstreamAuthorization: Sendable {
+    case providerAPIKey(String?)
+    case bearerAccessToken(String, billingProjectID: String?)
+
+    fileprivate var secretValue: String? {
+        switch self {
+        case .providerAPIKey(let value): value
+        case .bearerAccessToken(let value, _): value
+        }
+    }
+}
+
+enum GeminiDeveloperOAuthTransportPolicy {
+    static let canonicalOrigin = "https://generativelanguage.googleapis.com"
+    private static let officialHost = "generativelanguage.googleapis.com"
+
+    static func isAllowedAPIURL(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == "https",
+              url.host?.lowercased() == officialHost,
+              url.port == nil || url.port == 443,
+              url.user == nil,
+              url.password == nil,
+              url.fragment == nil
+        else { return false }
+        return true
+    }
+
+    static func allowsRedirect(from original: URL, to redirected: URL) -> Bool {
+        guard isAllowedAPIURL(original), isAllowedAPIURL(redirected) else { return false }
+        return original.scheme?.lowercased() == redirected.scheme?.lowercased()
+            && original.host?.lowercased() == redirected.host?.lowercased()
+            && normalizedPort(original) == normalizedPort(redirected)
+    }
+
+    private static func normalizedPort(_ url: URL) -> Int {
+        url.port ?? 443
+    }
+}
+
+private final class GeminiDeveloperOAuthRedirectGuard: NSObject,
+    URLSessionTaskDelegate,
+    @unchecked Sendable
+{
+    private let originalURL: URL
+    private let stateLock = NSLock()
+    private var rejectedRedirect = false
+
+    init(originalURL: URL) {
+        self.originalURL = originalURL
+    }
+
+    var didRejectRedirect: Bool {
+        stateLock.withLock { rejectedRedirect }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        guard let redirectedURL = request.url,
+              GeminiDeveloperOAuthTransportPolicy.allowsRedirect(
+                from: response.url ?? task.currentRequest?.url ?? originalURL,
+                to: redirectedURL
+              )
+        else {
+            stateLock.withLock { rejectedRedirect = true }
+            completionHandler(nil)
+            return
+        }
+        completionHandler(request)
+    }
+}
+
 private actor ProviderProxySessionPool {
     static let shared = ProviderProxySessionPool()
     private var sessions: [ProviderProxyEndpoint: URLSession] = [:]
@@ -170,6 +248,7 @@ public enum ProviderClientError: LocalizedError {
     case credentialMismatch(String)
     case invalidRequest(String)
     case nonHTTPResponse
+    case responseTooLarge(limit: Int)
 
     public var errorDescription: String? {
         switch self {
@@ -179,6 +258,7 @@ public enum ProviderClientError: LocalizedError {
         case .credentialMismatch(let message): message
         case .invalidRequest(let detail): "请求无法转换：\(detail)"
         case .nonHTTPResponse: "供应商返回了非 HTTP 响应"
+        case .responseTooLarge(let limit): "供应商响应超过传输上限（\(limit) 字节）"
         }
     }
 
@@ -197,8 +277,10 @@ public enum ProviderClientError: LocalizedError {
     }
 
     public var isTransportFailure: Bool {
-        if case .nonHTTPResponse = self { return true }
-        return false
+        switch self {
+        case .nonHTTPResponse, .responseTooLarge: true
+        default: false
+        }
     }
 
     public var gatewayStatusCode: Int {
@@ -214,14 +296,18 @@ public enum ProviderClientError: LocalizedError {
 }
 
 public struct ProviderClient: Sendable {
+    static let defaultMaximumNonStreamingResponseBytes = 64 * 1_024 * 1_024
     let session: URLSession
     let catalogRecoverySessionFactory: (@Sendable () -> URLSession)?
+    let maximumNonStreamingResponseBytes: Int
 
     public init() {
         self.session = URLSession(configuration: ProviderNetworkSession.directConfiguration())
         self.catalogRecoverySessionFactory = {
             URLSession(configuration: ProviderNetworkSession.directConfiguration())
         }
+        self.maximumNonStreamingResponseBytes =
+            Self.defaultMaximumNonStreamingResponseBytes
     }
 
     public static func proxySessionMetrics() async -> ProviderProxySessionPoolMetrics {
@@ -238,6 +324,8 @@ public struct ProviderClient: Sendable {
 
     public init(session: URLSession) {
         self.session = session
+        self.maximumNonStreamingResponseBytes =
+            Self.defaultMaximumNonStreamingResponseBytes
         if session === URLSession.shared {
             self.catalogRecoverySessionFactory = {
                 URLSession(configuration: ProviderNetworkSession.directConfiguration())
@@ -253,6 +341,14 @@ public struct ProviderClient: Sendable {
     ) {
         self.session = session
         self.catalogRecoverySessionFactory = catalogRecoverySessionFactory
+        self.maximumNonStreamingResponseBytes =
+            Self.defaultMaximumNonStreamingResponseBytes
+    }
+
+    init(session: URLSession, maximumNonStreamingResponseBytes: Int) {
+        self.session = session
+        self.catalogRecoverySessionFactory = nil
+        self.maximumNonStreamingResponseBytes = max(1, maximumNonStreamingResponseBytes)
     }
 
     public func send(
@@ -293,6 +389,33 @@ public struct ProviderClient: Sendable {
                 timeoutInterval: timeoutInterval,
                 proxy: proxy
             )
+        }
+    }
+
+    public func send(
+        rawBody: Data,
+        targetModel: String,
+        provider: ProviderConfig,
+        authorization: UpstreamAuthorization,
+        timeoutInterval: TimeInterval = 180,
+        proxy: ProviderProxyEndpoint? = nil
+    ) async throws -> ProviderResponse {
+        let request = try chatRequest(
+            rawBody: rawBody,
+            targetModel: targetModel,
+            provider: provider,
+            authorization: authorization,
+            timeoutInterval: timeoutInterval
+        )
+        let response = try await execute(request, proxy: proxy)
+        guard (200..<300).contains(response.statusCode) else { return response }
+        switch provider.kind {
+        case .anthropic:
+            return try UnifiedProtocolBridge.normalizeAnthropic(response)
+        case .gemini:
+            return try UnifiedProtocolBridge.normalizeGemini(response, model: targetModel)
+        default:
+            return response
         }
     }
 
@@ -388,6 +511,23 @@ public struct ProviderClient: Sendable {
         return request
     }
 
+    public func chatRequest(
+        rawBody: Data,
+        targetModel: String,
+        provider: ProviderConfig,
+        authorization: UpstreamAuthorization,
+        timeoutInterval: TimeInterval = 180
+    ) throws -> URLRequest {
+        let request = try chatRequest(
+            rawBody: rawBody,
+            targetModel: targetModel,
+            provider: provider,
+            apiKey: authorization.secretValue,
+            timeoutInterval: timeoutInterval
+        )
+        return try applying(authorization, to: request, provider: provider)
+    }
+
     public func startChatStream(
         rawBody: Data,
         targetModel: String,
@@ -400,6 +540,30 @@ public struct ProviderClient: Sendable {
             targetModel: targetModel,
             provider: provider,
             apiKey: apiKey
+        ), proxy: proxy)
+        guard (200..<300).contains(response.statusCode) else { return response }
+        switch provider.kind {
+        case .anthropic:
+            return UnifiedProtocolBridge.anthropicStream(response, model: targetModel)
+        case .gemini:
+            return UnifiedProtocolBridge.geminiStream(response, model: targetModel)
+        default:
+            return response
+        }
+    }
+
+    public func startChatStream(
+        rawBody: Data,
+        targetModel: String,
+        provider: ProviderConfig,
+        authorization: UpstreamAuthorization,
+        proxy: ProviderProxyEndpoint? = nil
+    ) async throws -> ProviderStreamResponse {
+        let response = try await executeStream(chatRequest(
+            rawBody: rawBody,
+            targetModel: targetModel,
+            provider: provider,
+            authorization: authorization
         ), proxy: proxy)
         guard (200..<300).contains(response.statusCode) else { return response }
         switch provider.kind {
@@ -427,6 +591,25 @@ public struct ProviderClient: Sendable {
         ), proxy: proxy)
     }
 
+    public func startResponsesStream(
+        rawBody: Data,
+        targetModel: String,
+        provider: ProviderConfig,
+        authorization: UpstreamAuthorization,
+        proxy: ProviderProxyEndpoint? = nil
+    ) async throws -> ProviderStreamResponse {
+        try await executeStream(try applying(
+            authorization,
+            to: responsesRequest(
+                rawBody: rawBody,
+                targetModel: targetModel,
+                provider: provider,
+                apiKey: authorization.secretValue
+            ),
+            provider: provider
+        ), proxy: proxy)
+    }
+
     public func sendResponses(
         rawBody: Data,
         targetModel: String,
@@ -441,6 +624,27 @@ public struct ProviderClient: Sendable {
             provider: provider,
             apiKey: apiKey,
             timeoutInterval: timeoutInterval
+        ), proxy: proxy)
+    }
+
+    public func sendResponses(
+        rawBody: Data,
+        targetModel: String,
+        provider: ProviderConfig,
+        authorization: UpstreamAuthorization,
+        timeoutInterval: TimeInterval = 180,
+        proxy: ProviderProxyEndpoint? = nil
+    ) async throws -> ProviderResponse {
+        try await execute(try applying(
+            authorization,
+            to: responsesRequest(
+                rawBody: rawBody,
+                targetModel: targetModel,
+                provider: provider,
+                apiKey: authorization.secretValue,
+                timeoutInterval: timeoutInterval
+            ),
+            provider: provider
         ), proxy: proxy)
     }
 
@@ -794,6 +998,33 @@ public struct ProviderClient: Sendable {
         )
     }
 
+    public func sendNative(
+        rawBody: Data,
+        targetModel: String,
+        provider: ProviderConfig,
+        authorization: UpstreamAuthorization,
+        operation: NativeAPIOperation,
+        taskID: String? = nil,
+        contentType: String = "application/json",
+        timeoutInterval: TimeInterval = 600,
+        proxy: ProviderProxyEndpoint? = nil
+    ) async throws -> ProviderResponse {
+        let request = try nativeRequest(
+            rawBody: rawBody,
+            targetModel: targetModel,
+            provider: provider,
+            apiKey: authorization.secretValue,
+            operation: operation,
+            taskID: taskID,
+            contentType: contentType,
+            timeoutInterval: timeoutInterval
+        )
+        return try await execute(
+            try applying(authorization, to: request, provider: provider),
+            proxy: proxy
+        )
+    }
+
     public func nativePassthroughRequest(
         rawBody: Data,
         method: String,
@@ -946,6 +1177,78 @@ public struct ProviderClient: Sendable {
             ),
             proxy: proxy
         )
+    }
+
+    public func sendNativePassthrough(
+        rawBody: Data,
+        method: String,
+        upstreamPath: String,
+        orderedQueryItems: [NativeQueryItem],
+        provider: ProviderConfig,
+        authorization: UpstreamAuthorization,
+        headers: [String: String] = [:],
+        timeoutInterval: TimeInterval = 600,
+        proxy: ProviderProxyEndpoint? = nil
+    ) async throws -> ProviderResponse {
+        let request = try nativePassthroughRequest(
+            rawBody: rawBody,
+            method: method,
+            upstreamPath: upstreamPath,
+            orderedQueryItems: orderedQueryItems,
+            provider: provider,
+            apiKey: authorization.secretValue,
+            headers: headers,
+            timeoutInterval: timeoutInterval
+        )
+        return try await execute(
+            try applying(authorization, to: request, provider: provider),
+            proxy: proxy
+        )
+    }
+
+    private func applying(
+        _ authorization: UpstreamAuthorization,
+        to original: URLRequest,
+        provider: ProviderConfig
+    ) throws -> URLRequest {
+        guard case .bearerAccessToken(let accessToken, let billingProjectID) = authorization else {
+            return original
+        }
+        guard provider.kind == .gemini else {
+            throw ProviderClientError.invalidRequest(
+                "当前供应商没有经过审核的开发者 OAuth Bearer 授权策略"
+            )
+        }
+        guard let upstreamURL = original.url,
+              GeminiDeveloperOAuthTransportPolicy.isAllowedAPIURL(upstreamURL)
+        else {
+            throw ProviderClientError.invalidRequest(
+                "Gemini 开发者 OAuth Bearer 仅允许发送到官方 HTTPS API 端点"
+            )
+        }
+        let token = accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else { throw ProviderClientError.missingAPIKey }
+        var request = original
+        request.setValue(nil, forHTTPHeaderField: "x-goog-api-key")
+        request.setValue(nil, forHTTPHeaderField: "x-api-key")
+        request.setValue(nil, forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let projectID = billingProjectID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let projectCharacters = CharacterSet(
+            charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-"
+        )
+        guard !projectID.isEmpty,
+              projectID.count <= 128,
+              projectID.unicodeScalars.allSatisfy(projectCharacters.contains),
+              projectID.first?.isLetter == true,
+              (projectID.last?.isLetter == true || projectID.last?.isNumber == true)
+        else {
+            throw ProviderClientError.invalidRequest(
+                "Gemini 开发者 OAuth 需要自有 Google Cloud 计费项目 ID"
+            )
+        }
+        request.setValue(projectID, forHTTPHeaderField: "x-goog-user-project")
+        return request
     }
 
     private func validateCredential(
@@ -1107,9 +1410,39 @@ public struct ProviderClient: Sendable {
         } else {
             session
         }
-        let (data, response) = try await transport.data(for: request)
+        let redirectGuard = oauthRedirectGuard(for: request)
+        let (bytes, response) = try await responseBytes(
+            for: request,
+            transport: transport,
+            redirectGuard: redirectGuard
+        )
         guard let http = response as? HTTPURLResponse else {
             throw ProviderClientError.nonHTTPResponse
+        }
+        if redirectGuard?.didRejectRedirect == true {
+            throw ProviderClientError.invalidRequest(
+                "Gemini 开发者 OAuth 拒绝跨来源重定向"
+            )
+        }
+        if http.expectedContentLength > Int64(maximumNonStreamingResponseBytes) {
+            throw ProviderClientError.responseTooLarge(
+                limit: maximumNonStreamingResponseBytes
+            )
+        }
+        var data = Data()
+        if http.expectedContentLength > 0 {
+            data.reserveCapacity(min(
+                Int(http.expectedContentLength),
+                maximumNonStreamingResponseBytes
+            ))
+        }
+        for try await byte in bytes {
+            guard data.count < maximumNonStreamingResponseBytes else {
+                throw ProviderClientError.responseTooLarge(
+                    limit: maximumNonStreamingResponseBytes
+                )
+            }
+            data.append(byte)
         }
         var headers: [String: String] = [:]
         for (key, value) in http.allHeaderFields {
@@ -1127,9 +1460,19 @@ public struct ProviderClient: Sendable {
         } else {
             session
         }
-        let (bytes, response) = try await transport.bytes(for: request)
+        let redirectGuard = oauthRedirectGuard(for: request)
+        let (bytes, response) = try await responseBytes(
+            for: request,
+            transport: transport,
+            redirectGuard: redirectGuard
+        )
         guard let http = response as? HTTPURLResponse else {
             throw ProviderClientError.nonHTTPResponse
+        }
+        if redirectGuard?.didRejectRedirect == true {
+            throw ProviderClientError.invalidRequest(
+                "Gemini 开发者 OAuth 拒绝跨来源重定向"
+            )
         }
         var headers: [String: String] = [:]
         for (key, value) in http.allHeaderFields {
@@ -1161,6 +1504,45 @@ public struct ProviderClient: Sendable {
             headers: headers,
             body: stream
         )
+    }
+
+    /// A generic TLS handshake failure (`NSURLErrorDomain -1200`) occurs before
+    /// an HTTP request can be accepted by the provider, so one bounded retry on
+    /// the exact same direct/proxy transport is allowed. Foundation's explicit
+    /// trust, certificate-date, hostname and client-certificate errors never
+    /// enter this branch. The model-probe layer deliberately does not retry
+    /// `-1200` again, keeping the complete operation to at most two handshakes.
+    private func responseBytes(
+        for request: URLRequest,
+        transport: URLSession,
+        redirectGuard: GeminiDeveloperOAuthRedirectGuard?
+    ) async throws -> (URLSession.AsyncBytes, URLResponse) {
+        for attempt in 0...1 {
+            do {
+                if let redirectGuard {
+                    return try await transport.bytes(for: request, delegate: redirectGuard)
+                }
+                return try await transport.bytes(for: request)
+            } catch let error as URLError {
+                guard error.code == .secureConnectionFailed, attempt == 0 else {
+                    throw error
+                }
+                try await Task.sleep(for: .milliseconds(150))
+            }
+        }
+        preconditionFailure("TLS retry loop must either return or throw")
+    }
+
+    private func oauthRedirectGuard(
+        for request: URLRequest
+    ) -> GeminiDeveloperOAuthRedirectGuard? {
+        guard let authorization = request.value(forHTTPHeaderField: "Authorization"),
+              authorization.hasPrefix("Bearer "),
+              request.value(forHTTPHeaderField: "x-goog-user-project") != nil,
+              let url = request.url,
+              GeminiDeveloperOAuthTransportPolicy.isAllowedAPIURL(url)
+        else { return nil }
+        return GeminiDeveloperOAuthRedirectGuard(originalURL: url)
     }
 
     private func normalizeAnthropic(_ response: ProviderResponse) throws -> ProviderResponse {

@@ -7,17 +7,68 @@ final class ResponseCacheTests: XCTestCase {
         let primary = ResponseCacheKey.digest(
             method: "POST",
             path: "/v1/chat/completions",
+            canonicalQuery: "",
+            semanticHeaders: [:],
             body: body,
             accessScope: "primary"
         )
         let workspace = ResponseCacheKey.digest(
             method: "POST",
             path: "/v1/chat/completions",
+            canonicalQuery: "",
+            semanticHeaders: [:],
             body: body,
             accessScope: "workspace-key"
         )
         XCTAssertNotEqual(primary, workspace)
         XCTAssertFalse(primary.contains("smart"))
+    }
+
+    func testCacheKeySeparatesCanonicalQueryAndSemanticHeaders() {
+        let body = Data(#"{"model":"smart","messages":[]}"#.utf8)
+        let baseline = ResponseCacheKey.digest(
+            method: "POST",
+            path: "/v1/chat/completions",
+            canonicalQuery: "mode=fast",
+            semanticHeaders: ["content-type": "application/json"],
+            body: body,
+            accessScope: "primary"
+        )
+        let differentQuery = ResponseCacheKey.digest(
+            method: "POST",
+            path: "/v1/chat/completions",
+            canonicalQuery: "mode=precise",
+            semanticHeaders: ["content-type": "application/json"],
+            body: body,
+            accessScope: "primary"
+        )
+        let differentHeader = ResponseCacheKey.digest(
+            method: "POST",
+            path: "/v1/chat/completions",
+            canonicalQuery: "mode=fast",
+            semanticHeaders: ["content-type": "application/json; charset=utf-8"],
+            body: body,
+            accessScope: "primary"
+        )
+
+        XCTAssertNotEqual(baseline, differentQuery)
+        XCTAssertNotEqual(baseline, differentHeader)
+    }
+
+    func testCachedResponseHeaderPolicyAllowsOnlyRepresentationMetadata() {
+        let sanitized = ResponseCacheHeaderPolicy.sanitized([
+            "Content-Type": "application/json",
+            "Content-Language": "zh-CN",
+            "Set-Cookie": "session=secret",
+            "WWW-Authenticate": "Bearer realm=upstream",
+            "Retry-After": "30",
+            "X-Request-ID": "upstream-trace",
+            "Connection": "keep-alive"
+        ])
+
+        XCTAssertEqual(sanitized["Content-Type"], "application/json")
+        XCTAssertEqual(sanitized["Content-Language"], "zh-CN")
+        XCTAssertEqual(sanitized.count, 2)
     }
 
     func testCacheTransitionsFreshStaleAndExpired() async {

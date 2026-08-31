@@ -662,6 +662,53 @@ final class OperationalCoreTests: XCTestCase {
         XCTAssertEqual(settings.unitsPerUSD, ["USD": 1])
     }
 
+    func testCurrencyRateRefreshPolicyCatchesUpAndBoundsFailureRetries() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let stale = CurrencyDisplaySettings(
+            currency: .cny,
+            unitsPerUSD: ["USD": 1, "CNY": 7],
+            rateUpdatedAt: now.addingTimeInterval(-CurrencyRateRefreshPolicy.successInterval - 1),
+            rateLastAttemptAt: now.addingTimeInterval(-CurrencyRateRefreshPolicy.failureRetryInterval - 1)
+        )
+        XCTAssertTrue(CurrencyRateRefreshPolicy.shouldRefresh(stale, at: now))
+        XCTAssertEqual(
+            CurrencyRateRefreshPolicy.nextRefreshDate(for: stale, at: now),
+            now
+        )
+
+        let recentFailure = CurrencyDisplaySettings(
+            currency: .cny,
+            unitsPerUSD: ["USD": 1, "CNY": 7],
+            rateUpdatedAt: now.addingTimeInterval(-CurrencyRateRefreshPolicy.successInterval - 1),
+            rateLastAttemptAt: now.addingTimeInterval(-60),
+            rateLastError: "offline"
+        )
+        XCTAssertFalse(CurrencyRateRefreshPolicy.shouldRefresh(recentFailure, at: now))
+        XCTAssertEqual(
+            CurrencyRateRefreshPolicy.nextRefreshDate(for: recentFailure, at: now),
+            recentFailure.rateLastAttemptAt?.addingTimeInterval(
+                CurrencyRateRefreshPolicy.failureRetryInterval
+            )
+        )
+    }
+
+    func testCurrencyRateRefreshPolicyKeepsFreshRatesAndRefreshesForReferencePricingInUSD() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let freshUSD = CurrencyDisplaySettings(
+            currency: .usd,
+            unitsPerUSD: ["USD": 1, "CNY": 7],
+            rateUpdatedAt: now.addingTimeInterval(-600)
+        )
+        XCTAssertFalse(CurrencyRateRefreshPolicy.shouldRefresh(freshUSD, at: now))
+
+        let neverFetchedUSD = CurrencyDisplaySettings(currency: .usd)
+        XCTAssertTrue(CurrencyRateRefreshPolicy.shouldRefresh(neverFetchedUSD, at: now))
+        XCTAssertEqual(
+            CurrencyRateRefreshPolicy.nextRefreshDate(for: neverFetchedUSD, at: now),
+            now
+        )
+    }
+
     func testRateLimitConcurrencyCircuitAndCooldown() async {
         let controller = ResilienceController()
         let providerID = UUID()

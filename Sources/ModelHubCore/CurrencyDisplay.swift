@@ -29,19 +29,32 @@ public enum DisplayCurrency: String, Codable, CaseIterable, Identifiable, Sendab
 public struct CurrencyDisplaySettings: Codable, Hashable, Sendable {
     public var currency: DisplayCurrency
     public var unitsPerUSD: [String: Double]
+    /// Time when ModelHub last received and parsed a valid rate document.
     public var rateUpdatedAt: Date?
     public var rateSource: String?
+    /// Effective business date published by the reference-rate provider.
+    public var rateEffectiveDate: String?
+    /// Time of the last bounded network attempt, successful or otherwise.
+    public var rateLastAttemptAt: Date?
+    /// Sanitized local diagnostic for the latest failed attempt.
+    public var rateLastError: String?
 
     public init(
         currency: DisplayCurrency = .usd,
         unitsPerUSD: [String: Double] = [DisplayCurrency.usd.rawValue: 1],
         rateUpdatedAt: Date? = nil,
-        rateSource: String? = nil
+        rateSource: String? = nil,
+        rateEffectiveDate: String? = nil,
+        rateLastAttemptAt: Date? = nil,
+        rateLastError: String? = nil
     ) {
         self.currency = currency
         self.unitsPerUSD = unitsPerUSD
         self.rateUpdatedAt = rateUpdatedAt
         self.rateSource = rateSource
+        self.rateEffectiveDate = rateEffectiveDate
+        self.rateLastAttemptAt = rateLastAttemptAt
+        self.rateLastError = rateLastError
     }
 
     public var sanitized: CurrencyDisplaySettings {
@@ -55,7 +68,10 @@ public struct CurrencyDisplaySettings: Codable, Hashable, Sendable {
             currency: selected,
             unitsPerUSD: rates,
             rateUpdatedAt: rateUpdatedAt,
-            rateSource: rateSource.map { String($0.prefix(200)) }
+            rateSource: rateSource.map { String($0.prefix(200)) },
+            rateEffectiveDate: rateEffectiveDate.map { String($0.prefix(32)) },
+            rateLastAttemptAt: rateLastAttemptAt,
+            rateLastError: rateLastError.map { String($0.prefix(300)) }
         )
     }
 
@@ -76,6 +92,53 @@ public struct CurrencyDisplaySettings: Codable, Hashable, Sendable {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         return formatter.string(from: NSNumber(value: convertedFromUSD(value)))
             ?? "\(currency.rawValue) \(convertedFromUSD(value))"
+    }
+}
+
+/// Keeps the ECB reference-rate cache current without creating a tight retry
+/// loop. ECB publishes once per working day, so a six-hour success interval
+/// catches the next publication while the 30-minute failure interval limits
+/// repeated traffic during outages.
+public enum CurrencyRateRefreshPolicy {
+    public static let successInterval: TimeInterval = 6 * 60 * 60
+    public static let failureRetryInterval: TimeInterval = 30 * 60
+
+    public static func shouldRefresh(
+        _ settings: CurrencyDisplaySettings,
+        at date: Date = .now
+    ) -> Bool {
+        nextRefreshDate(for: settings, at: date) <= date
+    }
+
+    public static func nextRefreshDate(
+        for rawSettings: CurrencyDisplaySettings,
+        at date: Date = .now
+    ) -> Date {
+        let settings = rawSettings.sanitized
+        let nextSuccess = settings.rateUpdatedAt?.addingTimeInterval(successInterval) ?? date
+        guard let lastAttempt = settings.rateLastAttemptAt else {
+            return max(date, nextSuccess)
+        }
+
+        let attemptFailedAfterLastSuccess: Bool
+        if let updatedAt = settings.rateUpdatedAt {
+            attemptFailedAfterLastSuccess = settings.rateLastError != nil
+                && lastAttempt >= updatedAt
+        } else {
+            attemptFailedAfterLastSuccess = settings.rateLastError != nil
+        }
+        let nextAttempt = attemptFailedAfterLastSuccess
+            ? lastAttempt.addingTimeInterval(failureRetryInterval)
+            : nextSuccess
+        return max(date, nextAttempt)
+    }
+
+    public static func isStale(
+        _ settings: CurrencyDisplaySettings,
+        at date: Date = .now
+    ) -> Bool {
+        guard let updatedAt = settings.rateUpdatedAt else { return true }
+        return date.timeIntervalSince(updatedAt) >= successInterval
     }
 }
 

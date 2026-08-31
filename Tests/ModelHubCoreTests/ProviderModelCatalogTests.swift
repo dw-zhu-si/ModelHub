@@ -560,6 +560,83 @@ final class ProviderModelCatalogTests: XCTestCase {
         )
     }
 
+    func testGlobalPricingRefreshSummaryDoesNotReportZeroUpdatesAsSuccess() {
+        let summary = ProviderModelPriceRefreshSummary(
+            totalProviders: 8,
+            catalogsChecked: 0,
+            catalogsFetched: 0,
+            catalogsWithoutPrices: 0,
+            modelsUpdated: 0,
+            unavailablePriceSources: 7,
+            missingCredentials: 1,
+            failures: 0
+        )
+
+        XCTAssertFalse(summary.didUpdatePrices)
+        XCTAssertEqual(
+            summary.message(trigger: "手动"),
+            "手动：未写入任何价格。8 个已启用供应商中：7 个模型目录不提供带明确币种和单位的机器可读价格，1 个缺少可用凭证，0 个目录已响应但没有明确价格，0 个请求失败。未修改现有费用；可在供应商编辑页导入其官方价格 CSV。"
+        )
+    }
+
+    func testGlobalPricingRefreshSummaryReportsCatalogsWithoutMachineReadablePrices() {
+        let summary = ProviderModelPriceRefreshSummary(
+            totalProviders: 3,
+            catalogsChecked: 2,
+            catalogsFetched: 2,
+            catalogsWithoutPrices: 1,
+            modelsUpdated: 12,
+            unavailablePriceSources: 1,
+            missingCredentials: 0,
+            failures: 0
+        )
+
+        XCTAssertTrue(summary.didUpdatePrices)
+        XCTAssertEqual(
+            summary.message(trigger: "自动"),
+            "自动：检查 2 个价格目录，成功读取 2 个，更新 12 个模型价格；1 个目录未返回明确价格，1 个供应商无机器可读价格源，0 个缺少凭证，0 个失败。"
+        )
+    }
+
+    func testGlobalPricingRefreshSummarySeparatesReferenceFallbackFromSettlementPrice() {
+        let summary = ProviderModelPriceRefreshSummary(
+            totalProviders: 8,
+            catalogsChecked: 1,
+            catalogsFetched: 1,
+            catalogsWithoutPrices: 1,
+            modelsUpdated: 0,
+            unavailablePriceSources: 7,
+            missingCredentials: 0,
+            failures: 0,
+            referenceModelsApplied: 128,
+            modelsStillUnpriced: 348
+        )
+
+        XCTAssertTrue(summary.didUpdatePrices)
+        XCTAssertTrue(summary.message(trigger: "手动").contains("内置上游公开参考价"))
+        XCTAssertTrue(summary.message(trigger: "手动").contains("不代表当前渠道结算价"))
+        XCTAssertTrue(summary.message(trigger: "手动").contains("CSV 和手动价始终优先"))
+    }
+
+    func testGlobalPricingRefreshSummaryReportsExistingReferenceCoverage() {
+        let summary = ProviderModelPriceRefreshSummary(
+            totalProviders: 2,
+            catalogsChecked: 0,
+            catalogsFetched: 0,
+            catalogsWithoutPrices: 0,
+            modelsUpdated: 0,
+            unavailablePriceSources: 2,
+            missingCredentials: 0,
+            failures: 0,
+            referenceModelsAvailable: 9,
+            modelsStillUnpriced: 3
+        )
+
+        let message = summary.message(trigger: "手动")
+        XCTAssertTrue(message.contains("当前 9 个模型已有"))
+        XCTAssertTrue(message.contains("仍有 3 个模型无可靠参考价"))
+    }
+
     func testParsesOnlyDocumentedMachineReadableTokenPrices() throws {
         let openRouter = Data(
             #"{"data":[{"id":"model-a","pricing":{"prompt":"0.00000125","completion":"0.000005"}}]}"#.utf8

@@ -1,0 +1,261 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ModelHub.Windows.Views.MainWindow"
+        Width="1280" Height="820" MinWidth="1024" MinHeight="720"
+        Title="模型枢纽 ModelHub · Windows">
+  <Grid RowDefinitions="Auto,*,Auto" Background="#F5F8FC">
+    <Border Background="#0B74DE" Padding="28,22">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Spacing="5">
+          <TextBlock Text="MODELHUB" Foreground="#B7DBFF" FontWeight="SemiBold" FontSize="12" />
+          <TextBlock Text="模型枢纽 ModelHub" Foreground="White" FontSize="28" FontWeight="Bold" />
+          <TextBlock Text="Windows · 本地 AI 路由、协议适配与健康观测" Foreground="#D6EAFF" />
+        </StackPanel>
+        <Border Grid.Column="1" Background="#155FAE" CornerRadius="14" Padding="16,8" VerticalAlignment="Center">
+          <TextBlock Text="{Binding IsGatewayRunning, StringFormat=本地 API 运行：{0}}" Foreground="White" />
+        </Border>
+      </Grid>
+    </Border>
+
+    <ScrollViewer Grid.Row="1" Margin="24">
+      <Grid ColumnDefinitions="1.15*,1*" ColumnSpacing="20">
+        <StackPanel Spacing="18">
+          <Border Background="White" CornerRadius="14" Padding="20">
+            <StackPanel Spacing="12">
+              <TextBlock Text="本地 OpenAI 兼容 API" FontSize="20" FontWeight="Bold" />
+              <TextBlock Text="只监听 127.0.0.1；令牌只保存到 Windows Credential Manager。" Foreground="#59636E" TextWrapping="Wrap" />
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <TextBox Text="{Binding GatewayToken}" PlaceholderText="输入或生成至少 24 位 API 令牌" PasswordChar="●" />
+                <Button Content="生成" Command="{Binding GenerateGatewayTokenCommand}" />
+                <Button Content="保存令牌" Command="{Binding SaveGatewayTokenCommand}" />
+              </Grid>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="启动 API" Command="{Binding StartGatewayCommand}" />
+                <Button Content="停止 API" Command="{Binding StopGatewayCommand}" />
+                <TextBlock Text="GET /health · GET /v1/models · POST /v1/chat/completions" VerticalAlignment="Center" Foreground="#59636E" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Background="White" CornerRadius="14" Padding="20">
+            <StackPanel Spacing="12">
+              <TextBlock Text="模型供应商与目录" FontSize="20" FontWeight="Bold" />
+              <TextBlock Text="文字聊天支持 OpenAI 兼容、Anthropic 与 Gemini 协议的请求、响应和 SSE 流式边界适配；密钥不写入配置。" Foreground="#59636E" TextWrapping="Wrap" />
+              <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="8">
+                <TextBox Text="{Binding ProviderName}" PlaceholderText="供应商名称" />
+                <TextBox Grid.Column="1" Text="{Binding ProviderBaseUrl}" PlaceholderText="HTTPS API 基址" />
+                <TextBox Grid.Row="1" Text="{Binding ProviderModelId}" PlaceholderText="模型 ID" />
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ProviderSecret}" PlaceholderText="API Key（不写入配置）" PasswordChar="●" />
+                <TextBlock Grid.Row="2" Text="文字协议" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding ProviderProtocols}" SelectedItem="{Binding SelectedProviderProtocol}" />
+                <Button Grid.Row="3" Grid.ColumnSpan="2" HorizontalAlignment="Left" Content="保存供应商与模型" Command="{Binding AddProviderCommand}" />
+              </Grid>
+              <ItemsControl ItemsSource="{Binding Providers}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border BorderBrush="#DCE4EF" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,4">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel>
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                          <TextBlock Text="{Binding Endpoint}" Foreground="#59636E" FontSize="12" />
+                          <TextBlock Text="{Binding Models}" Foreground="#1673D1" FontSize="12" />
+                          <TextBlock Text="{Binding Protocol}" Foreground="#59636E" FontSize="12" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Text="{Binding State}" Foreground="#138A45" VerticalAlignment="Center" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+
+          <Border Background="White" CornerRadius="14" Padding="20">
+            <StackPanel Spacing="12">
+              <TextBlock Text="健康状态与可观测性" FontSize="20" FontWeight="Bold" />
+              <TextBlock Text="健康记录区分已验证、降级和失败；不会因为一次瞬态网络错误把模型永久判定为不可用。" Foreground="#59636E" TextWrapping="Wrap" />
+              <ItemsControl ItemsSource="{Binding Health}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border BorderBrush="#DCE4EF" BorderThickness="0,0,0,1" Padding="4,9">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel><TextBlock Text="{Binding Subject}" FontWeight="SemiBold" /><TextBlock Text="{Binding Detail}" Foreground="#59636E" FontSize="12" /></StackPanel>
+                        <TextBlock Grid.Column="1" Text="{Binding State}" Foreground="#1673D1" VerticalAlignment="Center" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <StackPanel Grid.Column="1" Spacing="18">
+          <Border Background="White" CornerRadius="14" Padding="20">
+            <StackPanel Spacing="12">
+              <TextBlock Text="Google 开发者 OAuth" FontSize="20" FontWeight="Bold" />
+              <TextBlock Text="仅用于你自己 Google Cloud 项目中创建的 Desktop client。必须显式生成 PKCE 授权地址并显式完成回调；令牌永不显示、不回填。" Foreground="#59636E" TextWrapping="Wrap" />
+              <TextBox Text="{Binding OAuthCloudProject}" PlaceholderText="你自己的 Cloud project ID" />
+              <TextBox Text="{Binding OAuthClientId}" PlaceholderText="Desktop client ID（….apps.googleusercontent.com）" />
+              <TextBox Text="{Binding OAuthRedirectUri}" PlaceholderText="http://127.0.0.1:18443/oauth/callback" />
+              <Button HorizontalAlignment="Left" Content="显式授权（打开系统浏览器）" Command="{Binding PrepareDeveloperOAuthCommand}" />
+              <TextBox Text="{Binding OAuthAuthorizationUrl}" IsReadOnly="True" TextWrapping="Wrap" PlaceholderText="授权期间显示官方 HTTPS 地址（不含令牌）" />
+              <TextBlock Text="不提供消费者订阅账号自动化、账号抓取或配额轮换。" Foreground="#8A4A00" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+
+          <Border Background="White" CornerRadius="14" Padding="20">
+            <StackPanel Spacing="12">
+              <TextBlock Text="代理订阅节点" FontSize="20" FontWeight="Bold" />
+              <TextBlock Text="以卡片选择节点；订阅节点会先通过 Mihomo Controller 切换真实节点，再经该节点访问 HTTPS 204 探针。切换失败不会保存选择或回退直连。" Foreground="#59636E" TextWrapping="Wrap" />
+              <TextBlock Text="显式启动已有 Mihomo" FontWeight="SemiBold" />
+              <TextBox Text="{Binding MihomoExecutablePath}" PlaceholderText="mihomo.exe 已存在绝对路径（不搜索 PATH）" />
+              <TextBox Text="{Binding MihomoConfigurationPath}" PlaceholderText="Clash/Mihomo 配置已存在绝对路径" />
+              <NumericUpDown Value="{Binding MihomoControllerPort}" Minimum="1024" Maximum="65535" PlaceholderText="已明确分配的回环 controller 端口" />
+              <TextBox Text="{Binding MihomoProxyGroup}" PlaceholderText="Mihomo select 类型组名（需与配置完全一致）" />
+              <Button HorizontalAlignment="Left" Content="保存非秘密运行设置" Command="{Binding SaveMihomoSettingsCommand}" />
+              <TextBlock Text="Controller 凭证只存入 Windows Credential Manager；不回填、不导出、不记录日志。" Foreground="#59636E" TextWrapping="Wrap" />
+              <TextBox Text="{Binding MihomoControllerSecret}" PasswordChar="●" PlaceholderText="Controller secret（可选，保存成功后清空）" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="保存 Controller 凭证" Command="{Binding SaveMihomoControllerSecretCommand}" />
+                <Button Content="删除 Controller 凭证" Command="{Binding DeleteMihomoControllerSecretCommand}" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="启动 Mihomo" Command="{Binding StartMihomoCommand}" />
+                <Button Content="停止 Mihomo" Command="{Binding StopMihomoCommand}" />
+              </StackPanel>
+              <TextBlock Text="{Binding MihomoStatus}" TextWrapping="Wrap" Foreground="#8A4A00" />
+              <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="8">
+                <TextBox Text="{Binding NodeName}" PlaceholderText="节点名称，例如 台湾 01" />
+                <TextBox Grid.Column="1" Text="{Binding NodeProxyUrl}" PlaceholderText="http://127.0.0.1:7890" />
+                <Button Grid.Row="1" Grid.ColumnSpan="2" HorizontalAlignment="Left" Content="添加节点" Command="{Binding AddNodeCommand}" />
+              </Grid>
+              <TextBlock Text="Clash/Mihomo HTTPS 订阅" FontWeight="SemiBold" />
+              <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="8">
+                <TextBox Text="{Binding SubscriptionName}" PlaceholderText="订阅名称" />
+                <TextBox Grid.Column="1" Text="{Binding SubscriptionUrl}" PlaceholderText="HTTPS 订阅 URL（不回显）" PasswordChar="●" />
+                <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="8">
+                  <Button Content="导入订阅" Command="{Binding ImportSubscriptionCommand}" />
+                  <Button Content="刷新" Command="{Binding RefreshSubscriptionCommand}" />
+                  <Button Content="取消" Command="{Binding CancelSubscriptionOperationCommand}" />
+                </StackPanel>
+              </Grid>
+              <TextBox Text="{Binding NodeSearch}" PlaceholderText="搜索节点卡片" />
+              <ItemsControl ItemsSource="{Binding Nodes}">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Width="235" BorderBrush="#9AC7FA" BorderThickness="1" Background="#F8FBFF" CornerRadius="10" Padding="12" Margin="4">
+                      <StackPanel Spacing="6">
+                        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Name}" FontWeight="Bold" /><TextBlock Grid.Column="1" Text="{Binding State}" Foreground="#1673D1" FontSize="12" /></Grid>
+                        <TextBlock Text="{Binding Endpoint}" Foreground="#59636E" FontSize="11" TextTrimming="CharacterEllipsis" />
+                        <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="选择" Command="{Binding DataContext.SelectNodeCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding Id}" /><Button Content="测速" Command="{Binding DataContext.TestNodeCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding Id}" /></StackPanel>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Text="精确模型→节点分配" FontWeight="SemiBold" />
+              <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="8">
+                <ComboBox ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedAssignmentModel}" DisplayMemberBinding="{Binding Label}" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding Nodes}" SelectedItem="{Binding SelectedAssignmentNode}" DisplayMemberBinding="{Binding Name}" />
+                <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="8">
+                  <Button Content="分配" Command="{Binding AssignModelToNodeCommand}" />
+                  <Button Content="清除" Command="{Binding ClearModelNodeAssignmentCommand}" />
+                </StackPanel>
+                <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding AssignmentStatus}" TextWrapping="Wrap" Foreground="#8A4A00" />
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <Border Background="White" CornerRadius="14" Padding="20">
+            <StackPanel Spacing="10">
+              <TextBlock Text="模型路由" FontSize="20" FontWeight="Bold" />
+              <TextBlock Text="alias 支持 PriorityFailover、RoundRobin 和 Weighted；禁用路由不会透传。" Foreground="#59636E" TextWrapping="Wrap" />
+              <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="8">
+                <TextBox Text="{Binding RouteAlias}" PlaceholderText="路由 alias" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding RouteStrategies}" SelectedItem="{Binding SelectedRouteStrategy}" />
+                <ComboBox Grid.Row="1" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedRouteModel}" DisplayMemberBinding="{Binding Label}" />
+                <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                  <NumericUpDown Value="{Binding RoutePriority}" Minimum="0" Maximum="999" Width="85" />
+                  <NumericUpDown Value="{Binding RouteWeight}" Minimum="1" Maximum="10000" Width="95" />
+                </StackPanel>
+                <StackPanel Grid.Row="2" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="8">
+                  <Button Content="添加目标" Command="{Binding AddRouteTargetCommand}" />
+                  <Button Content="保存路由" Command="{Binding SaveRouteCommand}" />
+                  <CheckBox Content="启用" IsChecked="{Binding RouteEnabled}" />
+                </StackPanel>
+              </Grid>
+              <ItemsControl ItemsSource="{Binding Routes}">
+                <ItemsControl.ItemTemplate><DataTemplate>
+                  <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4">
+                    <TextBlock Text="{Binding Summary}" />
+                    <Button Grid.Column="1" Content="启停" Command="{Binding DataContext.ToggleRouteCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding Alias}" />
+                    <Button Grid.Column="2" Content="删除" Command="{Binding DataContext.DeleteRouteCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding Alias}" />
+                  </Grid>
+                </DataTemplate></ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+
+          <Border Background="White" CornerRadius="14" Padding="20">
+            <StackPanel Spacing="10">
+              <TextBlock Text="端点协议与任务" FontSize="20" FontWeight="Bold" />
+              <TextBlock Text="11 类端点可显式配置；异步任务必须返回 task_id 并轮询，空 2xx 不算成功。" Foreground="#59636E" TextWrapping="Wrap" />
+              <ComboBox ItemsSource="{Binding Providers}" SelectedItem="{Binding SelectedEndpointProvider}" DisplayMemberBinding="{Binding Name}" />
+              <ComboBox ItemsSource="{Binding EndpointKinds}" SelectedItem="{Binding SelectedEndpointKind}" />
+              <TextBox Text="{Binding EndpointPath}" PlaceholderText="/v1/..." />
+              <CheckBox Content="异步 task_id 任务" IsChecked="{Binding EndpointIsAsynchronous}" />
+              <TextBox Text="{Binding EndpointPollPath}" PlaceholderText="/v1/tasks/{task_id}" />
+              <ComboBox ItemsSource="{Binding TaskIdentifierFields}" SelectedItem="{Binding SelectedTaskIdentifierField}" />
+              <Button HorizontalAlignment="Left" Content="保存端点" Command="{Binding SaveEndpointPathCommand}" />
+            </StackPanel>
+          </Border>
+
+          <Border Background="White" CornerRadius="14" Padding="20">
+            <StackPanel Spacing="10">
+              <TextBlock Text="批量健康验证与配置交换" FontSize="20" FontWeight="Bold" />
+              <TextBlock Text="{Binding HealthVerificationStatus}" TextWrapping="Wrap" Foreground="#8A4A00" />
+              <ProgressBar Minimum="0" Maximum="100" Value="{Binding HealthProgress}" Height="8" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="开始真实验证" Command="{Binding StartBatchHealthVerificationCommand}" />
+                <Button Content="取消" Command="{Binding CancelBatchHealthVerificationCommand}" />
+              </StackPanel>
+              <TextBox Text="{Binding ConfigurationFilePath}" PlaceholderText="非秘密配置文件路径" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="导出非秘密配置" Command="{Binding ExportConfigurationCommand}" />
+                <Button Content="导入并验证" Command="{Binding ImportConfigurationCommand}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Background="White" CornerRadius="14" Padding="20">
+            <StackPanel Spacing="10">
+              <TextBlock Text="Windows 显式更新" FontSize="20" FontWeight="Bold" />
+              <TextBlock Text="仅访问项目官方 GitHub HTTPS 更新源。不会在启动时静默替换，不允许降级；检查、下载、重启安装是三个独立的用户动作。" Foreground="#59636E" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding UpdateStatus}" TextWrapping="Wrap" />
+              <ProgressBar Minimum="0" Maximum="100" Value="{Binding UpdateProgress}" Height="8" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="1. 检查更新" Command="{Binding CheckForUpdateCommand}" IsEnabled="{Binding CanCheckUpdates}" />
+                <Button Content="2. 下载更新" Command="{Binding DownloadUpdateCommand}" IsEnabled="{Binding CanDownloadUpdate}" />
+                <Button Content="3. 重启并更新" Command="{Binding RestartToUpdateCommand}" IsEnabled="{Binding CanRestartToUpdate}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Background="#E7F2FF" BorderBrush="#B8D9FF" BorderThickness="1" CornerRadius="14" Padding="20">
+            <StackPanel Spacing="8">
+              <TextBlock Text="Windows 发布门禁" FontSize="20" FontWeight="Bold" />
+              <TextBlock Text="x64 和 ARM64 分别发布、分别验收。公开安装包需要受信任 Authenticode 签名，且必须在真实 Windows 执行安装、启动、覆盖升级、卸载、Defender 与 SmartScreen 检查。" TextWrapping="Wrap" />
+              <TextBlock Text="当前状态：构建管线可准备；未取得受信任证书且 Windows VM 许可到期，不能声称已完成公开 Windows 发布。" Foreground="#8A4A00" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Grid>
+    </ScrollViewer>
+
+    <Border Grid.Row="2" Background="White" BorderBrush="#DCE4EF" BorderThickness="0,1,0,0" Padding="22,13">
+      <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
+    </Border>
+  </Grid>
+</Window>

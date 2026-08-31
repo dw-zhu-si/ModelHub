@@ -365,6 +365,189 @@ final class ProviderClientTests: XCTestCase {
         XCTAssertEqual(object["stream"] as? Bool, true)
     }
 
+    func testGeminiDeveloperOAuthUsesBearerInsteadOfAPIKeyHeader() throws {
+        let provider = ProviderConfig(
+            name: "Gemini Developer API",
+            kind: .gemini,
+            baseURL: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        )
+        let request = try ProviderClient().chatRequest(
+            rawBody: Data(#"{"model":"alias","messages":[{"role":"user","content":"hi"}]}"#.utf8),
+            targetModel: "gemini-2.5-flash",
+            provider: provider,
+            authorization: .bearerAccessToken(
+                "oauth-access-token",
+                billingProjectID: "modelhub-oauth-project"
+            )
+        )
+
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "Authorization"),
+            "Bearer oauth-access-token"
+        )
+        XCTAssertNil(request.value(forHTTPHeaderField: "x-goog-api-key"))
+        XCTAssertNil(request.value(forHTTPHeaderField: "x-api-key"))
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "x-goog-user-project"),
+            "modelhub-oauth-project"
+        )
+    }
+
+    func testGeminiDeveloperOAuthRejectsInvalidBillingProjectHeader() {
+        let provider = ProviderConfig(
+            name: "Gemini Developer API",
+            kind: .gemini,
+            baseURL: "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        )
+        XCTAssertThrowsError(try ProviderClient().chatRequest(
+            rawBody: Data(#"{"model":"alias","messages":[{"role":"user","content":"hi"}]}"#.utf8),
+            targetModel: "gemini-2.5-flash",
+            provider: provider,
+            authorization: .bearerAccessToken(
+                "oauth-access-token",
+                billingProjectID: "bad\r\nheader"
+            )
+        )) { error in
+            guard case .invalidRequest = error as? ProviderClientError else {
+                return XCTFail("expected invalid request, got \(error)")
+            }
+        }
+    }
+
+    func testGeminiDeveloperOAuthRejectsNonOfficialOrInsecureAPIOrigins() {
+        let rejectedBaseURLs = [
+            "http://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+            "https://example.com/v1beta/models/{model}:generateContent",
+            "https://generativelanguage.googleapis.com.evil.example/v1beta/models/{model}:generateContent",
+            "https://generativelanguage.googleapis.com:8443/v1beta/models/{model}:generateContent"
+        ]
+
+        for baseURL in rejectedBaseURLs {
+            let provider = ProviderConfig(
+                name: "Gemini Developer API",
+                kind: .gemini,
+                baseURL: baseURL
+            )
+
+            XCTAssertThrowsError(try ProviderClient().chatRequest(
+                rawBody: Data(#"{"messages":[{"role":"user","content":"hi"}]}"#.utf8),
+                targetModel: "gemini-2.5-flash",
+                provider: provider,
+                authorization: .bearerAccessToken(
+                    "oauth-access-token",
+                    billingProjectID: "modelhub-oauth-project"
+                )
+            ), "OAuth bearer must not be attached to \(baseURL)") { error in
+                guard case .invalidRequest = error as? ProviderClientError else {
+                    return XCTFail("expected invalid request, got \(error)")
+                }
+            }
+        }
+    }
+
+    func testGeminiDeveloperOAuthRedirectPolicyAllowsOnlySameOfficialOrigin() throws {
+        let original = try XCTUnwrap(URL(
+            string: "https://generativelanguage.googleapis.com/v1beta/models/gemini:generateContent"
+        ))
+
+        XCTAssertTrue(GeminiDeveloperOAuthTransportPolicy.allowsRedirect(
+            from: original,
+            to: try XCTUnwrap(URL(
+                string: "https://generativelanguage.googleapis.com/v1beta/models/gemini:generateContent?alt=json"
+            ))
+        ))
+        XCTAssertFalse(GeminiDeveloperOAuthTransportPolicy.allowsRedirect(
+            from: original,
+            to: try XCTUnwrap(URL(string: "https://example.com/steal"))
+        ))
+        XCTAssertFalse(GeminiDeveloperOAuthTransportPolicy.allowsRedirect(
+            from: original,
+            to: try XCTUnwrap(URL(
+                string: "http://generativelanguage.googleapis.com/steal"
+            ))
+        ))
+    }
+
+    func testNonStreamingProviderResponseStopsAtConfiguredTransportByteLimit() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [BoundedProviderResponseURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = ProviderClient(session: session, maximumNonStreamingResponseBytes: 16)
+        let provider = ProviderConfig(
+            name: "Compatible",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.com/v1/chat/completions"
+        )
+
+        do {
+            _ = try await client.send(
+                rawBody: Data(#"{"messages":[{"role":"user","content":"hi"}]}"#.utf8),
+                targetModel: "test-model",
+                provider: provider,
+                apiKey: "test-key"
+            )
+            XCTFail("oversized response must fail before returning a fully buffered body")
+        } catch {
+            guard case .responseTooLarge(let limit) = error as? ProviderClientError else {
+                return XCTFail("expected responseTooLarge, got \(error)")
+            }
+            XCTAssertEqual(limit, 16)
+        }
+
+        XCTAssertLessThanOrEqual(
+            BoundedProviderResponseURLProtocol.deliveredBytes,
+            24,
+            "transport should be cancelled near the limit, not after buffering the complete body"
+        )
+    }
+
+    func testSecureConnectionFailureIsRetriedOnceOnTheSameTransport() async throws {
+        TLSRecoveryURLProtocol.reset()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TLSRecoveryURLProtocol.self]
+        let client = ProviderClient(session: URLSession(configuration: configuration))
+        let provider = ProviderConfig(
+            name: "Compatible",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.com/v1/chat/completions"
+        )
+
+        let response = try await client.send(
+            rawBody: Data(#"{"messages":[{"role":"user","content":"hi"}]}"#.utf8),
+            targetModel: "test-model",
+            provider: provider,
+            apiKey: "test-key"
+        )
+
+        XCTAssertEqual(response.statusCode, 200)
+        XCTAssertEqual(TLSRecoveryURLProtocol.attempts, 2)
+    }
+
+    func testCertificateTrustFailureIsTerminalAndNeverRetried() async throws {
+        TerminalTLSURLProtocol.reset()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TerminalTLSURLProtocol.self]
+        let client = ProviderClient(session: URLSession(configuration: configuration))
+        let provider = ProviderConfig(
+            name: "Compatible",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.com/v1/chat/completions"
+        )
+
+        do {
+            _ = try await client.send(
+                rawBody: Data(#"{"messages":[{"role":"user","content":"hi"}]}"#.utf8),
+                targetModel: "test-model",
+                provider: provider,
+                apiKey: "test-key"
+            )
+            XCTFail("certificate trust failure must remain terminal")
+        } catch let error as URLError {
+            XCTAssertEqual(error.code, .serverCertificateUntrusted)
+        }
+        XCTAssertEqual(TerminalTLSURLProtocol.attempts, 1)
+    }
+
     func testAnthropicChatRequestConvertsToolsImagesAndToolResults() throws {
         let provider = ProviderConfig(
             name: "Claude",
@@ -1176,6 +1359,108 @@ final class ProviderClientTests: XCTestCase {
             "https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding"
         )
     }
+}
+
+private final class BoundedProviderResponseURLProtocol: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var _deliveredBytes = 0
+    private let stateLock = NSLock()
+    private var stopped = false
+
+    static var deliveredBytes: Int {
+        lock.withLock { _deliveredBytes }
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        Self.lock.withLock { Self._deliveredBytes = 0 }
+        guard let url = request.url,
+              let response = HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "application/json"]
+              )
+        else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            for _ in 0..<8 {
+                Thread.sleep(forTimeInterval: 0.002)
+                guard !self.stateLock.withLock({ self.stopped }) else { return }
+                let chunk = Data(repeating: 0x61, count: 8)
+                Self.lock.withLock { Self._deliveredBytes += chunk.count }
+                self.client?.urlProtocol(self, didLoad: chunk)
+            }
+            guard !self.stateLock.withLock({ self.stopped }) else { return }
+            self.client?.urlProtocolDidFinishLoading(self)
+        }
+    }
+
+    override func stopLoading() {
+        stateLock.withLock { stopped = true }
+    }
+}
+
+private final class TLSRecoveryURLProtocol: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var _attempts = 0
+
+    static var attempts: Int { lock.withLock { _attempts } }
+    static func reset() { lock.withLock { _attempts = 0 } }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let attempt = Self.lock.withLock {
+            Self._attempts += 1
+            return Self._attempts
+        }
+        if attempt == 1 {
+            client?.urlProtocol(self, didFailWithError: URLError(.secureConnectionFailed))
+            return
+        }
+        guard let url = request.url,
+              let response = HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "application/json"]
+              )
+        else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(#"{"id":"ok"}"#.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
+private final class TerminalTLSURLProtocol: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var _attempts = 0
+
+    static var attempts: Int { lock.withLock { _attempts } }
+    static func reset() { lock.withLock { _attempts = 0 } }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        Self.lock.withLock { Self._attempts += 1 }
+        client?.urlProtocol(self, didFailWithError: URLError(.serverCertificateUntrusted))
+    }
+
+    override func stopLoading() {}
 }
 
 private extension ProviderClientTests {

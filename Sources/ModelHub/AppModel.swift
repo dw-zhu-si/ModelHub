@@ -25,6 +25,58 @@ private enum GatewayRequestScope {
     @TaskLocal static var requestID: String?
 }
 
+/// Serializes ledger appends behind a hard queue bound. This prevents a burst
+/// of gateway traffic from creating an unbounded number of fire-and-forget
+/// tasks while keeping filesystem locking off the UI actor.
+private actor UsageLedgerWriteBuffer {
+    typealias FailureHandler = @Sendable () async -> Void
+
+    private let store: UsageLedgerStore
+    private let capacity: Int
+    private let onFailure: FailureHandler
+    private var records: [UsageLedgerRecord] = []
+    private var head = 0
+    private var isDraining = false
+
+    init(
+        store: UsageLedgerStore,
+        capacity: Int = 1_024,
+        onFailure: @escaping FailureHandler
+    ) {
+        self.store = store
+        self.capacity = max(1, min(capacity, 16_384))
+        self.onFailure = onFailure
+    }
+
+    func enqueue(_ record: UsageLedgerRecord) -> Bool {
+        guard records.count - head < capacity else { return false }
+        records.append(record)
+        guard !isDraining else { return true }
+        isDraining = true
+        Task { await drain() }
+        return true
+    }
+
+    private func drain() async {
+        while head < records.count {
+            let record = records[head]
+            head += 1
+            do {
+                try await store.append(record)
+            } catch {
+                await onFailure()
+            }
+            if head >= 256, head * 2 >= records.count {
+                records.removeFirst(head)
+                head = 0
+            }
+        }
+        records.removeAll(keepingCapacity: true)
+        head = 0
+        isDraining = false
+    }
+}
+
 /// Immutable request-scoped state copied from the UI model in one bounded hop.
 /// Expensive JSON/context work, routing, Keychain lookup and upstream I/O then
 /// execute on the cooperative executor instead of serializing SwiftUI updates.
@@ -36,16 +88,39 @@ private struct GatewayDataPlaneSnapshot: Sendable {
     let routingRule: DefaultRoutingRule
     let accessPolicy: RoutingAccessPolicy
     let resilienceSettings: ResilienceSettings
+    let targetQueueSettings: TargetQueueSettings
     let contextOptimization: ContextOptimizationSettings
     let budget: BudgetSettings
     let router: RoutingEngine
     let providerClient: ProviderClient
     let resilience: ResilienceController
+    let stickySessionRouter: StickySessionRouter
+    let credentialPools: [CredentialPoolConfiguration]
+    let credentialPoolSelector: CredentialPoolSelector
+    let oauthTokenManager: OAuthTokenManager
 }
 
 private struct GatewayUsageSample: Sendable {
     let tokens: UsageTokenCounts
     let estimatedCostUSD: Double?
+}
+
+private struct GatewayUpstreamCredential: Sendable {
+    let credentialID: UUID?
+    let authorization: UpstreamAuthorization
+    let oauthEntry: CredentialPoolEntry?
+}
+
+private struct GatewayCredentialResponse<Response: Sendable>: Sendable {
+    let response: Response
+    let credentialID: UUID?
+}
+
+private struct ProviderCredentialObservability: Sendable {
+    var bound = 0
+    var missing = 0
+    var requiresReauthorization = 0
+    var temporarilyUnreadable = 0
 }
 
 private struct GatewayCacheRequestMetadata: Sendable {
@@ -132,14 +207,27 @@ enum SidebarItem: String, CaseIterable, Identifiable {
 
 enum ConsoleOperation: String, CaseIterable, Identifiable {
     case chat
+    case imageGeneration
     case musicGeneration
+    case videoGeneration
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .chat: String(localized: "文字聊天", locale: AppLanguage.saved.locale)
+        case .imageGeneration: String(localized: "图像生成", locale: AppLanguage.saved.locale)
         case .musicGeneration: String(localized: "音乐生成", locale: AppLanguage.saved.locale)
+        case .videoGeneration: String(localized: "视频生成", locale: AppLanguage.saved.locale)
+        }
+    }
+
+    var mediaBatchKind: MediaBatchKind? {
+        switch self {
+        case .chat: nil
+        case .imageGeneration: .image
+        case .musicGeneration: .music
+        case .videoGeneration: .video
         }
     }
 }
@@ -344,12 +432,48 @@ final class AppModel: ObservableObject {
     @Published private(set) var proxyNodeLatencyResults: [String: ProxyNodeLatencyResult] = [:]
     @Published private(set) var applicationUpdateState: ApplicationUpdateState = .idle
     @Published private(set) var automaticApplicationUpdateChecksEnabled = false
+    @Published private(set) var localHealthAlertsEnabled = false
+    @Published private(set) var mediaBatchJobs: [MediaBatchJob] = []
+    @Published private(set) var mediaBatchPaused = false
 
     private let router = RoutingEngine()
     private let providerClient = ProviderClient()
     private let resilience = ResilienceController()
     private let scopedRateLimiter = ScopedRateLimiter()
     private let responseCache = BoundedResponseCache()
+    private let idempotencyStore = BoundedIdempotencyStore()
+    private let stickySessionRouter = StickySessionRouter()
+    private let credentialPoolSelector = CredentialPoolSelector()
+    private let oauthTokenManager = OAuthTokenManager()
+    private let oauthAuthorizationFlow = OAuthAuthorizationFlow()
+    private let credentialSecretDeleter: any CredentialSecretDeleting
+    private let passiveHealthMonitor = PassiveHealthMonitor()
+    private lazy var localHealthNotificationSink = UNLocalHealthNotificationSink()
+    private lazy var localHealthAlertDelivery = LocalHealthAlertDeliveryBridge(
+        sink: localHealthNotificationSink
+    )
+    private lazy var passiveHealthEventBuffer = Self.makePassiveHealthEventBuffer(
+        monitor: passiveHealthMonitor,
+        delivery: localHealthAlertDelivery
+    )
+    private lazy var localGatewayMediaBatchExecutor = LocalGatewayMediaBatchExecutor {
+        [weak self] in
+        await MainActor.run { self?.gatewayToken ?? "" }
+    }
+    private lazy var mediaBatchQueue = MediaBatchQueue(
+        executor: localGatewayMediaBatchExecutor,
+        maximumJobs: 100,
+        maximumConcurrentJobs: 2,
+        maximumPollAttempts: 6,
+        pollIntervalMilliseconds: 2_000
+    )
+    private let usageLedger = UsageLedgerStore(
+        directoryURL: AppModel.usageLedgerDirectoryURL
+    )
+    private lazy var usageLedgerWriter = UsageLedgerWriteBuffer(store: usageLedger) {
+        [weak self] in
+        await self?.reportUsageLedgerFailureOnce()
+    }
     private let configurationPersistence = ConfigurationPersistence()
     private let currencyRateClient = CurrencyRateClient()
     private let modelProxyRuntime = ModelProxyRuntimeManager()
@@ -363,13 +487,17 @@ final class AppModel: ObservableObject {
     private var pendingWidgetPublicationTask: Task<Void, Never>?
     private var widgetSnapshotWriteInFlight = false
     private var pricingUpdateTask: Task<Void, Never>?
+    private var currencyRateUpdateTask: Task<Void, Never>?
     private var proxySubscriptionUpdateTask: Task<Void, Never>?
     private var proxyNodeLatencyTask: Task<Void, Never>?
     private var applicationUpdateTask: Task<Void, Never>?
     private var applicationUpdateScheduleTask: Task<Void, Never>?
+    private var mediaBatchMonitorTask: Task<Void, Never>?
+    private var hasReportedUsageLedgerFailure = false
     private var healthIndex = ModelHealthIndex(records: [])
     private var proxyEndpointIndex = ModelProxyEndpointIndex(settings: .init())
     private var proxyFailoverIndex = ModelProxyFailoverIndex(settings: .init())
+    private var providerCredentialObservability = ProviderCredentialObservability()
     private var proxyFailoverStates: [String: ModelProxyFailoverState] = [:]
     private var exhaustedProxyFailoverKeys: Set<String> = []
     private var availableModelListCache: HTTPResponse?
@@ -383,8 +511,33 @@ final class AppModel: ObservableObject {
     private static let launchAtLoginStatusKey = "launchAtLoginStatus"
     private static let launchAtLoginErrorKey = "launchAtLoginLastError"
     private static let automaticApplicationUpdateChecksKey = "automaticApplicationUpdateChecks"
+    private static let localHealthAlertsEnabledKey = "localHealthAlertsEnabled"
     private static let lastApplicationUpdateCheckKey = "lastApplicationUpdateCheck"
     private static let verificationTimestampFormatter = ISO8601DateFormatter()
+    private static let usageLedgerDirectoryURL =
+        (try? UsageLedgerStore.defaultApplicationSupportDirectory())
+        ?? FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first?.appending(path: "ModelHub/UsageLedger", directoryHint: .isDirectory)
+        ?? URL(filePath: "/dev/null/ModelHub-UsageLedger", directoryHint: .isDirectory)
+
+    init(
+        credentialSecretDeleter: any CredentialSecretDeleting =
+            KeychainCredentialSecretDeleter()
+    ) {
+        self.credentialSecretDeleter = credentialSecretDeleter
+    }
+
+    nonisolated private static func makePassiveHealthEventBuffer(
+        monitor: PassiveHealthMonitor,
+        delivery: LocalHealthAlertDeliveryBridge
+    ) -> BoundedPassiveHealthEventBuffer {
+        BoundedPassiveHealthEventBuffer(capacity: 1_024) { event in
+            guard let alert = await monitor.record(event) else { return }
+            _ = try? await delivery.deliver(alert)
+        }
+    }
 
     private struct ReviewDemoBackup {
         let configuration: AppConfiguration
@@ -586,21 +739,39 @@ final class AppModel: ObservableObject {
 
     var currencyRateStatusText: String {
         let settings = currencyDisplaySettings
-        guard settings.currency != .usd,
-              let rate = settings.unitsPerUSD[settings.currency.rawValue]
-        else {
-            return String(localized: "费用以美元（USD）显示。", locale: AppLanguage.saved.locale)
+        let prefix: String
+        if settings.currency == .usd {
+            prefix = String(localized: "费用以美元（USD）显示", locale: AppLanguage.saved.locale)
+        } else if let rate = settings.unitsPerUSD[settings.currency.rawValue] {
+            prefix = String(
+                format: "1 USD = %.4f %@",
+                locale: Locale(identifier: "en_US_POSIX"),
+                rate,
+                settings.currency.rawValue
+            )
+        } else {
+            prefix = String(localized: "尚无可用参考汇率", locale: AppLanguage.saved.locale)
         }
         let source = settings.rateSource ?? String(
             localized: "已保存汇率",
             locale: AppLanguage.saved.locale
         )
-        return L10n.format(
-            "1 USD = %.4f %@ · %@",
-            rate,
-            settings.currency.rawValue,
-            source
-        )
+        let effective = settings.rateEffectiveDate.map { " · 生效日 \($0)" } ?? ""
+        let fetched = settings.rateUpdatedAt.map {
+            " · 获取于 \($0.formatted(date: .abbreviated, time: .shortened))"
+        } ?? ""
+        if let error = settings.rateLastError,
+           let attempted = settings.rateLastAttemptAt
+        {
+            let failedAfterLastSuccess = settings.rateUpdatedAt.map { attempted >= $0 } ?? true
+            if failedAfterLastSuccess {
+                return "\(prefix) · \(source)\(effective)\(fetched) · 最近刷新失败，继续使用上次结果：\(error)"
+            }
+        }
+        if CurrencyRateRefreshPolicy.isStale(settings) {
+            return "\(prefix) · \(source)\(effective)\(fetched) · 已过刷新周期，正在自动补更新"
+        }
+        return "\(prefix) · \(source)\(effective)\(fetched) · 每 6 小时检查更新"
     }
 
     func formattedDisplayCost(_ valueUSD: Double, fractionDigits: Int = 4) -> String {
@@ -614,50 +785,84 @@ final class AppModel: ObservableObject {
     func selectDisplayCurrency(_ currency: DisplayCurrency) {
         guard !isReviewDemoMode, !isRefreshingCurrencyRates else { return }
         var settings = currencyDisplaySettings
-        let hasFreshRate = settings.unitsPerUSD[currency.rawValue] != nil
-            && settings.rateUpdatedAt.map { Date().timeIntervalSince($0) < 86_400 } == true
-        if currency == .usd || hasFreshRate {
+        let hasRate = currency == .usd || settings.unitsPerUSD[currency.rawValue] != nil
+        if hasRate {
             settings.currency = currency
             configuration.operational.currencyDisplay = settings.sanitized
             persistConfiguration()
-            return
         }
-        Task { await refreshCurrencyRates(selecting: currency) }
+        if currency != .usd && !hasRate {
+            Task { await refreshCurrencyRates(selecting: currency) }
+        } else if CurrencyRateRefreshPolicy.shouldRefresh(settings) {
+            Task { await refreshCurrencyRates(selecting: currency) }
+        }
+        scheduleCurrencyRateUpdates()
     }
 
     func refreshCurrencyRatesNow() {
         guard !isReviewDemoMode, !isRefreshingCurrencyRates else { return }
-        Task { await refreshCurrencyRates(selecting: currencyDisplaySettings.currency) }
+        Task {
+            await refreshCurrencyRates(selecting: currencyDisplaySettings.currency)
+            scheduleCurrencyRateUpdates()
+        }
     }
 
     private func refreshCurrencyRates(selecting currency: DisplayCurrency) async {
         guard !isRefreshingCurrencyRates else { return }
-        if currency == .usd {
-            var settings = currencyDisplaySettings
-            settings.currency = .usd
-            configuration.operational.currencyDisplay = settings.sanitized
-            persistConfiguration()
-            return
-        }
         isRefreshingCurrencyRates = true
         defer { isRefreshingCurrencyRates = false }
+        let attemptedAt = Date()
         do {
             let snapshot = try await currencyRateClient.fetch()
-            guard snapshot.unitsPerUSD[currency.rawValue] != nil else {
+            guard currency == .usd || snapshot.unitsPerUSD[currency.rawValue] != nil else {
                 throw CurrencyRateError.invalidDocument
             }
             var settings = currencyDisplaySettings
             settings.unitsPerUSD.merge(snapshot.unitsPerUSD) { _, new in new }
             settings.currency = currency
-            settings.rateUpdatedAt = .now
-            settings.rateSource = snapshot.effectiveDate.map {
-                "\(snapshot.source) · \($0)"
-            } ?? snapshot.source
+            settings.rateUpdatedAt = attemptedAt
+            settings.rateSource = snapshot.source
+            settings.rateEffectiveDate = snapshot.effectiveDate
+            settings.rateLastAttemptAt = attemptedAt
+            settings.rateLastError = nil
+            configuration.operational.currencyDisplay = settings.sanitized
+            _ = applyReferenceModelPrices(updatedAt: attemptedAt)
+            persistConfiguration()
+            notice = String(localized: "官方参考汇率已更新，内置人民币参考价已按新汇率重算。", locale: AppLanguage.saved.locale)
+        } catch {
+            var settings = currencyDisplaySettings
+            settings.rateLastAttemptAt = attemptedAt
+            settings.rateLastError = String(error.localizedDescription.prefix(300))
             configuration.operational.currencyDisplay = settings.sanitized
             persistConfiguration()
-            notice = String(localized: "展示币种与官方参考汇率已更新。", locale: AppLanguage.saved.locale)
-        } catch {
             notice = L10n.format("官方参考汇率更新失败：%@", error.localizedDescription)
+        }
+    }
+
+    private func scheduleCurrencyRateUpdates() {
+        currencyRateUpdateTask?.cancel()
+        currencyRateUpdateTask = nil
+        guard !isReviewDemoMode else { return }
+
+        currencyRateUpdateTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                let now = Date()
+                let next = CurrencyRateRefreshPolicy.nextRefreshDate(
+                    for: self.currencyDisplaySettings,
+                    at: now
+                )
+                let delay = next.timeIntervalSince(now)
+                do {
+                    try await Task.sleep(for: .seconds(delay <= 0 ? 2 : delay))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                await self.refreshCurrencyRates(
+                    selecting: self.currencyDisplaySettings.currency
+                )
+            }
         }
     }
 
@@ -960,10 +1165,32 @@ final class AppModel: ObservableObject {
         guard !didBootstrap else { return }
         didBootstrap = true
         loadConfiguration()
+        migrateLegacyProviderAPIKeysIfNeeded()
+        let referencePricesApplied = applyReferenceModelPrices(updatedAt: .now)
+        if referencePricesApplied > 0 {
+            var pricing = (configuration.operational.pricingUpdate ?? .init()).sanitized
+            pricing.lastMessage = "启动补全：已为 \(referencePricesApplied) 个缺价模型写入 ModelHub 内置上游公开参考价；它们不代表当前渠道结算价，供应商目录、CSV 和手动价始终优先。"
+            configuration.operational.pricingUpdate = pricing
+            persistConfiguration()
+        }
+        let ledgerRetentionMonths = configuration.operational.analyticsRetentionMonths
+        let ledgerDirectory = Self.usageLedgerDirectoryURL
+        Task {
+            let retentionStore = UsageLedgerStore(
+                directoryURL: ledgerDirectory,
+                limits: .init(retentionMonths: ledgerRetentionMonths)
+            )
+            _ = try? await retentionStore.prune()
+        }
         schedulePricingUpdates()
+        scheduleCurrencyRateUpdates()
         automaticApplicationUpdateChecksEnabled = UserDefaults.standard.bool(
             forKey: Self.automaticApplicationUpdateChecksKey
         )
+        localHealthAlertsEnabled = UserDefaults.standard.bool(
+            forKey: Self.localHealthAlertsEnabledKey
+        )
+        Task { await localHealthAlertDelivery.setEnabled(localHealthAlertsEnabled) }
         scheduleAutomaticApplicationUpdateCheck()
         Task { await initializeSecretsWithoutInteraction() }
         Task { await initializeAgentSecretWithoutInteraction() }
@@ -997,10 +1224,110 @@ final class AppModel: ObservableObject {
         publishWidgetSnapshot()
     }
 
+    /// Upgrades the pre-1.10 raw Keychain representation in place. The legacy
+    /// value is already scoped by the provider UUID in its Keychain account;
+    /// migration adds the provider kind and secure endpoint-origin binding.
+    /// Damaged/newer JSON envelopes and insecure endpoints remain fail-closed.
+    private func migrateLegacyProviderAPIKeysIfNeeded() {
+        var migrated: [String] = []
+        var requiresReauthorization: [String] = []
+
+        for provider in providers {
+            let account = KeychainStore.providerAccount(provider.id)
+            guard case .value(let stored) = KeychainStore.readWithoutInteraction(
+                account: account
+            ) else { continue }
+
+            if (try? KeychainStore.apiKey(
+                fromBoundProviderValue: stored,
+                provider: provider
+            )) != nil {
+                continue
+            }
+
+            do {
+                let bound = try KeychainStore.migratedBoundProviderAPIKeyValue(
+                    fromLegacyValue: stored,
+                    provider: provider
+                )
+                try KeychainStore.save(bound, account: account)
+                migrated.append(provider.name)
+            } catch {
+                requiresReauthorization.append(provider.name)
+            }
+        }
+
+        if !migrated.isEmpty {
+            notice = "已将 \(migrated.count) 个旧版供应商密钥原位升级为端点绑定格式；密钥内容未上传、未写入配置文件。"
+        }
+        if !requiresReauthorization.isEmpty {
+            let names = requiresReauthorization.prefix(3).joined(separator: "、")
+            let suffix = requiresReauthorization.count > 3 ? "等" : ""
+            notice = [
+                notice,
+                "\(requiresReauthorization.count) 个凭证无法安全自动迁移（\(names)\(suffix)），仍保持失败关闭，请在供应商编辑页重新授权。"
+            ].compactMap { $0 }.joined(separator: " ")
+        }
+        refreshProviderCredentialObservability()
+    }
+
+    private func refreshProviderCredentialObservability() {
+        var result = ProviderCredentialObservability()
+        for provider in providers where provider.enabled && provider.kind.needsAPIKey {
+            switch KeychainStore.readWithoutInteraction(
+                account: KeychainStore.providerAccount(provider.id)
+            ) {
+            case .value(let stored):
+                if (try? KeychainStore.apiKey(
+                    fromBoundProviderValue: stored,
+                    provider: provider
+                )) != nil {
+                    result.bound += 1
+                } else {
+                    result.requiresReauthorization += 1
+                }
+            case .notFound:
+                result.missing += 1
+            case .interactionRequired, .failure:
+                result.temporarilyUnreadable += 1
+            }
+        }
+        providerCredentialObservability = result
+    }
+
     func setAutomaticApplicationUpdateChecksEnabled(_ enabled: Bool) {
         automaticApplicationUpdateChecksEnabled = enabled
         UserDefaults.standard.set(enabled, forKey: Self.automaticApplicationUpdateChecksKey)
         scheduleAutomaticApplicationUpdateCheck()
+    }
+
+    func setLocalHealthAlertsEnabled(_ enabled: Bool) {
+        guard enabled else {
+            localHealthAlertsEnabled = false
+            UserDefaults.standard.set(false, forKey: Self.localHealthAlertsEnabledKey)
+            Task { await localHealthAlertDelivery.setEnabled(false) }
+            return
+        }
+        Task {
+            let authorization = await localHealthNotificationSink.authorizationStatus()
+            let allowed: Bool
+            switch authorization {
+            case .allowed:
+                allowed = true
+            case .notDetermined:
+                allowed = await localHealthNotificationSink.requestAuthorization()
+            case .denied:
+                allowed = false
+            }
+            await MainActor.run {
+                self.localHealthAlertsEnabled = allowed
+                UserDefaults.standard.set(allowed, forKey: Self.localHealthAlertsEnabledKey)
+                if !allowed {
+                    self.notice = "本地健康提醒未启用：请先在系统设置中允许 ModelHub 通知。"
+                }
+            }
+            await localHealthAlertDelivery.setEnabled(allowed)
+        }
     }
 
     func checkForApplicationUpdate(userInitiated: Bool = true) {
@@ -1218,16 +1545,6 @@ final class AppModel: ObservableObject {
         }
         let replacementKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         var providerToSave = provider
-        let credentialToValidate = replacementKey.isEmpty
-            ? providerAPIKeyWithoutInteraction(provider)
-            : replacementKey
-        if let message = ProviderCredentialPolicy.validationMessage(
-            for: provider.kind,
-            apiKey: credentialToValidate
-        ) {
-            notice = mhLocalized(message)
-            return false
-        }
         if let index = providers.firstIndex(where: { $0.id == provider.id }) {
             if providers[index].kind != provider.kind,
                provider.kind.isBailian,
@@ -1254,9 +1571,38 @@ final class AppModel: ObservableObject {
                 notice = mhLocalized(message)
                 return false
             }
+            if replacementKey.isEmpty,
+               KeychainStore.existsWithoutInteraction(
+                   account: KeychainStore.providerAccount(provider.id)
+               ),
+               providerAPIKeyWithoutInteraction(providerToSave).isEmpty
+            {
+                notice = String(
+                    localized: "供应商类型或上游地址已变更，或现有 API Key 来自旧版未绑定存储。为防止凭证被发送到错误端点，请重新输入 API Key。",
+                    locale: AppLanguage.saved.locale
+                )
+                return false
+            }
+            let credentialToValidate = replacementKey.isEmpty
+                ? providerAPIKeyWithoutInteraction(providerToSave)
+                : replacementKey
+            if let message = ProviderCredentialPolicy.validationMessage(
+                for: provider.kind,
+                apiKey: credentialToValidate
+            ) {
+                notice = mhLocalized(message)
+                return false
+            }
             providers[index] = providerToSave
         } else {
             if let message = BailianEndpointPolicy.validationMessage(for: providerToSave) {
+                notice = mhLocalized(message)
+                return false
+            }
+            if let message = ProviderCredentialPolicy.validationMessage(
+                for: provider.kind,
+                apiKey: replacementKey
+            ) {
                 notice = mhLocalized(message)
                 return false
             }
@@ -1264,8 +1610,12 @@ final class AppModel: ObservableObject {
         }
         if !replacementKey.isEmpty {
             do {
-                try KeychainStore.save(
+                let boundValue = try KeychainStore.boundProviderAPIKeyValue(
                     replacementKey,
+                    provider: providerToSave
+                )
+                try KeychainStore.save(
+                    boundValue,
                     account: KeychainStore.providerAccount(provider.id)
                 )
                 notice = L10n.format("“%@”的 API Key 已安全更新；既有隔离记录保持不变。", provider.name)
@@ -1285,28 +1635,50 @@ final class AppModel: ObservableObject {
             providers: providers
         )
         rebuildHealthIndex()
+        refreshProviderCredentialObservability()
         persistConfiguration()
         return true
     }
 
     func apiKey(for provider: ProviderConfig) -> String {
         guard !isReviewDemoMode else { return "" }
-        return KeychainStore.read(account: KeychainStore.providerAccount(provider.id)) ?? ""
+        guard let value = KeychainStore.read(
+            account: KeychainStore.providerAccount(provider.id)
+        ) else { return "" }
+        return (try? KeychainStore.apiKey(
+            fromBoundProviderValue: value,
+            provider: provider
+        )) ?? ""
     }
 
     private func providerAPIKeyWithoutInteraction(_ provider: ProviderConfig) -> String {
         switch KeychainStore.readWithoutInteraction(
             account: KeychainStore.providerAccount(provider.id)
         ) {
-        case .value(let stored): stored
+        case .value(let stored):
+            (try? KeychainStore.apiKey(
+                fromBoundProviderValue: stored,
+                provider: provider
+            )) ?? ""
         case .notFound, .interactionRequired, .failure: ""
         }
     }
 
     private func dataPlaneAPIKey(for provider: ProviderConfig) throws -> String {
-        try DataPlaneCredentialAccessPolicy.apiKey(from: KeychainStore.readWithoutInteraction(
+        let stored = try DataPlaneCredentialAccessPolicy.apiKey(from: KeychainStore.readWithoutInteraction(
             account: KeychainStore.providerAccount(provider.id)
         ))
+        guard !stored.isEmpty else { return "" }
+        do {
+            return try KeychainStore.apiKey(
+                fromBoundProviderValue: stored,
+                provider: provider
+            )
+        } catch {
+            throw ProviderClientError.credentialMismatch(
+                "API Key 与供应商类型或上游地址绑定不一致；请重新授权"
+            )
+        }
     }
 
     func providerCredentialValidationMessage(
@@ -1354,6 +1726,11 @@ final class AppModel: ObservableObject {
         let key = replacement.isEmpty
             ? providerAPIKeyWithoutInteraction(provider)
             : replacement
+        if !key.isEmpty,
+           ProviderEndpointSecurity.credentialBindingIdentifier(for: provider) == nil
+        {
+            throw ProviderModelCatalogError.invalidEndpoint
+        }
         return try await providerClient.fetchModelCatalog(
             provider: provider,
             apiKey: key.isEmpty ? nil : key
@@ -1389,7 +1766,7 @@ final class AppModel: ObservableObject {
             return
         }
 
-        let apiKey = providerAPIKeyWithoutInteraction(snapshot)
+        let apiKey = providerAPIKeyWithoutInteraction(catalogProvider)
         guard !snapshot.kind.needsAPIKey || !apiKey.isEmpty else {
             notice = String(
                 localized: "缺少 API Key，未向供应商发起请求",
@@ -1444,12 +1821,31 @@ final class AppModel: ObservableObject {
     }
 
     func hasAPIKey(for provider: ProviderConfig) -> Bool {
-        KeychainStore.existsWithoutInteraction(account: KeychainStore.providerAccount(provider.id))
+        !providerAPIKeyWithoutInteraction(provider).isEmpty
     }
 
-    func deleteAPIKey(for provider: ProviderConfig) {
-        KeychainStore.delete(account: KeychainStore.providerAccount(provider.id))
-        let providerModelNames = Set(provider.models.map {
+    @discardableResult
+    func deleteAPIKey(for provider: ProviderConfig) async -> Bool {
+        await deleteAPIKeyAndWait(for: provider)
+    }
+
+    @discardableResult
+    func deleteAPIKeyAndWait(for provider: ProviderConfig) async -> Bool {
+        do {
+            try await credentialSecretDeleter.delete(
+                account: KeychainStore.providerAccount(provider.id)
+            )
+        } catch {
+            notice = L10n.format(
+                "无法从 macOS 钥匙串删除“%@”的 API Key；供应商与模型健康状态保持不变。请检查钥匙串访问权限后重试。",
+                provider.name
+            )
+            return false
+        }
+        guard let currentProvider = providers.first(where: { $0.id == provider.id }) else {
+            return true
+        }
+        let providerModelNames = Set(currentProvider.models.map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         })
         configuration.modelHealth.removeAll {
@@ -1458,7 +1854,7 @@ final class AppModel: ObservableObject {
                     $0.model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                 )
         }
-        configuration.modelHealth.append(contentsOf: provider.models.map { model in
+        configuration.modelHealth.append(contentsOf: currentProvider.models.map { model in
                 ModelHealthRecord(
                     providerID: provider.id,
                     model: model,
@@ -1467,11 +1863,55 @@ final class AppModel: ObservableObject {
                 )
         })
         rebuildHealthIndex()
+        refreshProviderCredentialObservability()
         persistConfiguration()
-        notice = L10n.format("“%@”的 API Key 已删除，所属模型已隔离。", provider.name)
+        notice = L10n.format(
+            "“%@”的 API Key 已删除，所属模型已隔离。",
+            currentProvider.name
+        )
+        return true
     }
 
     func deleteProvider(_ provider: ProviderConfig) {
+        Task { await deleteProviderAndWait(provider) }
+    }
+
+    func deleteProviderAndWait(_ provider: ProviderConfig) async {
+        guard providers.contains(where: { $0.id == provider.id }) else { return }
+        let poolEntries = configuration.credentialPools
+            .filter { $0.providerID == provider.id }
+            .flatMap(\.entries)
+        let requiredAccounts = Set(
+            poolEntries.map { KeychainStore.credentialPoolAccount($0.id) }
+                + [KeychainStore.providerAccount(provider.id)]
+        )
+        do {
+            for account in requiredAccounts.sorted() {
+                try await credentialSecretDeleter.delete(account: account)
+            }
+        } catch {
+            notice = L10n.format(
+                "无法完整清理“%@”的钥匙串秘密；供应商、凭证池、健康记录与路由配置保持不变。部分钥匙串项目的状态可能已变化，请检查钥匙串权限后重试。",
+                provider.name
+            )
+            return
+        }
+        guard providers.contains(where: { $0.id == provider.id }) else { return }
+        let latestRequiredAccounts = Set(
+            configuration.credentialPools
+                .filter { $0.providerID == provider.id }
+                .flatMap(\.entries)
+                .map { KeychainStore.credentialPoolAccount($0.id) }
+                + [KeychainStore.providerAccount(provider.id)]
+        )
+        guard latestRequiredAccounts.isSubset(of: requiredAccounts) else {
+            notice = L10n.format(
+                "“%@”的凭证在删除期间发生变化；供应商配置保持不变，请重试。",
+                provider.name
+            )
+            return
+        }
+        configuration.credentialPools.removeAll { $0.providerID == provider.id }
         providers.removeAll { $0.id == provider.id }
         configuration.modelHealth.removeAll { $0.providerID == provider.id }
         rebuildHealthIndex()
@@ -1480,7 +1920,267 @@ final class AppModel: ObservableObject {
             updated.targets.removeAll { $0.providerID == provider.id }
             return updated
         }
-        KeychainStore.delete(account: KeychainStore.providerAccount(provider.id))
+        await credentialPoolSelector.reset(providerID: provider.id)
+        refreshProviderCredentialObservability()
+        persistConfiguration()
+        notice = L10n.format(
+            "“%@”的全部钥匙串秘密与供应商配置已删除。",
+            provider.name
+        )
+    }
+
+    func addCredentialPoolEntry(_ entry: CredentialPoolEntry) {
+        guard let provider = providers.first(where: { $0.id == entry.providerID }),
+              entry.intendedUse == .developerAPI
+        else {
+            notice = "只能把开发者凭证添加到对应供应商的凭证池。"
+            return
+        }
+        switch entry.secretKind {
+        case .apiKey:
+            break
+        case .oauthRefreshToken:
+            guard provider.kind == .gemini,
+                  CredentialCompliancePolicy.authorizationDecision(
+                      for: entry,
+                      providerKind: provider.kind
+                  ) == .allowed
+            else {
+                notice = "仅支持使用官方端点与范围的 Gemini Developer OAuth。"
+                return
+            }
+        case .workloadIdentity:
+            notice = "工作负载身份尚未提供受支持的授权适配器。"
+            return
+        }
+        let index = credentialPoolIndex(providerID: entry.providerID)
+        guard configuration.credentialPools[index].entries.count
+                < CredentialPoolConfiguration.maximumEntries
+        else {
+            notice = "每个供应商最多保存 32 个开发者凭证。"
+            return
+        }
+        guard !configuration.credentialPools
+            .lazy
+            .flatMap(\.entries)
+            .contains(where: { $0.id == entry.id })
+        else {
+            notice = "凭证标识已存在；请重新添加。"
+            return
+        }
+        configuration.credentialPools[index].entries.append(entry)
+        if configuration.credentialPools[index].mode == .manualOnly,
+           !entry.requiresReauthorization,
+           configuration.credentialPools[index].manuallySelectedCredentialID == nil
+        {
+            configuration.credentialPools[index].manuallySelectedCredentialID = entry.id
+        }
+        persistConfiguration()
+    }
+
+    func saveCredentialPoolSecret(credentialID: UUID, value: String) {
+        let secret = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !secret.isEmpty,
+              let entry = configuration.credentialPools
+                .flatMap(\.entries)
+                .first(where: { $0.id == credentialID }),
+              let provider = providers.first(where: { $0.id == entry.providerID })
+        else { return }
+        if entry.secretKind == .apiKey,
+           let message = ProviderCredentialPolicy.validationMessage(
+               for: provider.kind,
+               apiKey: secret
+           )
+        {
+            removeCredentialPoolEntryMetadata(credentialID)
+            notice = mhLocalized(message)
+            return
+        }
+        do {
+            let boundValue = try KeychainStore.boundCredentialPoolAPIKeyValue(
+                secret,
+                credentialID: credentialID,
+                provider: provider
+            )
+            try KeychainStore.save(
+                boundValue,
+                account: KeychainStore.credentialPoolAccount(credentialID)
+            )
+            if let poolIndex = configuration.credentialPools.firstIndex(where: {
+                $0.providerID == entry.providerID
+            }), let entryIndex = configuration.credentialPools[poolIndex].entries
+                .firstIndex(where: { $0.id == credentialID })
+            {
+                configuration.credentialPools[poolIndex]
+                    .entries[entryIndex].requiresReauthorization = false
+                persistConfiguration()
+            }
+            Task { await credentialPoolSelector.reset(providerID: entry.providerID) }
+            notice = "开发者凭证已安全保存到 macOS 钥匙串。"
+        } catch {
+            removeCredentialPoolEntryMetadata(credentialID)
+            notice = error.localizedDescription
+        }
+    }
+
+    func updateCredentialPoolEntry(_ entry: CredentialPoolEntry) {
+        guard let poolIndex = configuration.credentialPools.firstIndex(where: {
+            $0.providerID == entry.providerID
+        }),
+        let entryIndex = configuration.credentialPools[poolIndex].entries.firstIndex(where: {
+            $0.id == entry.id
+        }) else { return }
+        var safeEntry = entry
+        safeEntry.requiresReauthorization = configuration
+            .credentialPools[poolIndex].entries[entryIndex].requiresReauthorization
+        if safeEntry.intendedUse == .consumerSubscription {
+            safeEntry.enabled = false
+        }
+        configuration.credentialPools[poolIndex].entries[entryIndex] = safeEntry
+        Task { await credentialPoolSelector.reset(providerID: entry.providerID) }
+        persistConfiguration()
+    }
+
+    func deleteCredentialPoolEntry(_ credentialID: UUID) {
+        Task { await deleteCredentialPoolEntryAndWait(credentialID) }
+    }
+
+    func deleteCredentialPoolEntryAndWait(_ credentialID: UUID) async {
+        guard let entry = configuration.credentialPools
+            .flatMap(\.entries)
+            .first(where: { $0.id == credentialID })
+        else { return }
+        if entry.secretKind == .oauthRefreshToken {
+            await oauthAuthorizationFlow.cancel()
+        }
+        do {
+            try await credentialSecretDeleter.delete(
+                account: KeychainStore.credentialPoolAccount(credentialID)
+            )
+        } catch {
+            notice = "无法从 macOS 钥匙串删除该凭证秘密；凭证元数据已保留，请检查钥匙串访问权限后重试。"
+            return
+        }
+        guard configuration.credentialPools
+            .lazy
+            .flatMap(\.entries)
+            .contains(where: { $0.id == credentialID })
+        else { return }
+        removeCredentialPoolEntryMetadata(credentialID)
+        await credentialPoolSelector.reset(providerID: entry.providerID)
+        notice = "凭证条目及对应钥匙串秘密已删除。"
+    }
+
+    func setCredentialPoolMode(providerID: UUID, mode: CredentialPoolMode) {
+        let index = credentialPoolIndex(providerID: providerID)
+        configuration.credentialPools[index].mode = mode
+        if mode == .manualOnly,
+           configuration.credentialPools[index].manuallySelectedCredentialID == nil
+        {
+            configuration.credentialPools[index].manuallySelectedCredentialID =
+                configuration.credentialPools[index].entries.first(where: { $0.enabled })?.id
+        }
+        Task { await credentialPoolSelector.reset(providerID: providerID) }
+        persistConfiguration()
+    }
+
+    func selectCredentialPoolEntry(providerID: UUID, credentialID: UUID?) {
+        let index = credentialPoolIndex(providerID: providerID)
+        if let credentialID {
+            guard configuration.credentialPools[index].entries.contains(where: {
+                $0.id == credentialID && $0.enabled && $0.intendedUse == .developerAPI
+            }) else { return }
+        }
+        configuration.credentialPools[index].manuallySelectedCredentialID = credentialID
+        Task { await credentialPoolSelector.reset(providerID: providerID) }
+        persistConfiguration()
+    }
+
+    func beginGeminiDeveloperOAuth(providerID: UUID) {
+        guard let provider = providers.first(where: { $0.id == providerID }),
+              provider.kind == .gemini
+        else {
+            notice = "该供应商的开发者 OAuth 官方证据尚未核实。"
+            return
+        }
+        guard let poolIndex = configuration.credentialPools.firstIndex(where: {
+            $0.providerID == providerID
+        }),
+        let entryIndex = configuration.credentialPools[poolIndex].entries.lastIndex(where: {
+            $0.secretKind == .oauthRefreshToken
+                && $0.intendedUse == .developerAPI
+        }) else {
+            notice = "请先填写 Google Desktop OAuth Client ID 与 Google Cloud 项目 ID。"
+            return
+        }
+        let entry = configuration.credentialPools[poolIndex].entries[entryIndex]
+        notice = "正在打开 Google 官方授权页…"
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                try await oauthAuthorizationFlow.authorize(
+                    entry: entry,
+                    providerKind: provider.kind
+                )
+                guard let currentPoolIndex = configuration.credentialPools.firstIndex(where: {
+                    $0.providerID == providerID
+                }),
+                let currentEntryIndex = configuration.credentialPools[currentPoolIndex]
+                    .entries.firstIndex(where: { $0.id == entry.id })
+                else {
+                    try? await oauthAuthorizationFlow.revokeLocalAuthorization(
+                        for: entry.id
+                    )
+                    notice = "授权已完成，但凭证条目已被删除；授权结果未保留。"
+                    return
+                }
+                configuration.credentialPools[currentPoolIndex]
+                    .entries[currentEntryIndex].requiresReauthorization = false
+                if configuration.credentialPools[currentPoolIndex].mode == .manualOnly,
+                   configuration.credentialPools[currentPoolIndex]
+                    .manuallySelectedCredentialID == nil
+                {
+                    configuration.credentialPools[currentPoolIndex]
+                        .manuallySelectedCredentialID = entry.id
+                }
+                await credentialPoolSelector.reset(providerID: providerID)
+                persistConfiguration()
+                notice = "Gemini Developer OAuth 授权已保存到 macOS 钥匙串。"
+            } catch OAuthAuthorizationFlowError.cancelled {
+                notice = "Gemini Developer OAuth 授权已取消；未写入凭证。"
+            } catch OAuthAuthorizationFlowError.timedOut {
+                notice = "Gemini Developer OAuth 授权已超时；未写入凭证，请重试。"
+            } catch OAuthAuthorizationFlowError.loopbackListenerUnavailable {
+                notice = "Gemini Developer OAuth 无法启动本机回调：127.0.0.1:11469 已被占用或不可用。请关闭占用端口的程序后重试。"
+            } catch OAuthAuthorizationFlowError.complianceBlocked {
+                notice = "该 OAuth 授权不符合开发者 API 合规策略，已阻止。"
+            } catch OAuthAuthorizationFlowError.stateMismatch,
+                    OAuthAuthorizationFlowError.callbackMismatch {
+                notice = "OAuth 回调校验失败；请重新授权。"
+            } catch {
+                notice = "Gemini Developer OAuth 授权失败：\(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func credentialPoolIndex(providerID: UUID) -> Int {
+        if let index = configuration.credentialPools.firstIndex(where: {
+            $0.providerID == providerID
+        }) { return index }
+        configuration.credentialPools.append(
+            CredentialPoolConfiguration(providerID: providerID)
+        )
+        return configuration.credentialPools.index(before: configuration.credentialPools.endIndex)
+    }
+
+    private func removeCredentialPoolEntryMetadata(_ credentialID: UUID) {
+        for index in configuration.credentialPools.indices {
+            configuration.credentialPools[index].entries.removeAll { $0.id == credentialID }
+            if configuration.credentialPools[index].manuallySelectedCredentialID == credentialID {
+                configuration.credentialPools[index].manuallySelectedCredentialID = nil
+            }
+        }
+        configuration.credentialPools.removeAll { $0.entries.isEmpty }
         persistConfiguration()
     }
 
@@ -1531,6 +2231,7 @@ final class AppModel: ObservableObject {
 
     func persistOperationalSettings(_ settings: OperationalSettings) {
         var sanitized = settings
+        sanitized.targetQueue = (settings.targetQueue ?? .init()).sanitized
         if let responseCache = settings.responseCache {
             sanitized.responseCache = responseCache.sanitized
             if !responseCache.enabled {
@@ -1551,6 +2252,7 @@ final class AppModel: ObservableObject {
         rebuildProxyEndpointIndex()
         persistConfiguration()
         schedulePricingUpdates()
+        scheduleCurrencyRateUpdates()
         notice = String(localized: "本机路由、预算与协议设置已保存。", locale: AppLanguage.saved.locale)
     }
 
@@ -2442,7 +3144,9 @@ final class AppModel: ObservableObject {
         settings.lastAttemptAt = startedAt
         var checked = 0
         var catalogsFetched = 0
+        var catalogsWithoutPrices = 0
         var modelsUpdated = 0
+        var referenceModelsApplied = 0
         var missingPriceSource = 0
         var missingCredential = 0
         var failures = 0
@@ -2475,7 +3179,7 @@ final class AppModel: ObservableObject {
                 modelPriceRefreshProgress?.completed += 1
                 continue
             }
-            let apiKey = providerAPIKeyWithoutInteraction(snapshot)
+            let apiKey = providerAPIKeyWithoutInteraction(catalogProvider)
             if snapshot.kind.needsAPIKey && apiKey.isEmpty {
                 missingCredential += 1
                 modelPriceRefreshProgress?.completed += 1
@@ -2489,8 +3193,12 @@ final class AppModel: ObservableObject {
                     timeoutInterval: 20
                 )
                 catalogsFetched += 1
-                guard !result.prices.isEmpty,
-                      var currentProvider = providers.first(where: { $0.id == snapshot.id })
+                guard !result.prices.isEmpty else {
+                    catalogsWithoutPrices += 1
+                    modelPriceRefreshProgress?.completed += 1
+                    continue
+                }
+                guard var currentProvider = providers.first(where: { $0.id == snapshot.id })
                 else {
                     modelPriceRefreshProgress?.completed += 1
                     continue
@@ -2516,16 +3224,90 @@ final class AppModel: ObservableObject {
             modelPriceRefreshProgress?.completed += 1
         }
 
-        if modelsUpdated > 0 {
+        referenceModelsApplied = applyReferenceModelPrices(updatedAt: startedAt)
+        let referenceModelsAvailable = enabledModelCountWithReferencePrice()
+        let modelsStillUnpriced = enabledModelCountWithoutKnownPrice()
+
+        if modelsUpdated > 0 || referenceModelsApplied > 0 {
             settings.lastSuccessAt = startedAt
         }
         let failureDetail = failureSummaries.isEmpty
             ? ""
             : " 失败详情：" + failureSummaries.joined(separator: "；")
-        settings.lastMessage = "\(trigger)：检查 \(checked) 个供应商，成功读取 \(catalogsFetched) 个价格目录，更新 \(modelsUpdated) 个模型价格；无可靠价格来源 \(missingPriceSource)，缺少凭证 \(missingCredential)，失败 \(failures)。\(failureDetail)"
+        let summary = ProviderModelPriceRefreshSummary(
+            totalProviders: enabledProviders.count,
+            catalogsChecked: checked,
+            catalogsFetched: catalogsFetched,
+            catalogsWithoutPrices: catalogsWithoutPrices,
+            modelsUpdated: modelsUpdated,
+            unavailablePriceSources: missingPriceSource,
+            missingCredentials: missingCredential,
+            failures: failures,
+            referenceModelsApplied: referenceModelsApplied,
+            referenceModelsAvailable: referenceModelsAvailable,
+            modelsStillUnpriced: modelsStillUnpriced
+        )
+        settings.lastMessage = summary.message(trigger: trigger) + failureDetail
         configuration.operational.pricingUpdate = settings
         persistConfiguration()
         notice = settings.lastMessage
+    }
+
+    /// Fills only missing prices (or refreshes an earlier ModelHub reference).
+    /// Provider machine catalogs, imported CSV values and manual edits are
+    /// intentionally left untouched.
+    @discardableResult
+    private func applyReferenceModelPrices(updatedAt: Date) -> Int {
+        let currency = currencyDisplaySettings
+        var count = 0
+        for index in configuration.providers.indices where configuration.providers[index].enabled {
+            var provider = configuration.providers[index]
+            let prices = ReferenceModelPricingRegistry.prices(
+                for: provider.models,
+                currency: currency
+            )
+            guard !prices.isEmpty else { continue }
+            count += ProviderModelReferencePricingUpdater.apply(
+                prices: prices,
+                to: &provider,
+                routes: &configuration.routes,
+                updatedAt: updatedAt
+            )
+            configuration.providers[index] = provider
+        }
+        if count > 0 {
+            invalidateCatalogCaches()
+        }
+        return count
+    }
+
+    private func enabledModelCountWithoutKnownPrice() -> Int {
+        configuration.providers.lazy.filter(\.enabled).reduce(into: 0) { total, provider in
+            let priced = Set((provider.modelProfiles ?? [:]).compactMap { key, profile in
+                profile.hasKnownPrice
+                    ? key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    : nil
+            })
+            total += provider.models.reduce(into: 0) { count, model in
+                let identity = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if !priced.contains(identity) { count += 1 }
+            }
+        }
+    }
+
+    private func enabledModelCountWithReferencePrice() -> Int {
+        configuration.providers.lazy.filter(\.enabled).reduce(into: 0) { total, provider in
+            let referencePriced = Set((provider.modelProfiles ?? [:]).compactMap { key, profile in
+                profile.hasKnownPrice
+                    && ReferenceModelPricingRegistry.isReferenceSource(profile.pricingSource)
+                    ? key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    : nil
+            })
+            total += provider.models.reduce(into: 0) { count, model in
+                let identity = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                if referencePriced.contains(identity) { count += 1 }
+            }
+        }
     }
 
     private func schedulePricingUpdates() {
@@ -2685,11 +3467,16 @@ final class AppModel: ObservableObject {
             routingRule: configuration.routing.activeRule,
             accessPolicy: currentRoutingAccessPolicy(),
             resilienceSettings: configuration.operational.resilience,
+            targetQueueSettings: (configuration.operational.targetQueue ?? .init()).sanitized,
             contextOptimization: configuration.operational.contextOptimization,
             budget: configuration.operational.budget,
             router: router,
             providerClient: providerClient,
-            resilience: resilience
+            resilience: resilience,
+            stickySessionRouter: stickySessionRouter,
+            credentialPools: configuration.credentialPools,
+            credentialPoolSelector: credentialPoolSelector,
+            oauthTokenManager: oauthTokenManager
         )
     }
 
@@ -2896,6 +3683,13 @@ final class AppModel: ObservableObject {
 
             try saveRollbackBackup()
             configuration = try ConfigurationBackup.configuration(from: data)
+            for poolIndex in configuration.credentialPools.indices {
+                configuration.credentialPools[poolIndex].manuallySelectedCredentialID = nil
+                for entryIndex in configuration.credentialPools[poolIndex].entries.indices {
+                    configuration.credentialPools[poolIndex]
+                        .entries[entryIndex].requiresReauthorization = true
+                }
+            }
             configuration.modelHealth = ModelHealthMigration.normalize(
                 records: configuration.modelHealth,
                 providers: configuration.providers
@@ -2903,7 +3697,7 @@ final class AppModel: ObservableObject {
             rebuildHealthIndex()
             rebuildProxyEndpointIndex()
             persistConfiguration()
-            notice = String(localized: "备份已导入；如需撤销，请点击“恢复上次导入前配置”。", locale: AppLanguage.saved.locale)
+            notice = String(localized: "备份已导入；凭证池秘密必须重新确认后才可使用。如需撤销，请点击“恢复上次导入前配置”。", locale: AppLanguage.saved.locale)
         } catch {
             notice = L10n.format("备份导入失败：%@", error.localizedDescription)
         }
@@ -4032,10 +4826,16 @@ final class AppModel: ObservableObject {
                     ]],
                     "usage": ["prompt_tokens": 8, "completion_tokens": 18, "total_tokens": 26]
                 ]
-            case .musicGeneration:
+            case .imageGeneration, .musicGeneration, .videoGeneration:
+                let objectType: String = switch operation {
+                case .imageGeneration: "image.generation"
+                case .musicGeneration: "music.generation"
+                case .videoGeneration: "video.generation"
+                case .chat: "media.generation"
+                }
                 response = [
-                    "id": "modelhub-review-music",
-                    "object": "music.generation",
+                    "id": "modelhub-review-media",
+                    "object": objectType,
                     "model": model,
                     "status": "completed",
                     "demo": true,
@@ -4052,9 +4852,12 @@ final class AppModel: ObservableObject {
             return
         }
 
-        let path = operation == .musicGeneration
-            ? "/music/generations"
-            : "/chat/completions"
+        let path: String = switch operation {
+        case .chat: "/chat/completions"
+        case .imageGeneration: "/images/generations"
+        case .musicGeneration: "/music/generations"
+        case .videoGeneration: "/videos/generations"
+        }
         guard let url = URL(string: endpointURL + path) else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -4067,6 +4870,11 @@ final class AppModel: ObservableObject {
                 "model": model,
                 "messages": [["role": "user", "content": prompt]],
                 "stream": false
+            ]
+        case .imageGeneration, .videoGeneration:
+            object = [
+                "model": model,
+                "prompt": prompt
             ]
         case .musicGeneration:
             object = [
@@ -4091,6 +4899,136 @@ final class AppModel: ObservableObject {
         } catch {
             consoleOutput = error.localizedDescription
         }
+    }
+
+    func enqueueMediaBatch(
+        kind: MediaBatchKind,
+        model: String,
+        prompt: String,
+        count: Int,
+        feeConfirmed: Bool
+    ) {
+        guard feeConfirmed else {
+            notice = "媒体生成可能产生费用，必须先显式确认。"
+            return
+        }
+        guard isServerRunning else {
+            notice = "本地 API 服务尚未启动，批处理任务未发送。"
+            return
+        }
+        guard !model.isEmpty,
+              !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let providerID = providerIDForBatchModel(model)
+        else {
+            notice = "请选择可用媒体模型并填写提示词。"
+            return
+        }
+        let boundedCount = min(max(1, count), 20)
+        let createPath: String = switch kind {
+        case .image: "/images/generations"
+        case .music: "/music/generations"
+        case .video: "/videos/generations"
+        }
+        guard let createURL = URL(
+            string: endpointURL + createPath
+        ) else { return }
+
+        let boundedPrompt = String(prompt.prefix(20_000))
+        let bodyObject: [String: Any] = switch kind {
+        case .image, .video:
+            ["model": model, "prompt": boundedPrompt]
+        case .music:
+            ["model": model, "prompt": boundedPrompt, "duration": 30, "instrumental": true]
+        }
+        guard let body = try? JSONSerialization.data(withJSONObject: bodyObject) else { return }
+
+        Task {
+            var accepted = 0
+            for _ in 0..<boundedCount {
+                let metadata = MediaBatchMetadata(
+                    kind: kind,
+                    providerID: providerID,
+                    modelID: model
+                )
+                await localGatewayMediaBatchExecutor.register(
+                    LocalGatewayMediaBatchPayload(
+                        createURL: createURL,
+                        body: body,
+                        modelID: model
+                    ),
+                    for: metadata.id
+                )
+                do {
+                    _ = try await mediaBatchQueue.enqueue(
+                        metadata,
+                        feeConfirmed: feeConfirmed
+                    )
+                    accepted += 1
+                } catch {
+                    await localGatewayMediaBatchExecutor.discard(id: metadata.id)
+                }
+            }
+            mediaBatchJobs = await mediaBatchQueue.jobs()
+            let kindName: String = switch kind {
+            case .image: "图像"
+            case .music: "音乐"
+            case .video: "视频"
+            }
+            consoleOutput = "已加入 \(accepted) 个\(kindName)任务；创建请求不自动重试，仅查询阶段有界重试。"
+            monitorMediaBatchQueue()
+        }
+    }
+
+    func setMediaBatchPaused(_ paused: Bool) {
+        mediaBatchPaused = paused
+        Task {
+            if paused { await mediaBatchQueue.pause() }
+            else { await mediaBatchQueue.resume() }
+            mediaBatchJobs = await mediaBatchQueue.jobs()
+        }
+    }
+
+    func cancelMediaBatchJob(_ id: UUID) {
+        Task {
+            await mediaBatchQueue.cancel(id: id)
+            await localGatewayMediaBatchExecutor.discard(id: id)
+            mediaBatchJobs = await mediaBatchQueue.jobs()
+        }
+    }
+
+    private func monitorMediaBatchQueue() {
+        mediaBatchMonitorTask?.cancel()
+        mediaBatchMonitorTask = Task {
+            while !Task.isCancelled {
+                let jobs = await mediaBatchQueue.jobs()
+                mediaBatchJobs = jobs
+                for job in jobs where job.state.isTerminal {
+                    // The queue intentionally keeps bounded terminal metadata for
+                    // observability. Prompt bodies and local gateway request data
+                    // are transient and must be released as soon as work ends.
+                    await localGatewayMediaBatchExecutor.discard(id: job.id)
+                }
+                if jobs.allSatisfy({ $0.state.isTerminal }) { return }
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+        }
+    }
+
+    private func providerIDForBatchModel(_ model: String) -> UUID? {
+        if let route = routes.first(where: {
+            $0.enabled && $0.alias.caseInsensitiveCompare(model) == .orderedSame
+        }) {
+            return route.targets.first?.providerID
+        }
+        return providers.first { provider in
+            provider.models.contains { storedModel in
+                [
+                    storedModel,
+                    "\(provider.name)/\(storedModel)",
+                    "\(provider.id.uuidString)/\(storedModel)"
+                ].contains { $0.caseInsensitiveCompare(model) == .orderedSame }
+            }
+        }?.id
     }
 
     @concurrent
@@ -4151,7 +5089,85 @@ final class AppModel: ObservableObject {
         } else {
             access = .primary
         }
-        if isMeteredDataPlaneRequest(request),
+        if let idempotencyKey = request.header("Idempotency-Key") {
+            guard isMeteredDataPlaneRequest(request), request.method == "POST" else {
+                return .json(
+                    statusCode: 400,
+                    object: Self.errorObject(
+                        "idempotency_not_supported",
+                        "Idempotency-Key 仅支持可能计费的非流式 POST 请求"
+                    )
+                )
+            }
+            guard BoundedIdempotencyStore.isValidKey(idempotencyKey) else {
+                return .json(
+                    statusCode: 400,
+                    object: Self.errorObject(
+                        "invalid_idempotency_key",
+                        "Idempotency-Key 必须为 1–128 个安全 ASCII 字符"
+                    )
+                )
+            }
+            // Authorization, rate and budget decisions are intentionally made
+            // for every local request, including a replay. A cached upstream
+            // response must never bypass a disabled key, a changed allowlist,
+            // or a newly exhausted budget.
+            if let blocked = await accessBlockResponse(
+                access: access,
+                requestedModel: requestedModel
+            ) {
+                return blocked
+            }
+            let scope = access.virtualKeyID?.uuidString.lowercased() ?? "primary"
+            let fingerprint = BoundedIdempotencyStore.fingerprint(
+                method: request.method,
+                path: request.path,
+                orderedQuery: Self.canonicalQuery(request.orderedQueryItems),
+                headers: request.headers,
+                body: request.body
+            )
+            let result = await idempotencyStore.execute(
+                scope: scope,
+                accessPolicyRevision: Self.accessPolicyRevision(access),
+                key: idempotencyKey,
+                fingerprint: fingerprint
+            ) { [weak self] in
+                guard let self else {
+                    return IdempotentResponse(
+                        statusCode: 503,
+                        headers: ["Content-Type": "application/json; charset=utf-8"],
+                        body: Data("{\"error\":{\"code\":\"gateway_unavailable\"}}".utf8)
+                    )
+                }
+                let response = await self.dispatchAuthenticated(
+                    request,
+                    requestedModel: requestedModel,
+                    access: access,
+                    accessAlreadyChecked: true
+                )
+                return IdempotentResponse(
+                    statusCode: response.statusCode,
+                    headers: response.headers,
+                    body: response.body
+                )
+            }
+            return Self.response(from: result)
+        }
+        return await dispatchAuthenticated(
+            request,
+            requestedModel: requestedModel,
+            access: access
+        )
+    }
+
+    private func dispatchAuthenticated(
+        _ request: HTTPRequest,
+        requestedModel: String?,
+        access: GatewayAccessContext,
+        accessAlreadyChecked: Bool = false
+    ) async -> HTTPResponse {
+        if !accessAlreadyChecked,
+           isMeteredDataPlaneRequest(request),
            let blocked = await accessBlockResponse(
                access: access,
                requestedModel: requestedModel
@@ -4166,15 +5182,116 @@ final class AppModel: ObservableObject {
         }
     }
 
+    nonisolated private static func canonicalQuery(_ items: [HTTPQueryItem]) -> String {
+        items.map { item in
+            let name = Data(item.name.utf8).base64EncodedString()
+            let value = item.value.map { Data($0.utf8).base64EncodedString() } ?? "~"
+            return "\(name):\(value)"
+        }.joined(separator: ",")
+    }
+
+    nonisolated private static func accessPolicyRevision(
+        _ access: GatewayAccessContext
+    ) -> String {
+        let providers = access.accessPolicy.allowedProviderIDs
+            .map { $0.uuidString.lowercased() }
+            .sorted()
+            .joined(separator: ",")
+        let models = access.allowedModels.map { $0.lowercased() }
+            .sorted()
+            .joined(separator: ",")
+        let regions = access.accessPolicy.privacy.allowedRegions
+            .map(\.rawValue)
+            .sorted()
+            .joined(separator: ",")
+        let privacy = access.accessPolicy.privacy
+        return [
+            access.virtualKeyID?.uuidString.lowercased() ?? "primary",
+            access.workspaceID?.uuidString.lowercased() ?? "",
+            providers,
+            models,
+            regions,
+            privacy.requireZeroDataRetention ? "zdr:1" : "zdr:0",
+            privacy.forbidTrainingUse ? "training:0" : "training:1",
+            "retention:\(privacy.maximumRetentionDays.map(String.init) ?? "none")"
+        ].joined(separator: "|")
+    }
+
+    nonisolated private static func response(
+        from result: IdempotencyExecutionResult
+    ) -> HTTPResponse {
+        switch result {
+        case .executed(let stored), .replay(let stored):
+            var headers = stored.headers
+            headers["X-ModelHub-Idempotent-Replay"] = result.isReplay ? "true" : "false"
+            return HTTPResponse(
+                statusCode: stored.statusCode,
+                headers: headers,
+                body: stored.body
+            )
+        case .conflict:
+            return .json(
+                statusCode: 409,
+                object: errorObject(
+                    "idempotency_conflict",
+                    "同一作用域中的 Idempotency-Key 已用于不同请求"
+                )
+            )
+        case .capacityExceeded:
+            return .json(
+                statusCode: 503,
+                object: errorObject(
+                    "idempotency_capacity_exceeded",
+                    "幂等协调器当前已满，请稍后重试"
+                )
+            )
+        case .responseUnavailable:
+            return .json(
+                statusCode: 409,
+                object: errorObject(
+                    "idempotency_result_unavailable",
+                    "该幂等请求已执行，但响应超过内存重放上限；为避免重复计费，未再次调用上游"
+                )
+            )
+        }
+    }
+
     @concurrent
     private func healthResponse() async -> HTTPResponse {
-        let (providerSnapshot, routeSnapshot, healthSnapshot, cache, resilienceController) =
+        let (
+            providerSnapshot,
+            routeSnapshot,
+            healthSnapshot,
+            cache,
+            resilienceController,
+            idempotencyCoordinator,
+            sessionRouter,
+            passiveMonitor,
+            batchQueue,
+            credentialObservability
+        ) =
             await MainActor.run {
-                (providers, routes, healthIndex, responseCache, resilience)
+                (
+                    providers,
+                    routes,
+                    healthIndex,
+                    responseCache,
+                    resilience,
+                    idempotencyStore,
+                    stickySessionRouter,
+                    passiveHealthMonitor,
+                    mediaBatchQueue,
+                    providerCredentialObservability
+                )
             }
         async let cacheMetricsValue = cache.metrics()
         async let proxyMetricsValue = ProviderClient.proxySessionMetrics()
         async let resilienceMetricsValue = resilienceController.metrics()
+        async let idempotencyMetricsValue = idempotencyCoordinator.metrics()
+        async let stickyMetricsValue = sessionRouter.metrics()
+        async let passiveEventsValue = passiveMonitor.history()
+        async let passiveAlertsValue = passiveMonitor.activeAlerts()
+        async let mediaBatchJobsValue = batchQueue.jobs()
         let freshnessPolicy = ModelHealthFreshnessPolicy()
         var freshnessCounts: [ModelHealthFreshness: Int] = [
             .fresh: 0,
@@ -4195,6 +5312,22 @@ final class AppModel: ObservableObject {
         let cacheMetrics = await cacheMetricsValue
         let proxySessionMetrics = await proxyMetricsValue
         let resilienceMetrics = await resilienceMetricsValue
+        let idempotencyMetrics = await idempotencyMetricsValue
+        let stickyMetrics = await stickyMetricsValue
+        let passiveEvents = await passiveEventsValue
+        let passiveAlerts = await passiveAlertsValue
+        let batchJobs = await mediaBatchJobsValue
+        let batchQueued = batchJobs.filter {
+            switch $0.state {
+            case .queued, .creating, .polling: true
+            default: false
+            }
+        }.count
+        let batchSucceeded = batchJobs.filter { $0.state.isSucceeded }.count
+        let batchFailed = batchJobs.filter {
+            if case .failed = $0.state { return true }
+            return false
+        }.count
         return .json(statusCode: 200, object: [
             "status": "ok",
             "service": "ModelHub",
@@ -4224,6 +5357,13 @@ final class AppModel: ObservableObject {
                     "never": freshnessCounts[.never, default: 0],
                     "fresh_window_seconds": Int(freshnessPolicy.freshWindow)
                 ],
+                "provider_credentials": [
+                    "bound": credentialObservability.bound,
+                    "missing": credentialObservability.missing,
+                    "invalid_or_mismatched":
+                        credentialObservability.requiresReauthorization,
+                    "temporarily_unreadable": credentialObservability.temporarilyUnreadable
+                ],
                 "resilience": [
                     "gateway_allowed": resilienceMetrics.gatewayAllowed,
                     "gateway_rate_limited": resilienceMetrics.gatewayRateLimited,
@@ -4232,7 +5372,38 @@ final class AppModel: ObservableObject {
                     "target_circuit_rejected": resilienceMetrics.targetCircuitRejected,
                     "circuits_opened": resilienceMetrics.circuitsOpened,
                     "transient_failures": resilienceMetrics.transientFailures,
-                    "successful_targets": resilienceMetrics.successfulTargets
+                    "successful_targets": resilienceMetrics.successfulTargets,
+                    "queued_waiting": resilienceMetrics.queuedWaiting,
+                    "queued_accepted": resilienceMetrics.queuedAccepted,
+                    "queue_full_rejected": resilienceMetrics.queueFullRejected,
+                    "queue_timed_out": resilienceMetrics.queueTimedOut,
+                    "queue_cancelled": resilienceMetrics.queueCancelled
+                ],
+                "idempotency": [
+                    "entries": idempotencyMetrics.entries,
+                    "retained_bytes": idempotencyMetrics.retainedBytes,
+                    "leaders": idempotencyMetrics.leaders,
+                    "replays": idempotencyMetrics.replays,
+                    "conflicts": idempotencyMetrics.conflicts,
+                    "evictions": idempotencyMetrics.evictions,
+                    "unreplayable_responses": idempotencyMetrics.unreplayableResponses
+                ],
+                "sticky_sessions": [
+                    "entries": stickyMetrics.entries,
+                    "hits": stickyMetrics.hits,
+                    "misses": stickyMetrics.misses,
+                    "migrations": stickyMetrics.migrations,
+                    "evictions": stickyMetrics.evictions
+                ],
+                "passive_health": [
+                    "bounded_events": passiveEvents.count,
+                    "active_alerts": passiveAlerts.count
+                ],
+                "media_batch": [
+                    "jobs": batchJobs.count,
+                    "active_or_queued": batchQueued,
+                    "succeeded": batchSucceeded,
+                    "failed": batchFailed
                 ]
             ]
         ])
@@ -4251,10 +5422,15 @@ final class AppModel: ObservableObject {
               let cacheMetadata = Self.responseCacheRequestMetadata(request)
         else { return await handleAuthorized(request) }
 
-        let accessScope = access.virtualKeyID?.uuidString.lowercased() ?? "primary"
+        let accessScope = [
+            access.virtualKeyID?.uuidString.lowercased() ?? "primary",
+            Self.accessPolicyRevision(access)
+        ].joined(separator: "|")
         let key = ResponseCacheKey.digest(
             method: request.method,
             path: request.path,
+            canonicalQuery: Self.canonicalQuery(request.orderedQueryItems),
+            semanticHeaders: Self.responseCacheSemanticHeaders(request),
             body: request.body,
             accessScope: accessScope
         )
@@ -4277,7 +5453,7 @@ final class AppModel: ObservableObject {
                 key: key,
                 response: CachedGatewayResponse(
                     statusCode: response.statusCode,
-                    headers: response.headers,
+                    headers: ResponseCacheHeaderPolicy.sanitized(response.headers),
                     body: response.body
                 ),
                 settings: settings
@@ -4317,7 +5493,7 @@ final class AppModel: ObservableObject {
         _ cached: CachedGatewayResponse,
         state: String
     ) -> HTTPResponse {
-        var headers = cached.headers
+        var headers = ResponseCacheHeaderPolicy.sanitized(cached.headers)
         for name in ["Content-Length", "Transfer-Encoding", "Connection"] {
             headers = headers.filter { $0.key.caseInsensitiveCompare(name) != .orderedSame }
         }
@@ -4328,6 +5504,17 @@ final class AppModel: ObservableObject {
             headers: headers,
             body: cached.body
         )
+    }
+
+    nonisolated private static func responseCacheSemanticHeaders(
+        _ request: HTTPRequest
+    ) -> [String: String] {
+        ["content-type", "accept", "x-modelhub-session-id"].reduce(into: [:]) {
+            result, name in
+            if let value = request.header(name) {
+                result[name] = value
+            }
+        }
     }
 
     private func recordCacheEvent(
@@ -4391,6 +5578,9 @@ final class AppModel: ObservableObject {
         }
         if request.method == "GET" && request.path == "/v1/analytics" {
             return analyticsResponse()
+        }
+        if request.method == "GET" && request.path == "/v1/analytics/ledger" {
+            return await usageLedgerResponse(request)
         }
         if request.method == "POST" && request.path == "/mcp",
            configuration.operational.agentProtocols.mcpEnabled
@@ -4482,6 +5672,15 @@ final class AppModel: ObservableObject {
         _ request: HTTPRequest,
         envelope: ModelRequestEnvelope
     ) async -> HTTPStreamResponse? {
+        if request.header("Idempotency-Key") != nil {
+            return Self.streamResponse(from: .json(
+                statusCode: 422,
+                object: Self.errorObject(
+                    "idempotency_not_supported_for_streaming",
+                    "流式响应无法提供完整结果重放保证，请移除 Idempotency-Key"
+                )
+            ))
+        }
         let access: GatewayAccessContext
         if configuration.server.requireAuthentication {
             guard let authenticated = gatewayAccess(request) else {
@@ -4538,7 +5737,7 @@ final class AppModel: ObservableObject {
             budget: snapshot.budget
         ) { return Self.streamResponse(from: budget) }
 
-        let candidates = await snapshot.router.candidates(
+        var candidates = await snapshot.router.candidates(
             for: envelope.model,
             routes: snapshot.routes,
             providers: snapshot.providers,
@@ -4547,6 +5746,12 @@ final class AppModel: ObservableObject {
             requiredCapabilities: Self.requestCapabilities(from: request.body),
             defaultRule: snapshot.routingRule,
             accessPolicy: snapshot.accessPolicy
+        )
+        candidates = await Self.stickyOrderedCandidates(
+            candidates,
+            request: request,
+            requestedModel: envelope.model,
+            router: snapshot.stickySessionRouter
         )
         let settings = snapshot.resilienceSettings
         var lastResponse: HTTPResponse?
@@ -4569,6 +5774,7 @@ final class AppModel: ObservableObject {
                 target: target,
                 usage: snapshot.usage,
                 settings: settings,
+                queue: snapshot.targetQueueSettings,
                 resilience: snapshot.resilience
             ) {
                 lastResponse = blocked
@@ -4581,28 +5787,41 @@ final class AppModel: ObservableObject {
                 model: target.model
             )
             do {
-                let upstream: ProviderStreamResponse
-                if request.path == "/v1/responses" {
-                    upstream = try await snapshot.providerClient.startResponsesStream(
-                        rawBody: request.body,
-                        targetModel: target.model,
-                        provider: provider,
-                        apiKey: try await Self.dataPlaneAPIKeyAsync(for: provider),
-                        proxy: proxyAttempt.endpoint
-                    )
-                } else {
+                let credentialResponse = try await Self.performWithCredentialFailover(
+                    provider: provider,
+                    pools: snapshot.credentialPools,
+                    selector: snapshot.credentialPoolSelector,
+                    oauthTokenManager: snapshot.oauthTokenManager,
+                    statusCode: { $0.statusCode },
+                    discardBeforeRetry: { response in
+                        _ = try? await Self.collect(
+                            response.body,
+                            maximumBytes: 1_048_576
+                        )
+                    }
+                ) { authorization in
+                    if request.path == "/v1/responses" {
+                        return try await snapshot.providerClient.startResponsesStream(
+                            rawBody: request.body,
+                            targetModel: target.model,
+                            provider: provider,
+                            authorization: authorization,
+                            proxy: proxyAttempt.endpoint
+                        )
+                    }
                     let optimized = ContextOptimizer.optimizeChatBody(
                         request.body,
                         settings: snapshot.contextOptimization
                     )
-                    upstream = try await snapshot.providerClient.startChatStream(
+                    return try await snapshot.providerClient.startChatStream(
                         rawBody: optimized.body,
                         targetModel: target.model,
                         provider: provider,
-                        apiKey: try await Self.dataPlaneAPIKeyAsync(for: provider),
+                        authorization: authorization,
                         proxy: proxyAttempt.endpoint
                     )
                 }
+                let upstream = credentialResponse.response
 
                 if upstream.statusCode == 429 || upstream.statusCode >= 500 {
                     let failureBody = try await Self.collect(upstream.body, maximumBytes: 1_048_576)
@@ -4626,7 +5845,8 @@ final class AppModel: ObservableObject {
                         statusCode: upstream.statusCode,
                         latency: latency,
                         responseBody: failureBody,
-                        contextCharactersSaved: 0
+                        contextCharactersSaved: 0,
+                        credentialID: credentialResponse.credentialID
                     )
                     lastResponse = HTTPResponse(
                         statusCode: upstream.statusCode,
@@ -4634,6 +5854,14 @@ final class AppModel: ObservableObject {
                         body: failureBody
                     )
                     continue
+                }
+                if (200..<300).contains(upstream.statusCode) {
+                    await Self.recordStickySuccess(
+                        request: request,
+                        requestedModel: envelope.model,
+                        target: target,
+                        router: snapshot.stickySessionRouter
+                    )
                 }
                 return await trackedStreamResponse(
                     upstream: upstream,
@@ -4644,7 +5872,8 @@ final class AppModel: ObservableObject {
                     started: started,
                     settings: settings,
                     resilience: snapshot.resilience,
-                    attemptedProxyNodeID: proxyAttempt.failoverNodeID
+                    attemptedProxyNodeID: proxyAttempt.failoverNodeID,
+                    credentialID: credentialResponse.credentialID
                 )
             } catch let error as ProviderClientError {
                 await observeProxyFailover(
@@ -4703,7 +5932,8 @@ final class AppModel: ObservableObject {
         started: ContinuousClock.Instant,
         settings: ResilienceSettings,
         resilience: ResilienceController,
-        attemptedProxyNodeID: String?
+        attemptedProxyNodeID: String?,
+        credentialID: UUID?
     ) async -> HTTPStreamResponse {
         let stream = AsyncThrowingStream<Data, Error> { continuation in
             let task = Task { [weak self] in
@@ -4745,7 +5975,8 @@ final class AppModel: ObservableObject {
                         target: target,
                         statusCode: upstream.statusCode,
                         latency: latency,
-                        eventStream: accountingBuffer
+                        eventStream: accountingBuffer,
+                        credentialID: credentialID
                     )
                     await self.record(
                         model: requestedModel,
@@ -4765,16 +5996,18 @@ final class AppModel: ObservableObject {
                         )
                         healthDetail = "增量流式调用失败 · \(ProviderErrorDiagnostics.summary(for: diagnosticResponse))"
                     }
-                    await self.updateModelHealth(
-                        providerID: provider.id,
-                        model: target.model,
-                        status: ModelAvailability(statusCode: upstream.statusCode),
-                        latency: latency,
-                        statusCode: upstream.statusCode,
-                        detail: healthDetail,
-                        attemptedProxyNodeID: attemptedProxyNodeID,
-                        observeProxyOutcome: false
-                    )
+                    if credentialID == nil || upstream.statusCode != 401 {
+                        await self.updateModelHealth(
+                            providerID: provider.id,
+                            model: target.model,
+                            status: ModelAvailability(statusCode: upstream.statusCode),
+                            latency: latency,
+                            statusCode: upstream.statusCode,
+                            detail: healthDetail,
+                            attemptedProxyNodeID: attemptedProxyNodeID,
+                            observeProxyOutcome: false
+                        )
+                    }
                 } catch {
                     let wasCancelled = Task.isCancelled
                     if let self {
@@ -4851,7 +6084,7 @@ final class AppModel: ObservableObject {
         }
         switch path {
         case "/health", "/v1/models", "/v1/models/available", "/v1/providers",
-             "/v1/analytics":
+             "/v1/analytics", "/v1/analytics/ledger":
             return ["GET", "OPTIONS"]
         case "/mcp", "/a2a":
             return ["POST", "OPTIONS"]
@@ -4887,7 +6120,7 @@ final class AppModel: ObservableObject {
             request.body,
             settings: snapshot.contextOptimization
         )
-        let candidates = await snapshot.router.candidates(
+        var candidates = await snapshot.router.candidates(
             for: envelope.model,
             routes: snapshot.routes,
             providers: snapshot.providers,
@@ -4896,6 +6129,12 @@ final class AppModel: ObservableObject {
             requiredCapabilities: Self.requestCapabilities(from: request.body),
             defaultRule: snapshot.routingRule,
             accessPolicy: snapshot.accessPolicy
+        )
+        candidates = await Self.stickyOrderedCandidates(
+            candidates,
+            request: request,
+            requestedModel: envelope.model,
+            router: snapshot.stickySessionRouter
         )
         guard !candidates.isEmpty else {
             let quarantined = Self.quarantinedTargets(
@@ -4937,6 +6176,7 @@ final class AppModel: ObservableObject {
                 target: target,
                 usage: snapshot.usage,
                 settings: settings,
+                queue: snapshot.targetQueueSettings,
                 resilience: snapshot.resilience
             ) {
                 lastResponse = blocked
@@ -4949,13 +6189,22 @@ final class AppModel: ObservableObject {
                 model: target.model
             )
             do {
-                let response = try await snapshot.providerClient.send(
-                    rawBody: optimized.body,
-                    targetModel: target.model,
+                let credentialResponse = try await Self.performWithCredentialFailover(
                     provider: provider,
-                    apiKey: try await Self.dataPlaneAPIKeyAsync(for: provider),
-                    proxy: proxyAttempt.endpoint
-                )
+                    pools: snapshot.credentialPools,
+                    selector: snapshot.credentialPoolSelector,
+                    oauthTokenManager: snapshot.oauthTokenManager,
+                    statusCode: { $0.statusCode }
+                ) { authorization in
+                    try await snapshot.providerClient.send(
+                        rawBody: optimized.body,
+                        targetModel: target.model,
+                        provider: provider,
+                        authorization: authorization,
+                        proxy: proxyAttempt.endpoint
+                    )
+                }
+                let response = credentialResponse.response
                 let latency = Self.milliseconds(from: started.duration(to: .now))
                 let assessment = ModelProbePolicy.providerResponseAssessment(
                     response,
@@ -4977,7 +6226,8 @@ final class AppModel: ObservableObject {
                     statusCode: effectiveStatus,
                     latency: latency,
                     responseBody: response.body,
-                    contextCharactersSaved: optimized.charactersSaved
+                    contextCharactersSaved: optimized.charactersSaved,
+                    credentialID: credentialResponse.credentialID
                 )
                 await record(
                     model: envelope.model,
@@ -4986,23 +6236,33 @@ final class AppModel: ObservableObject {
                     latency: latency,
                     detail: assessment.isAccepted ? "成功" : assessment.detail
                 )
-                await updateModelHealth(
-                    providerID: provider.id,
-                    model: target.model,
-                    status: assessment.availability,
-                    latency: latency,
-                    statusCode: effectiveStatus,
-                    detail: assessment.isAccepted
-                        ? "运行调用成功"
-                        : "运行调用失败，已隔离 · \(assessment.detail)",
-                    attemptedProxyNodeID: proxyAttempt.failoverNodeID
-                )
+                if credentialResponse.credentialID == nil || effectiveStatus != 401 {
+                    await updateModelHealth(
+                        providerID: provider.id,
+                        model: target.model,
+                        status: assessment.availability,
+                        latency: latency,
+                        statusCode: effectiveStatus,
+                        detail: assessment.isAccepted
+                            ? "运行调用成功"
+                            : "运行调用失败，已隔离 · \(assessment.detail)",
+                        attemptedProxyNodeID: proxyAttempt.failoverNodeID
+                    )
+                }
                 let gatewayResponse = HTTPResponse(
                     statusCode: effectiveStatus,
                     headers: ["Content-Type": response.contentType],
                     body: response.body
                 )
                 lastResponse = gatewayResponse
+                if isSuccess {
+                    await Self.recordStickySuccess(
+                        request: request,
+                        requestedModel: envelope.model,
+                        target: target,
+                        router: snapshot.stickySessionRouter
+                    )
+                }
                 if effectiveStatus < 500 && effectiveStatus != 429 {
                     return gatewayResponse
                 }
@@ -5020,7 +6280,7 @@ final class AppModel: ObservableObject {
                 case .credentialAccessUnavailable:
                     status = nil
                     responseStatus = error.gatewayStatusCode
-                case .invalidBaseURL, .nonHTTPResponse:
+                case .invalidBaseURL, .nonHTTPResponse, .responseTooLarge:
                     status = .unavailable
                     responseStatus = 502
                 }
@@ -5127,7 +6387,7 @@ final class AppModel: ObservableObject {
             budget: snapshot.budget
         ) { return response }
 
-        let candidates = await snapshot.router.candidates(
+        var candidates = await snapshot.router.candidates(
             for: envelope.model,
             routes: snapshot.routes,
             providers: snapshot.providers,
@@ -5136,6 +6396,12 @@ final class AppModel: ObservableObject {
             requiredCapabilities: Self.requestCapabilities(from: request.body),
             defaultRule: snapshot.routingRule,
             accessPolicy: snapshot.accessPolicy
+        )
+        candidates = await Self.stickyOrderedCandidates(
+            candidates,
+            request: request,
+            requestedModel: envelope.model,
+            router: snapshot.stickySessionRouter
         )
         guard !candidates.isEmpty else {
             let quarantined = Self.quarantinedTargets(
@@ -5176,6 +6442,7 @@ final class AppModel: ObservableObject {
                 target: target,
                 usage: snapshot.usage,
                 settings: settings,
+                queue: snapshot.targetQueueSettings,
                 resilience: snapshot.resilience
             ) {
                 lastResponse = blocked
@@ -5189,13 +6456,22 @@ final class AppModel: ObservableObject {
                 model: target.model
             )
             do {
-                let response = try await snapshot.providerClient.sendResponses(
-                    rawBody: request.body,
-                    targetModel: target.model,
+                let credentialResponse = try await Self.performWithCredentialFailover(
                     provider: provider,
-                    apiKey: try await Self.dataPlaneAPIKeyAsync(for: provider),
-                    proxy: proxyAttempt.endpoint
-                )
+                    pools: snapshot.credentialPools,
+                    selector: snapshot.credentialPoolSelector,
+                    oauthTokenManager: snapshot.oauthTokenManager,
+                    statusCode: { $0.statusCode }
+                ) { authorization in
+                    try await snapshot.providerClient.sendResponses(
+                        rawBody: request.body,
+                        targetModel: target.model,
+                        provider: provider,
+                        authorization: authorization,
+                        proxy: proxyAttempt.endpoint
+                    )
+                }
+                let response = credentialResponse.response
                 let latency = Self.milliseconds(from: started.duration(to: .now))
                 let succeeded = (200..<300).contains(response.statusCode)
                 await snapshot.resilience.finishTarget(
@@ -5211,7 +6487,8 @@ final class AppModel: ObservableObject {
                     statusCode: response.statusCode,
                     latency: latency,
                     responseBody: response.body,
-                    contextCharactersSaved: 0
+                    contextCharactersSaved: 0,
+                    credentialID: credentialResponse.credentialID
                 )
                 await record(
                     model: envelope.model,
@@ -5220,23 +6497,33 @@ final class AppModel: ObservableObject {
                     latency: latency,
                     detail: "Responses API 上游响应"
                 )
-                await updateModelHealth(
-                    providerID: provider.id,
-                    model: target.model,
-                    status: ModelAvailability(statusCode: response.statusCode),
-                    latency: latency,
-                    statusCode: response.statusCode,
-                    detail: succeeded
-                        ? "Responses API 调用成功"
-                        : "Responses API 调用失败，已隔离 · \(ProviderErrorDiagnostics.summary(for: response))",
-                    attemptedProxyNodeID: proxyAttempt.failoverNodeID
-                )
+                if credentialResponse.credentialID == nil || response.statusCode != 401 {
+                    await updateModelHealth(
+                        providerID: provider.id,
+                        model: target.model,
+                        status: ModelAvailability(statusCode: response.statusCode),
+                        latency: latency,
+                        statusCode: response.statusCode,
+                        detail: succeeded
+                            ? "Responses API 调用成功"
+                            : "Responses API 调用失败，已隔离 · \(ProviderErrorDiagnostics.summary(for: response))",
+                        attemptedProxyNodeID: proxyAttempt.failoverNodeID
+                    )
+                }
                 let gatewayResponse = HTTPResponse(
                     statusCode: response.statusCode,
                     headers: ["Content-Type": response.contentType],
                     body: response.body
                 )
                 lastResponse = gatewayResponse
+                if succeeded {
+                    await Self.recordStickySuccess(
+                        request: request,
+                        requestedModel: envelope.model,
+                        target: target,
+                        router: snapshot.stickySessionRouter
+                    )
+                }
                 if response.statusCode < 500 && response.statusCode != 429 {
                     return gatewayResponse
                 }
@@ -5324,7 +6611,7 @@ final class AppModel: ObservableObject {
             budget: snapshot.budget
         ) { return response }
 
-        let candidates = await snapshot.router.candidates(
+        var candidates = await snapshot.router.candidates(
             for: requestedModel,
             routes: snapshot.routes,
             providers: snapshot.providers,
@@ -5332,6 +6619,12 @@ final class AppModel: ObservableObject {
             usage: snapshot.usage,
             defaultRule: snapshot.routingRule,
             accessPolicy: snapshot.accessPolicy
+        )
+        candidates = await Self.stickyOrderedCandidates(
+            candidates,
+            request: request,
+            requestedModel: requestedModel,
+            router: snapshot.stickySessionRouter
         )
         if candidates.isEmpty {
             let quarantined = Self.quarantinedTargets(
@@ -5386,6 +6679,7 @@ final class AppModel: ObservableObject {
                 target: target,
                 usage: snapshot.usage,
                 settings: settings,
+                queue: snapshot.targetQueueSettings,
                 resilience: snapshot.resilience
             ) {
                 lastResponse = blocked
@@ -5398,16 +6692,25 @@ final class AppModel: ObservableObject {
                 model: target.model
             )
             do {
-                let response = try await snapshot.providerClient.sendNative(
-                    rawBody: request.body,
-                    targetModel: target.model,
+                let credentialResponse = try await Self.performWithCredentialFailover(
                     provider: provider,
-                    apiKey: try await Self.dataPlaneAPIKeyAsync(for: provider),
-                    operation: operation,
-                    taskID: taskID,
-                    contentType: request.header("Content-Type") ?? "application/json",
-                    proxy: proxyAttempt.endpoint
-                )
+                    pools: snapshot.credentialPools,
+                    selector: snapshot.credentialPoolSelector,
+                    oauthTokenManager: snapshot.oauthTokenManager,
+                    statusCode: { $0.statusCode }
+                ) { authorization in
+                    try await snapshot.providerClient.sendNative(
+                        rawBody: request.body,
+                        targetModel: target.model,
+                        provider: provider,
+                        authorization: authorization,
+                        operation: operation,
+                        taskID: taskID,
+                        contentType: request.header("Content-Type") ?? "application/json",
+                        proxy: proxyAttempt.endpoint
+                    )
+                }
+                let response = credentialResponse.response
                 let latency = Self.milliseconds(from: started.duration(to: .now))
                 let assessment = ModelProbePolicy.nativeResponseAssessment(
                     response,
@@ -5430,7 +6733,8 @@ final class AppModel: ObservableObject {
                     statusCode: effectiveStatus,
                     latency: latency,
                     responseBody: response.body,
-                    contextCharactersSaved: 0
+                    contextCharactersSaved: 0,
+                    credentialID: credentialResponse.credentialID
                 )
                 await record(
                     model: requestedModel,
@@ -5447,7 +6751,8 @@ final class AppModel: ObservableObject {
                         attemptedProxyNodeID: proxyAttempt.failoverNodeID
                     )
                 }
-                if !isTaskQuery {
+                if !isTaskQuery,
+                   credentialResponse.credentialID == nil || effectiveStatus != 401 {
                     await updateModelHealth(
                         providerID: provider.id,
                         model: target.model,
@@ -5466,6 +6771,14 @@ final class AppModel: ObservableObject {
                     body: response.body
                 )
                 lastResponse = gatewayResponse
+                if isSuccess {
+                    await Self.recordStickySuccess(
+                        request: request,
+                        requestedModel: requestedModel,
+                        target: target,
+                        router: snapshot.stickySessionRouter
+                    )
+                }
                 if effectiveStatus < 500 && effectiveStatus != 429 {
                     return gatewayResponse
                 }
@@ -5483,7 +6796,7 @@ final class AppModel: ObservableObject {
                 case .credentialAccessUnavailable:
                     status = nil
                     responseStatus = error.gatewayStatusCode
-                case .invalidBaseURL, .nonHTTPResponse:
+                case .invalidBaseURL, .nonHTTPResponse, .responseTooLarge:
                     status = .unavailable
                     responseStatus = 502
                 }
@@ -5676,6 +6989,7 @@ final class AppModel: ObservableObject {
             target: target,
             usage: snapshot.usage,
             settings: settings,
+            queue: snapshot.targetQueueSettings,
             resilience: snapshot.resilience
         ) {
             return blocked
@@ -5695,16 +7009,25 @@ final class AppModel: ObservableObject {
             model: targetModel
         )
         do {
-            let response = try await snapshot.providerClient.sendNativePassthrough(
-                rawBody: request.body,
-                method: request.method,
-                upstreamPath: upstreamPath,
-                orderedQueryItems: upstreamQueryItems,
+            let credentialResponse = try await Self.performWithCredentialFailover(
                 provider: provider,
-                apiKey: try await Self.dataPlaneAPIKeyAsync(for: provider),
-                headers: request.headers,
-                proxy: proxyAttempt.endpoint
-            )
+                pools: snapshot.credentialPools,
+                selector: snapshot.credentialPoolSelector,
+                oauthTokenManager: snapshot.oauthTokenManager,
+                statusCode: { $0.statusCode }
+            ) { authorization in
+                try await snapshot.providerClient.sendNativePassthrough(
+                    rawBody: request.body,
+                    method: request.method,
+                    upstreamPath: upstreamPath,
+                    orderedQueryItems: upstreamQueryItems,
+                    provider: provider,
+                    authorization: authorization,
+                    headers: request.headers,
+                    proxy: proxyAttempt.endpoint
+                )
+            }
+            let response = credentialResponse.response
             let latency = Self.milliseconds(from: started.duration(to: .now))
             await snapshot.resilience.finishTarget(
                 runtimeKey,
@@ -5719,7 +7042,8 @@ final class AppModel: ObservableObject {
                 statusCode: response.statusCode,
                 latency: latency,
                 responseBody: response.body,
-                contextCharactersSaved: 0
+                contextCharactersSaved: 0,
+                credentialID: credentialResponse.credentialID
             )
             await record(
                 model: targetModel,
@@ -5728,17 +7052,19 @@ final class AppModel: ObservableObject {
                 latency: latency,
                 detail: "供应商专用原生响应"
             )
-            await updateModelHealth(
-                providerID: provider.id,
-                model: targetModel,
-                status: ModelAvailability(statusCode: response.statusCode),
-                latency: latency,
-                statusCode: response.statusCode,
-                detail: (200..<300).contains(response.statusCode)
-                    ? "原生供应商专用调用成功"
-                    : "原生供应商专用调用失败，已隔离 · \(ProviderErrorDiagnostics.summary(for: response))",
-                attemptedProxyNodeID: proxyAttempt.failoverNodeID
-            )
+            if credentialResponse.credentialID == nil || response.statusCode != 401 {
+                await updateModelHealth(
+                    providerID: provider.id,
+                    model: targetModel,
+                    status: ModelAvailability(statusCode: response.statusCode),
+                    latency: latency,
+                    statusCode: response.statusCode,
+                    detail: (200..<300).contains(response.statusCode)
+                        ? "原生供应商专用调用成功"
+                        : "原生供应商专用调用失败，已隔离 · \(ProviderErrorDiagnostics.summary(for: response))",
+                    attemptedProxyNodeID: proxyAttempt.failoverNodeID
+                )
+            }
             return HTTPResponse(
                 statusCode: response.statusCode,
                 headers: ["Content-Type": response.contentType],
@@ -5774,7 +7100,7 @@ final class AppModel: ObservableObject {
                     detail: "原生供应商专用调用凭证不可用，已隔离 · \(error.localizedDescription)",
                     attemptedProxyNodeID: proxyAttempt.failoverNodeID
                 )
-            case .invalidBaseURL, .nonHTTPResponse:
+            case .invalidBaseURL, .nonHTTPResponse, .responseTooLarge:
                 await updateModelHealth(
                     providerID: provider.id,
                     model: targetModel,
@@ -5969,7 +7295,9 @@ final class AppModel: ObservableObject {
     func availableModelIDsForConsole(operation: ConsoleOperation) -> [String] {
         let requiredCapabilities: Set<ModelCapability> = switch operation {
         case .chat: [.chat]
+        case .imageGeneration: [.imageGeneration]
         case .musicGeneration: [.musicGeneration]
+        case .videoGeneration: [.videoGeneration]
         }
         return availableModelEntries(
             access: .unrestricted,
@@ -6304,6 +7632,91 @@ final class AppModel: ObservableObject {
         ])
     }
 
+    private func usageLedgerResponse(_ request: HTTPRequest) async -> HTTPResponse {
+        guard GatewayRequestScope.access?.virtualKeyID == nil else {
+            return .json(
+                statusCode: 403,
+                object: Self.errorObject(
+                    "usage_ledger_forbidden",
+                    "详细用量账本只允许主网关管理员读取"
+                )
+            )
+        }
+        let month = request.queryItem("month") ?? Self.utcMonthKey()
+        let limit = request.queryItem("limit").flatMap(Int.init) ?? 100
+        let cursor = request.queryItem("cursor").map { rawValue in
+            if let legacyLineOffset = Int(rawValue) {
+                return UsageLedgerCursor(month: month, lineOffset: legacyLineOffset)
+            }
+            return UsageLedgerCursor(month: month, opaqueValue: rawValue)
+        }
+        do {
+            let page = try await usageLedger.query(
+                month: month,
+                cursor: cursor,
+                limit: limit
+            )
+            let formatter = ISO8601DateFormatter()
+            let rows: [[String: Any]] = page.records.map { item in
+                var row: [String: Any] = [
+                    "request_id": item.requestID,
+                    "timestamp": formatter.string(from: item.timestamp),
+                    "provider_id": item.providerID.uuidString.lowercased(),
+                    "model": item.model,
+                    "status_code": item.statusCode,
+                    "latency_ms": item.latencyMilliseconds,
+                    "input_tokens": item.inputTokens,
+                    "output_tokens": item.outputTokens
+                ]
+                if let workspaceID = item.workspaceID {
+                    row["workspace_id"] = workspaceID.uuidString.lowercased()
+                }
+                if let virtualKeyID = item.virtualKeyID {
+                    row["virtual_key_id"] = virtualKeyID.uuidString.lowercased()
+                }
+                if let credentialID = item.credentialID {
+                    row["credential_id"] = credentialID.uuidString.lowercased()
+                }
+                if let cost = item.estimatedCostUSD {
+                    row["estimated_cost_usd"] = cost
+                }
+                return row
+            }
+            var object: [String: Any] = [
+                "object": "local.usage_ledger",
+                "month": month,
+                "stores_request_bodies": false,
+                "data": rows
+            ]
+            if let nextCursor = page.nextCursor?.opaqueValue {
+                object["next_cursor"] = nextCursor
+            }
+            return .json(statusCode: 200, object: object)
+        } catch let error as UsageLedgerError {
+            return .json(
+                statusCode: 400,
+                object: Self.errorObject("invalid_usage_ledger_query", error.localizedDescription)
+            )
+        } catch {
+            return .json(
+                statusCode: 500,
+                object: Self.errorObject(
+                    "usage_ledger_unavailable",
+                    "本地用量账本暂时不可读取"
+                )
+            )
+        }
+    }
+
+    nonisolated private static func utcMonthKey(_ date: Date = .now) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM"
+        return formatter.string(from: date)
+    }
+
     private func isMeteredDataPlaneRequest(_ request: HTTPRequest) -> Bool {
         guard request.method != "GET"
                 || videoTaskID(from: request.path) != nil
@@ -6330,6 +7743,42 @@ final class AppModel: ObservableObject {
         )
     }
 
+    nonisolated private static func stickyOrderedCandidates(
+        _ candidates: [RouteTarget],
+        request: HTTPRequest,
+        requestedModel: String,
+        router: StickySessionRouter
+    ) async -> [RouteTarget] {
+        guard let sessionID = request.header("X-ModelHub-Session-ID") else {
+            return candidates
+        }
+        let accessScope = GatewayRequestScope.access?.virtualKeyID?.uuidString.lowercased()
+            ?? "primary"
+        return await router.order(
+            candidates: candidates,
+            accessScope: accessScope,
+            requestedModel: requestedModel,
+            sessionID: sessionID
+        )
+    }
+
+    nonisolated private static func recordStickySuccess(
+        request: HTTPRequest,
+        requestedModel: String,
+        target: RouteTarget,
+        router: StickySessionRouter
+    ) async {
+        guard let sessionID = request.header("X-ModelHub-Session-ID") else { return }
+        let accessScope = GatewayRequestScope.access?.virtualKeyID?.uuidString.lowercased()
+            ?? "primary"
+        await router.recordSuccess(
+            accessScope: accessScope,
+            requestedModel: requestedModel,
+            sessionID: sessionID,
+            target: target
+        )
+    }
+
     nonisolated private static func budgetBlockResponse(
         usage: [UsageAggregate],
         budget: BudgetSettings
@@ -6352,6 +7801,7 @@ final class AppModel: ObservableObject {
         target: RouteTarget,
         usage: [UsageAggregate],
         settings: ResilienceSettings,
+        queue: TargetQueueSettings,
         resilience: ResilienceController
     ) async -> HTTPResponse? {
         if let tokenLimit = target.profile?.monthlyTokenLimit,
@@ -6371,13 +7821,35 @@ final class AppModel: ObservableObject {
             )
         }
         let key = TargetRuntimeKey(providerID: target.providerID, model: target.model)
-        switch await resilience.beginTarget(key, settings: settings) {
+        let accessScope = GatewayRequestScope.access?.virtualKeyID?.uuidString.lowercased()
+            ?? "primary"
+        switch await resilience.acquireTarget(
+            key,
+            accessScope: accessScope,
+            settings: settings,
+            queue: queue
+        ) {
         case .allowed:
             return nil
         case .concurrencyLimited:
             return .json(
                 statusCode: 503,
                 object: errorObject("target_busy", "该模型已达到并发上限，正在尝试回退目标")
+            )
+        case .queueFull:
+            return .json(
+                statusCode: 503,
+                object: errorObject("target_queue_full", "该模型等待队列已满，正在尝试回退目标")
+            )
+        case .queueTimedOut:
+            return .json(
+                statusCode: 503,
+                object: errorObject("target_queue_timeout", "等待模型并发槽位超时，正在尝试回退目标")
+            )
+        case .cancelled:
+            return .json(
+                statusCode: 499,
+                object: errorObject("request_cancelled", "请求已取消，未继续调用上游")
             )
         case .circuitOpen(let retryAfterSeconds):
             return HTTPResponse(
@@ -6430,14 +7902,265 @@ final class AppModel: ObservableObject {
         }
     }
 
-    nonisolated private static func dataPlaneAPIKeyAsync(
-        for provider: ProviderConfig
-    ) async throws -> String {
-        try DataPlaneCredentialAccessPolicy.apiKey(
-            from: await KeychainStore.readWithoutInteractionAsync(
-                account: KeychainStore.providerAccount(provider.id)
+    nonisolated private static func dataPlaneCredentialAsync(
+        for provider: ProviderConfig,
+        pools: [CredentialPoolConfiguration],
+        selector: CredentialPoolSelector,
+        oauthTokenManager: OAuthTokenManager
+    ) async throws -> GatewayUpstreamCredential {
+        let matchingPools = pools.filter { $0.providerID == provider.id }
+        let credentialIDs = pools.flatMap(\.entries).map(\.id)
+        guard matchingPools.count <= 1,
+              Set(credentialIDs).count == credentialIDs.count
+        else {
+            throw ProviderClientError.credentialMismatch(
+                "凭证池元数据重复或已损坏；请重新确认凭证"
             )
-        )
+        }
+        guard let pool = matchingPools.first,
+              !pool.entries.isEmpty
+        else {
+            let storedValue = try DataPlaneCredentialAccessPolicy.apiKey(
+                from: await KeychainStore.readWithoutInteractionAsync(
+                    account: KeychainStore.providerAccount(provider.id)
+                )
+            )
+            let apiKey: String
+            if storedValue.isEmpty {
+                apiKey = ""
+            } else {
+                do {
+                    apiKey = try KeychainStore.apiKey(
+                        fromBoundProviderValue: storedValue,
+                        provider: provider
+                    )
+                } catch {
+                    throw ProviderClientError.credentialMismatch(
+                        "API Key 与供应商类型或上游地址绑定不一致；请重新授权"
+                    )
+                }
+            }
+            return GatewayUpstreamCredential(
+                credentialID: nil,
+                authorization: .providerAPIKey(apiKey.isEmpty ? nil : apiKey),
+                oauthEntry: nil
+            )
+        }
+
+        guard pool.entries.count <= CredentialPoolConfiguration.maximumEntries,
+              pool.entries.allSatisfy({ $0.providerID == provider.id })
+        else {
+            throw ProviderClientError.credentialMismatch(
+                "凭证池元数据与供应商不匹配；请重新确认凭证"
+            )
+        }
+
+        let maximumAttempts = min(32, max(1, pool.entries.count))
+        for _ in 0..<maximumAttempts {
+            guard let entry = await selector.select(
+                providerKind: provider.kind,
+                configuration: pool
+            ) else { throw ProviderClientError.missingAPIKey }
+
+            switch entry.secretKind {
+            case .apiKey:
+                let storedValue = try DataPlaneCredentialAccessPolicy.apiKey(
+                    from: await KeychainStore.readWithoutInteractionAsync(
+                        account: KeychainStore.credentialPoolAccount(entry.id)
+                    )
+                )
+                guard !storedValue.isEmpty else {
+                    if pool.mode == .failoverOnly {
+                        await selector.recordFailure(
+                            credentialID: entry.id,
+                            providerID: provider.id,
+                            reason: .revokedOrInvalid
+                        )
+                        continue
+                    }
+                    throw ProviderClientError.missingAPIKey
+                }
+                let apiKey: String
+                do {
+                    apiKey = try KeychainStore.apiKey(
+                        fromBoundCredentialPoolValue: storedValue,
+                        credentialID: entry.id,
+                        provider: provider
+                    )
+                } catch {
+                    throw ProviderClientError.credentialMismatch(
+                        "凭证与供应商端点绑定不一致；请重新输入开发者凭证"
+                    )
+                }
+                return GatewayUpstreamCredential(
+                    credentialID: entry.id,
+                    authorization: .providerAPIKey(apiKey),
+                    oauthEntry: nil
+                )
+            case .oauthRefreshToken:
+                do {
+                    let accessToken = try await oauthTokenManager.accessToken(
+                        for: entry,
+                        providerKind: provider.kind
+                    )
+                    return GatewayUpstreamCredential(
+                        credentialID: entry.id,
+                        authorization: .bearerAccessToken(
+                            accessToken,
+                            billingProjectID: entry.oauth?.billingProjectID
+                        ),
+                        oauthEntry: entry
+                    )
+                } catch OAuthTokenManagerError.authorizationIrrecoverable(
+                    let errorCode
+                ) where errorCode == "invalid_grant" && pool.mode == .failoverOnly
+                {
+                    await selector.recordFailure(
+                        credentialID: entry.id,
+                        providerID: provider.id,
+                        reason: .revokedOrInvalid
+                    )
+                    continue
+                } catch OAuthTokenManagerError.secretMissing,
+                        OAuthTokenManagerError.secretMalformed {
+                    throw ProviderClientError.missingAPIKey
+                } catch OAuthTokenManagerError.secretBindingMismatch {
+                    throw ProviderClientError.credentialMismatch(
+                        "OAuth 授权与供应商端点绑定不一致；请重新授权"
+                    )
+                } catch OAuthTokenManagerError.storageFailure {
+                    throw ProviderClientError.credentialAccessUnavailable
+                } catch OAuthTokenManagerError.transportFailure,
+                        OAuthTokenManagerError.invalidResponse,
+                        OAuthTokenManagerError.responseTooLarge {
+                    throw ProviderClientError.nonHTTPResponse
+                } catch OAuthTokenManagerError.serverRejected {
+                    throw ProviderClientError.nonHTTPResponse
+                } catch OAuthTokenManagerError.authorizationIrrecoverable(let errorCode) {
+                    throw ProviderClientError.credentialMismatch(
+                        "OAuth 授权已失效（\(errorCode)）；请重新授权"
+                    )
+                } catch {
+                    throw ProviderClientError.credentialMismatch(
+                        "开发者 OAuth 配置未通过合规校验或授权已失效"
+                    )
+                }
+            case .workloadIdentity:
+                throw ProviderClientError.invalidRequest(
+                    "工作负载身份必须通过受支持的 ADC/WIF 适配器接入"
+                )
+            }
+        }
+        throw ProviderClientError.missingAPIKey
+    }
+
+    /// Retries only when an individual pooled developer credential is
+    /// definitively rejected. Quota/rate-limit and upstream failures are
+    /// returned unchanged so a pool cannot combine independent allocations.
+    nonisolated private static func performWithCredentialFailover<Response: Sendable>(
+        provider: ProviderConfig,
+        pools: [CredentialPoolConfiguration],
+        selector: CredentialPoolSelector,
+        oauthTokenManager: OAuthTokenManager,
+        statusCode: @escaping @Sendable (Response) -> Int,
+        discardBeforeRetry: @escaping @Sendable (Response) async -> Void = { _ in },
+        operation: @escaping @Sendable (UpstreamAuthorization) async throws -> Response
+    ) async throws -> GatewayCredentialResponse<Response> {
+        let pool = pools.first { $0.providerID == provider.id && !$0.entries.isEmpty }
+        let maximumAttempts = pool?.mode == .failoverOnly
+            ? min(32, max(1, pool?.entries.count ?? 1))
+            : 1
+
+        for attempt in 0..<maximumAttempts {
+            let credential = try await dataPlaneCredentialAsync(
+                for: provider,
+                pools: pools,
+                selector: selector,
+                oauthTokenManager: oauthTokenManager
+            )
+            var response = try await operation(credential.authorization)
+            var code = statusCode(response)
+
+            // A bearer token can expire between local resolution and the
+            // upstream request. Refresh and retry this exact credential once;
+            // do not rotate credentials for generic 403 responses.
+            if code == 401,
+               let oauthEntry = credential.oauthEntry,
+               case .bearerAccessToken(let rejectedToken, let billingProjectID) =
+                credential.authorization
+            {
+                do {
+                    let refreshedToken = try await oauthTokenManager
+                        .accessTokenAfterUnauthorized(
+                            rejectedAccessToken: rejectedToken,
+                            for: oauthEntry,
+                            providerKind: provider.kind
+                        )
+                    await discardBeforeRetry(response)
+                    response = try await operation(.bearerAccessToken(
+                        refreshedToken,
+                        billingProjectID: billingProjectID
+                    ))
+                    code = statusCode(response)
+                } catch OAuthTokenManagerError.authorizationIrrecoverable(
+                    let errorCode
+                ) where errorCode == "invalid_grant" {
+                    if let credentialID = credential.credentialID {
+                        await selector.recordFailure(
+                            credentialID: credentialID,
+                            providerID: provider.id,
+                            reason: .revokedOrInvalid
+                        )
+                    }
+                    guard pool?.mode == .failoverOnly,
+                          attempt + 1 < maximumAttempts
+                    else {
+                        return GatewayCredentialResponse(
+                            response: response,
+                            credentialID: credential.credentialID
+                        )
+                    }
+                    await discardBeforeRetry(response)
+                    continue
+                } catch {
+                    return GatewayCredentialResponse(
+                        response: response,
+                        credentialID: credential.credentialID
+                    )
+                }
+            }
+
+            if (200..<300).contains(code), let credentialID = credential.credentialID {
+                await selector.recordSuccess(
+                    credentialID: credentialID,
+                    providerID: provider.id
+                )
+            }
+
+            guard code == 401,
+                  credential.oauthEntry == nil,
+                  let credentialID = credential.credentialID
+            else {
+                return GatewayCredentialResponse(
+                    response: response,
+                    credentialID: credential.credentialID
+                )
+            }
+
+            await selector.recordFailure(
+                credentialID: credentialID,
+                providerID: provider.id,
+                reason: .revokedOrInvalid
+            )
+            guard pool?.mode == .failoverOnly, attempt + 1 < maximumAttempts else {
+                return GatewayCredentialResponse(
+                    response: response,
+                    credentialID: credentialID
+                )
+            }
+            await discardBeforeRetry(response)
+        }
+        throw ProviderClientError.missingAPIKey
     }
 
     private func targetBlockResponse(
@@ -6470,6 +8193,21 @@ final class AppModel: ObservableObject {
                 statusCode: 503,
                 object: Self.errorObject("target_busy", "该模型已达到并发上限，正在尝试回退目标")
             )
+        case .queueFull:
+            return .json(
+                statusCode: 503,
+                object: Self.errorObject("target_queue_full", "该模型等待队列已满，正在尝试回退目标")
+            )
+        case .queueTimedOut:
+            return .json(
+                statusCode: 503,
+                object: Self.errorObject("target_queue_timeout", "等待模型并发槽位超时，正在尝试回退目标")
+            )
+        case .cancelled:
+            return .json(
+                statusCode: 499,
+                object: Self.errorObject("request_cancelled", "请求已取消，未继续调用上游")
+            )
         case .circuitOpen(let retryAfterSeconds):
             return HTTPResponse(
                 statusCode: 503,
@@ -6495,7 +8233,8 @@ final class AppModel: ObservableObject {
         statusCode: Int,
         latency: Int,
         responseBody: Data,
-        contextCharactersSaved: Int
+        contextCharactersSaved: Int,
+        credentialID: UUID? = nil
     ) async {
         let tokens = UsageAccounting.tokenCounts(from: responseBody)
         let profile = target.profile ?? provider.modelProfiles?[target.model]
@@ -6507,7 +8246,8 @@ final class AppModel: ObservableObject {
             statusCode: statusCode,
             latency: latency,
             sample: GatewayUsageSample(tokens: tokens, estimatedCostUSD: cost),
-            contextCharactersSaved: contextCharactersSaved
+            contextCharactersSaved: contextCharactersSaved,
+            credentialID: credentialID
         )
     }
 
@@ -6518,7 +8258,8 @@ final class AppModel: ObservableObject {
         target: RouteTarget,
         statusCode: Int,
         latency: Int,
-        eventStream: Data
+        eventStream: Data,
+        credentialID: UUID? = nil
     ) async {
         let tokens = UsageAccounting.tokenCounts(fromEventStream: eventStream)
         let profile = target.profile ?? provider.modelProfiles?[target.model]
@@ -6530,7 +8271,8 @@ final class AppModel: ObservableObject {
             statusCode: statusCode,
             latency: latency,
             sample: GatewayUsageSample(tokens: tokens, estimatedCostUSD: cost),
-            contextCharactersSaved: 0
+            contextCharactersSaved: 0,
+            credentialID: credentialID
         )
     }
 
@@ -6541,8 +8283,9 @@ final class AppModel: ObservableObject {
         statusCode: Int,
         latency: Int,
         sample: GatewayUsageSample,
-        contextCharactersSaved: Int
-    ) {
+        contextCharactersSaved: Int,
+        credentialID: UUID? = nil
+    ) async {
         configuration.usage = UsageAccounting.recording(
             aggregates: configuration.usage,
             requestedModel: requestedModel,
@@ -6557,7 +8300,47 @@ final class AppModel: ObservableObject {
             retentionMonths: configuration.operational.analyticsRetentionMonths
         )
         recordScopedCost(sample.estimatedCostUSD, statusCode: statusCode)
+        let access = GatewayRequestScope.access
+        let ledgerRecord = UsageLedgerRecord(
+            requestID: GatewayRequestScope.requestID ?? UUID().uuidString,
+            workspaceID: access?.workspaceID,
+            virtualKeyID: access?.virtualKeyID,
+            providerID: provider.id,
+            credentialID: credentialID,
+            model: target.model,
+            statusCode: statusCode,
+            latencyMilliseconds: latency,
+            inputTokens: sample.tokens.input,
+            outputTokens: sample.tokens.output,
+            estimatedCostUSD: sample.estimatedCostUSD
+        )
+        if !(await usageLedgerWriter.enqueue(ledgerRecord)) {
+            reportUsageLedgerFailureOnce()
+        }
+        let passiveEvent = PassiveHealthEvent(
+            providerID: provider.id,
+            targetID: target.model,
+            outcome: .http(statusCode: statusCode),
+            latencyMilliseconds: latency
+        )
+        _ = await passiveHealthEventBuffer.enqueue(passiveEvent)
         scheduleConfigurationPersistence()
+    }
+
+    private func reportUsageLedgerFailureOnce() {
+        guard !hasReportedUsageLedgerFailure else { return }
+        hasReportedUsageLedgerFailure = true
+        logs.insert(
+            GatewayLogEntry(
+                model: "local-ledger",
+                provider: "ModelHub",
+                statusCode: 500,
+                latencyMilliseconds: 0,
+                detail: "本地详细用量账本写入失败；未记录请求正文或凭证"
+            ),
+            at: 0
+        )
+        if logs.count > 500 { logs.removeLast(logs.count - 500) }
     }
 
     private func recordScopedCost(_ cost: Double?, statusCode: Int) {
@@ -6711,7 +8494,10 @@ final class AppModel: ObservableObject {
               parts[0].caseInsensitiveCompare("Bearer") == .orderedSame,
               let expected = agentTokenWithoutInteraction()
         else { return false }
-        return String(parts[1]) == expected
+        return AccessTokenHasher.matches(
+            String(parts[1]),
+            digest: AccessTokenHasher.digest(expected)
+        )
     }
 
     private func isAgentProtocolPath(_ path: String) -> Bool {

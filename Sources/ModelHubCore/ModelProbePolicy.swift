@@ -96,7 +96,7 @@ public enum ModelProbeRetryPolicy {
     public static func isTransientNetworkError(_ error: URLError) -> Bool {
         return [
             .timedOut, .networkConnectionLost, .cannotConnectToHost,
-            .dnsLookupFailed, .notConnectedToInternet, .secureConnectionFailed
+            .dnsLookupFailed, .notConnectedToInternet
         ].contains(error.code)
     }
 }

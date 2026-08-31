@@ -96,6 +96,14 @@ public enum ConfigurationBackup {
 
     private static func validated(_ configuration: AppConfiguration) throws -> AppConfiguration {
         var copy = configuration
+        do {
+            try CredentialPoolValidator.validate(
+                configuration.credentialPools,
+                providers: configuration.providers
+            )
+        } catch {
+            throw ConfigurationBackupError.invalidData
+        }
         if let settings = configuration.operational.modelProxy {
             // Reject invalid untrusted metadata before normalization. Normalizing first could
             // silently discard a credential-bearing or otherwise malformed subscription.

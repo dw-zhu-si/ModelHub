@@ -1,12 +1,14 @@
 # ModelHub
 
-[![Latest release](https://img.shields.io/github/v/release/dw-zhu-si/ModelHub?display_name=tag&sort=semver)](https://github.com/dw-zhu-si/ModelHub/releases) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE) [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-000000?logo=apple)](https://www.apple.com/macos/)
+[![Latest release](https://img.shields.io/github/v/release/dw-zhu-si/ModelHub?display_name=tag&sort=semver)](https://github.com/dw-zhu-si/ModelHub/releases) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE) [![macOS 14+](https://img.shields.io/badge/macOS-14%2B-000000?logo=apple)](https://www.apple.com/macos/) [![Windows x64 / ARM64](https://img.shields.io/badge/Windows-x64%20%7C%20ARM64-0078D4?logo=windows)](windows/README.md)
 
 English · [简体中文](README.md)
 
+See the [code-signing policy](docs/CODE_SIGNING_POLICY.md) for Windows trust status, signing roles, and release boundaries. ModelHub has prepared its local SignPath Foundation integration but has not submitted the external application yet; Windows builds remain non-public until approval and both real-device gates pass.
+
 ## Product overview
 
-ModelHub is a native macOS local gateway for multi-provider AI APIs. It gives your clients one widely compatible Base URL and stable model aliases, while ModelHub handles provider credentials, protocol differences, health checks, quarantine, routing, failover, budgets, usage analytics, and native media capabilities on the same Mac.
+ModelHub is a local multi-provider AI API gateway for macOS and Windows. The macOS client is native SwiftUI and the Windows client uses Avalonia/.NET; both provide one loopback-only compatible Base URL and stable model aliases while handling credentials, protocol differences, health checks, quarantine, routing, failover, budgets, usage analytics, and media capabilities locally. Public Windows installers remain gated on trusted Authenticode signing and real-device verification for each architecture; see the [Windows client notes](windows/README.md).
 
 The product is designed for developers, local agents, and power users who are tired of changing every client when a provider, model name, API key, or endpoint changes. A model that failed yesterday should not silently receive traffic today, and an untested model should not be exposed as if it were ready. ModelHub makes those states explicit and keeps normal catalog reads local and side-effect free.
 
@@ -81,6 +83,10 @@ See the complete [OpenAPI contract](openapi/modelhub-openapi.yaml).
 - no unconditional replay of a request that may already have been billed;
 - quarantined targets are removed from routes until a user explicitly clears or revalidates them.
 
+Billable, non-streaming `POST /v1/*` requests may include a 1–128 character safe-ASCII `Idempotency-Key`. The same scope, key, and request execute once; concurrent duplicates wait for the same result and later replays return `X-ModelHub-Idempotent-Replay: true`. Reusing a key for a different request returns 409, and streaming requests reject idempotent replay. Coordination is memory-only and bounded by TTL, entry count, and bytes.
+
+Alias routes may also use `X-ModelHub-Session-ID` as an affinity hint. ModelHub retains only a digest in a bounded TTL/LRU table and prefers the last successful target while still enforcing quarantine, budget, and failover policies. An optional bounded target queue provides FIFO order within one access scope and round-robin fairness across virtual keys, with explicit full, timeout, and cancellation outcomes.
+
 ### Health and quarantine
 
 Every model health record includes its last check time, latency, HTTP status, and a readable reason. The UI distinguishes “available”, “pending verification · quarantined”, “unavailable”, and “needs configuration/processing”; an empty health record is never treated as usable.
@@ -102,10 +108,31 @@ When pending verification came from a proxy or TLS failure, **Proxy Subscription
 
 - aggregate requests, success rate, latency, tokens, estimated cost, and context savings by model and provider;
 - per-model input, output, and fixed per-request costs with a recorded pricing source and timestamp;
-- one-click price synchronization with live progress directly from Usage Analytics, using configured or verified machine-readable catalogs owned by the provider and scheduled for 00:00 local time by default; existing manual values remain when explicit amounts or units are unavailable, with no third-party scraping or guessing;
+- one-click price synchronization with live progress directly from Usage Analytics, using configured or verified machine-readable catalogs owned by the provider and scheduled for 00:00 local time by default;
+- when a provider catalog has no price, exact recognized model IDs may receive a release-bundled, reviewed upstream public reference price. It is labeled as a non-settlement estimate; manual/CSV prices and provider machine prices always win, while ambiguous models remain unknown. See the Chinese [reference-pricing and exchange-rate policy](docs/REFERENCE_PRICING.md);
+- display currencies track the latest published ECB working-day reference data at startup and every six hours. A failed refresh keeps the previous successful value, retries after 30 minutes, and exposes the effective date, fetch time, and failure state;
 - monthly token quotas, budget warnings, and hard limits;
-- unknown pricing stays unknown instead of becoming a made-up estimate;
+- pricing without a reliable exact match stays unknown instead of becoming zero or an unverifiable estimate;
 - import preview, a 10 MiB configuration backup limit, and automatic rollback copies; Keychain secrets are never backed up.
+
+`GET /v1/analytics/ledger` returns an opaque-cursor-paginated per-request ledger by UTC month (legacy integer cursor input remains accepted). Rows contain only request, workspace, virtual-key, provider, and credential UUIDs plus model, status, latency, tokens, and estimated cost. Prompts, responses, headers, and secrets have no ledger representation. Monthly shards have hard row, file-size, and retention limits and are readable only by the current user.
+
+### Developer credential pools and OAuth boundary
+
+- a provider may hold multiple Developer API keys, selected manually or failed over only after a credential is definitively rejected;
+- 401/403 can mark one developer credential unavailable without quarantining the model or provider;
+- 429, exhausted quota, transport errors, and 5xx never rotate accounts;
+- every secret is stored separately in macOS Keychain; configuration, backups, logs, and the usage ledger retain only non-authenticating UUIDs and metadata;
+- Gemini Developer OAuth now supports an explicit interactive authorization flow for a user-owned Google Cloud Desktop OAuth client and project. It uses official HTTPS endpoints, a fixed reviewed scope set, PKCE, state/nonce, and an exact loopback callback; access/refresh tokens and binding metadata remain in macOS Keychain and irrecoverable authorization failures require a user-driven reauthorization;
+- ChatGPT, Claude, Gemini Apps, and other consumer-subscription accounts, cookies, tokens, and official-client login files are never imported or pooled, including for personal use.
+
+See the Chinese [credential-pool and OAuth compliance boundary](docs/CREDENTIAL_POOL_COMPLIANCE.md) for the current implementation matrix, official sources, and release checklist.
+
+### Passive health alerts and media batch queue
+
+Real gateway traffic feeds a bounded in-memory passive health monitor. Ordinary client 4xx responses are not model failures; repeated failures, high latency, and recovery may generate local notifications. Notifications are off by default and request macOS permission only after the user opts in. Their content excludes prompts, outputs, URLs, and credentials.
+
+The API Console can queue image, music, and video work through the authenticated local gateway. Each submission requires billable confirmation; a batch is capped at 20, the queue at 100, and default concurrency at two. Creation is never retried, task polling is bounded, and pause/resume/cancel are explicit. Request bodies live only in memory while work is active and are released at every terminal state.
 
 ### Access governance for individuals and small teams
 
@@ -118,6 +145,8 @@ When pending verification came from a proxy or TLS failure, **Proxy Subscription
 ### Optional in-memory cache and failure fallback
 
 The **Routing & Protocols** screen can enable a bounded, opt-in memory cache for byte-identical non-streaming Chat Completions and Responses requests. It is off by default. Keys are request digests scoped to the primary or virtual access key, and response bodies remain in process memory only. TTL, entry count, total bytes, and LRU eviction provide hard bounds. When an upstream returns 5xx, ModelHub may serve a still-permitted stale response and marks it with `X-ModelHub-Cache: STALE` so cached output is never presented as a fresh generation.
+
+`GET /health` exposes bounded aggregate counters for cache, proxy sessions, rate limits, fair queues, circuit breakers, idempotency, session affinity, passive health, media batches, and verification freshness. It never uses request IDs or raw session IDs as high-cardinality metric labels.
 
 ### Providers and native protocols
 

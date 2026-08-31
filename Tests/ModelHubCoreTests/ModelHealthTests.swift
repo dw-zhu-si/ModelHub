@@ -1332,8 +1332,8 @@ final class ModelHealthTests: XCTestCase {
         )
     }
 
-    func testRetryPolicyRetriesTransientTLSHandshakeFailureWithoutRetryingUntrustedCertificate() {
-        XCTAssertTrue(
+    func testProbeRetryPolicyDoesNotMultiplyTransportTLSRetryOrRetryUntrustedCertificate() {
+        XCTAssertFalse(
             ModelProbeRetryPolicy.shouldRetryNetworkError(
                 URLError(.secureConnectionFailed),
                 attempt: 1

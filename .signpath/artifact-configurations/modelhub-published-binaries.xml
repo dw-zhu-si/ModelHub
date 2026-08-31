@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+    <parameter name="build" required="true" />
+  </parameters>
+  <zip-file>
+    <directory-set>
+      <include path="win-x64" />
+      <include path="win-arm64" />
+      <for-each>
+        <pe-file path="ModelHub.Windows.exe"
+                 product-name="ModelHub"
+                 product-version="${version}+build.${build}"
+                 file-version="${version}.${build}"
+                 company-name="野路子工作室"
+                 original-filename="ModelHub.Windows.exe">
+          <authenticode-sign description="ModelHub" description-url="https://github.com/dw-zhu-si/ModelHub" />
+        </pe-file>
+        <pe-file path="ModelHub.Windows.dll"
+                 product-name="ModelHub"
+                 product-version="${version}+build.${build}"
+                 file-version="${version}.${build}"
+                 company-name="野路子工作室">
+          <authenticode-sign description="ModelHub" description-url="https://github.com/dw-zhu-si/ModelHub" />
+        </pe-file>
+      </for-each>
+    </directory-set>
+  </zip-file>
+</artifact-configuration>

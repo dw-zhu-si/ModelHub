@@ -366,6 +366,7 @@ public struct PricingUpdateSettings: Codable, Hashable, Sendable {
 
 public struct OperationalSettings: Codable, Hashable, Sendable {
     public var resilience: ResilienceSettings
+    public var targetQueue: TargetQueueSettings?
     public var budget: BudgetSettings
     public var contextOptimization: ContextOptimizationSettings
     public var agentProtocols: AgentProtocolSettings
@@ -377,6 +378,7 @@ public struct OperationalSettings: Codable, Hashable, Sendable {
 
     public init(
         resilience: ResilienceSettings = .init(),
+        targetQueue: TargetQueueSettings? = .init(),
         budget: BudgetSettings = .init(),
         contextOptimization: ContextOptimizationSettings = .init(),
         agentProtocols: AgentProtocolSettings = .init(),
@@ -387,6 +389,7 @@ public struct OperationalSettings: Codable, Hashable, Sendable {
         analyticsRetentionMonths: Int = 12
     ) {
         self.resilience = resilience
+        self.targetQueue = targetQueue
         self.budget = budget
         self.contextOptimization = contextOptimization
         self.agentProtocols = agentProtocols

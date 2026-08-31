@@ -993,6 +993,61 @@ public enum ProviderModelPricingAvailability: Sendable, Equatable {
     case unavailable(reason: String)
 }
 
+public struct ProviderModelPriceRefreshSummary: Sendable, Equatable {
+    public let totalProviders: Int
+    public let catalogsChecked: Int
+    public let catalogsFetched: Int
+    public let catalogsWithoutPrices: Int
+    public let modelsUpdated: Int
+    public let unavailablePriceSources: Int
+    public let missingCredentials: Int
+    public let failures: Int
+    public let referenceModelsApplied: Int
+    public let referenceModelsAvailable: Int
+    public let modelsStillUnpriced: Int
+
+    public init(
+        totalProviders: Int,
+        catalogsChecked: Int,
+        catalogsFetched: Int,
+        catalogsWithoutPrices: Int,
+        modelsUpdated: Int,
+        unavailablePriceSources: Int,
+        missingCredentials: Int,
+        failures: Int,
+        referenceModelsApplied: Int = 0,
+        referenceModelsAvailable: Int = 0,
+        modelsStillUnpriced: Int = 0
+    ) {
+        self.totalProviders = max(0, totalProviders)
+        self.catalogsChecked = max(0, catalogsChecked)
+        self.catalogsFetched = max(0, catalogsFetched)
+        self.catalogsWithoutPrices = max(0, catalogsWithoutPrices)
+        self.modelsUpdated = max(0, modelsUpdated)
+        self.unavailablePriceSources = max(0, unavailablePriceSources)
+        self.missingCredentials = max(0, missingCredentials)
+        self.failures = max(0, failures)
+        self.referenceModelsApplied = max(0, referenceModelsApplied)
+        self.referenceModelsAvailable = max(0, referenceModelsAvailable)
+        self.modelsStillUnpriced = max(0, modelsStillUnpriced)
+    }
+
+    public var didUpdatePrices: Bool { modelsUpdated > 0 || referenceModelsApplied > 0 }
+
+    public func message(trigger: String) -> String {
+        if referenceModelsApplied > 0 {
+            return "\(trigger)：从供应商机器目录更新 \(modelsUpdated) 个模型，并为 \(referenceModelsApplied) 个缺价模型填入 ModelHub 内置上游公开参考价；仍有 \(modelsStillUnpriced) 个模型无可靠参考价。参考价不代表当前渠道结算价，供应商目录、CSV 和手动价始终优先。目录情况：检查 \(catalogsChecked) 个，成功读取 \(catalogsFetched) 个，\(catalogsWithoutPrices) 个无明确价格，\(unavailablePriceSources) 个无机器价格源，\(missingCredentials) 个缺少凭证，\(failures) 个失败。"
+        }
+        if modelsUpdated == 0 && referenceModelsAvailable > 0 {
+            return "\(trigger)：未发现需要改写的价格。当前 \(referenceModelsAvailable) 个模型已有 ModelHub 内置上游公开参考价，仍有 \(modelsStillUnpriced) 个模型无可靠参考价。参考价不代表当前渠道结算价，供应商目录、CSV 和手动价始终优先。目录情况：检查 \(catalogsChecked) 个，成功读取 \(catalogsFetched) 个，\(catalogsWithoutPrices) 个无明确价格，\(unavailablePriceSources) 个无机器价格源，\(missingCredentials) 个缺少凭证，\(failures) 个失败。"
+        }
+        if !didUpdatePrices {
+            return "\(trigger)：未写入任何价格。\(totalProviders) 个已启用供应商中：\(unavailablePriceSources) 个模型目录不提供带明确币种和单位的机器可读价格，\(missingCredentials) 个缺少可用凭证，\(catalogsWithoutPrices) 个目录已响应但没有明确价格，\(failures) 个请求失败。未修改现有费用；可在供应商编辑页导入其官方价格 CSV。"
+        }
+        return "\(trigger)：检查 \(catalogsChecked) 个价格目录，成功读取 \(catalogsFetched) 个，更新 \(modelsUpdated) 个模型价格；\(catalogsWithoutPrices) 个目录未返回明确价格，\(unavailablePriceSources) 个供应商无机器可读价格源，\(missingCredentials) 个缺少凭证，\(failures) 个失败。"
+    }
+}
+
 public enum ProviderModelCatalogPricingPolicy {
     private static let builtInMachinePriceKinds: Set<ProviderKind> = [
         .xAI, .openRouter, .togetherAI,

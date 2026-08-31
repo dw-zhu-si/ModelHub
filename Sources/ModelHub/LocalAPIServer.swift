@@ -94,8 +94,8 @@ struct HTTPResponse: Sendable {
         allHeaders["Content-Length"] = String(body.count)
         allHeaders["Connection"] = "close"
         allHeaders["Access-Control-Allow-Origin"] = "http://127.0.0.1"
-        allHeaders["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-ModelHub-Request-ID, X-Request-ID"
-        allHeaders["Access-Control-Expose-Headers"] = "X-ModelHub-Request-ID"
+        allHeaders["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Idempotency-Key, X-ModelHub-Session-ID, X-ModelHub-Request-ID, X-Request-ID"
+        allHeaders["Access-Control-Expose-Headers"] = "X-ModelHub-Request-ID, X-ModelHub-Idempotent-Replay"
         allHeaders["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
 
         var head = "HTTP/1.1 \(statusCode) \(httpReasonPhrase(statusCode))\r\n"
@@ -128,7 +128,7 @@ struct HTTPStreamResponse: Sendable {
         allHeaders["Connection"] = "close"
         allHeaders["Cache-Control"] = "no-cache"
         allHeaders["Access-Control-Allow-Origin"] = "http://127.0.0.1"
-        allHeaders["Access-Control-Allow-Headers"] = "Authorization, Content-Type, X-ModelHub-Request-ID, X-Request-ID"
+        allHeaders["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Idempotency-Key, X-ModelHub-Session-ID, X-ModelHub-Request-ID, X-Request-ID"
         allHeaders["Access-Control-Expose-Headers"] = "X-ModelHub-Request-ID"
         var head = "HTTP/1.1 \(statusCode) \(httpReasonPhrase(statusCode))\r\n"
         for (key, value) in allHeaders { head += "\(key): \(value)\r\n" }
@@ -260,6 +260,8 @@ struct HTTPRequestParser {
             "content-length",
             "host",
             "transfer-encoding",
+            "idempotency-key",
+            "x-modelhub-session-id",
             "x-modelhub-request-id",
             "x-request-id"
         ])
@@ -645,6 +647,9 @@ final class LocalAPIServer: @unchecked Sendable {
     private var connectionTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
     private let requestParser = HTTPRequestParser()
     private let maximumBufferedBytes = 33 * 1_024 * 1_024
+    private var bufferedBytesByConnection: [ObjectIdentifier: Int] = [:]
+    private var totalBufferedBytes = 0
+    private let maximumTotalBufferedBytes = 128 * 1_024 * 1_024
 
     init(
         handler: @escaping Handler,
@@ -702,6 +707,8 @@ final class LocalAPIServer: @unchecked Sendable {
             connectionTasks.removeAll()
             connections.values.forEach { $0.cancel() }
             connections.removeAll()
+            bufferedBytesByConnection.removeAll()
+            totalBufferedBytes = 0
         }
     }
 
@@ -807,6 +814,27 @@ final class LocalAPIServer: @unchecked Sendable {
                 let response = HTTPResponse.json(
                     statusCode: 413,
                     object: ["error": ["message": "请求体超过 32 MiB", "type": "request_too_large"]]
+                ).addingRequestID(UUID().uuidString)
+                self.cancelRequestTimeouts(for: connection)
+                self.send(response, on: connection)
+                return
+            }
+            let previousBufferedBytes = self.bufferedBytesByConnection[identifier] ?? 0
+            self.totalBufferedBytes = max(
+                0,
+                self.totalBufferedBytes - previousBufferedBytes + parser.bufferedByteCount
+            )
+            self.bufferedBytesByConnection[identifier] = parser.bufferedByteCount
+            guard self.totalBufferedBytes <= self.maximumTotalBufferedBytes else {
+                let response = HTTPResponse.json(
+                    statusCode: 503,
+                    object: [
+                        "error": [
+                            "message": "服务器请求缓冲区已达上限，请稍后重试",
+                            "type": "request_buffer_capacity_exceeded",
+                            "code": "request_buffer_capacity_exceeded"
+                        ]
+                    ]
                 ).addingRequestID(UUID().uuidString)
                 self.cancelRequestTimeouts(for: connection)
                 self.send(response, on: connection)
@@ -951,5 +979,8 @@ final class LocalAPIServer: @unchecked Sendable {
         absoluteRequestTimeouts.removeValue(forKey: identifier)?.cancel()
         connectionTasks.removeValue(forKey: identifier)?.cancel()
         connections.removeValue(forKey: identifier)
+        if let bytes = bufferedBytesByConnection.removeValue(forKey: identifier) {
+            totalBufferedBytes = max(0, totalBufferedBytes - bytes)
+        }
     }
 }

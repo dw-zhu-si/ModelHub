@@ -1,0 +1,164 @@
+name: Windows client gate
+
+on:
+  pull_request:
+    paths:
+      - 'windows/**'
+      - '.signpath/**'
+      - 'docs/CODE_SIGNING_POLICY.md'
+      - '.github/workflows/windows-release.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'windows/**'
+      - '.signpath/**'
+      - 'docs/CODE_SIGNING_POLICY.md'
+      - '.github/workflows/windows-release.yml'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'SemVer to package (example: 1.10.0)'
+        required: true
+        default: '1.10.0'
+      trusted_release:
+        description: 'Require trusted Authenticode signing and produce release candidates'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  validate:
+    name: Validate ${{ matrix.rid }}
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [win-x64, win-arm64]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Restore locked dependencies
+        run: dotnet restore windows/ModelHub.Windows.sln --locked-mode
+      - name: Build Windows client
+        run: dotnet build windows/ModelHub.Windows.sln -c Release --no-restore
+      - name: Test Windows client
+        run: dotnet test windows/ModelHub.Windows.sln -c Release --no-build --logger "console;verbosity=normal"
+      - name: Publish untrusted candidate
+        run: dotnet publish windows/src/ModelHub.Windows/ModelHub.Windows.csproj -c Release -r ${{ matrix.rid }} --self-contained true --no-restore -o windows/artifacts/${{ matrix.rid }}
+      - name: Upload untrusted build evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ModelHub-Windows-${{ matrix.rid }}-unsigned-build-only
+          path: windows/artifacts/${{ matrix.rid }}
+          retention-days: 7
+
+  trusted-package:
+    name: SignPath trusted package (x64 + ARM64)
+    needs: validate
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.trusted_release
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Restore dependencies
+        run: dotnet restore windows/ModelHub.Windows.sln --locked-mode
+      - name: Install matching Velopack CLI
+        run: dotnet tool install --global vpk --version 1.2.0
+      - name: Prepare unsigned project-owned binaries
+        shell: pwsh
+        run: |
+          & ./windows/eng/Prepare-SignPathWindows.ps1 `
+            -Version '${{ inputs.version }}' `
+            -Build 67 `
+            -OutputRoot "$env:GITHUB_WORKSPACE\windows\signpath-prepared"
+      - name: Upload unsigned application binaries for origin-verified signing
+        id: upload-unsigned-publish
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ModelHub-Windows-${{ inputs.version }}-build-67-signpath-publish-input
+          if-no-files-found: error
+          path: |
+            windows/signpath-prepared/unsigned-publish/win-x64
+            windows/signpath-prepared/unsigned-publish/win-arm64
+          retention-days: 1
+      - name: Sign ModelHub-owned application binaries with SignPath
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2.3
+        with:
+          api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
+          organization-id: '${{ vars.SIGNPATH_ORGANIZATION_ID }}'
+          project-slug: '${{ vars.SIGNPATH_PROJECT_SLUG }}'
+          signing-policy-slug: '${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}'
+          artifact-configuration-slug: '${{ vars.SIGNPATH_PUBLISH_ARTIFACT_CONFIGURATION_SLUG }}'
+          github-artifact-id: '${{ steps.upload-unsigned-publish.outputs.artifact-id }}'
+          wait-for-completion: true
+          output-artifact-directory: 'windows/signpath-signed-publish'
+          parameters: |
+            version: ${{ toJSON(inputs.version) }}
+            build: 67
+      - name: Build Velopack packages from signed application binaries
+        shell: pwsh
+        run: |
+          & ./windows/eng/Package-SignPathWindows.ps1 `
+            -Version '${{ inputs.version }}' `
+            -Build 67 `
+            -SignedPublishRoot "$env:GITHUB_WORKSPACE\windows\signpath-signed-publish" `
+            -OutputRoot "$env:GITHUB_WORKSPACE\windows\signpath-packaged"
+      - name: Upload unsigned Setup executables for origin-verified signing
+        id: upload-unsigned-setups
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ModelHub-Windows-${{ inputs.version }}-build-67-signpath-setup-input
+          if-no-files-found: error
+          path: |
+            windows/signpath-packaged/unsigned-setups/win-x64
+            windows/signpath-packaged/unsigned-setups/win-arm64
+          retention-days: 1
+      - name: Sign Velopack Setup executables with SignPath
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2.3
+        with:
+          api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
+          organization-id: '${{ vars.SIGNPATH_ORGANIZATION_ID }}'
+          project-slug: '${{ vars.SIGNPATH_PROJECT_SLUG }}'
+          signing-policy-slug: '${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}'
+          artifact-configuration-slug: '${{ vars.SIGNPATH_SETUP_ARTIFACT_CONFIGURATION_SLUG }}'
+          github-artifact-id: '${{ steps.upload-unsigned-setups.outputs.artifact-id }}'
+          wait-for-completion: true
+          output-artifact-directory: 'windows/signpath-signed-setups'
+          parameters: |
+            version: ${{ toJSON(inputs.version) }}
+            build: 67
+      - name: Finalize and verify both trusted release candidates
+        shell: pwsh
+        run: |
+          & ./windows/eng/Finalize-SignPathWindows.ps1 `
+            -Version '${{ inputs.version }}' `
+            -Build 67 `
+            -PackagedRoot "$env:GITHUB_WORKSPACE\windows\signpath-packaged" `
+            -SignedSetupRoot "$env:GITHUB_WORKSPACE\windows\signpath-signed-setups" `
+            -OutputRoot "$env:GITHUB_WORKSPACE\windows\signpath-final"
+      - name: Upload SignPath-verified candidates for real-Windows gates
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ModelHub-Windows-${{ inputs.version }}-build-67-SignPath-candidates
+          if-no-files-found: error
+          path: windows/signpath-final/stable/${{ inputs.version }}/build-67
+          retention-days: 7
+
+# This workflow intentionally never creates a GitHub Release. A separate approved release workflow
+# may upload only artifacts that have passed the documented real-Windows install/upgrade/uninstall gate.

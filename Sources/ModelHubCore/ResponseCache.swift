@@ -23,6 +23,8 @@ public enum ResponseCacheKey {
     public static func digest(
         method: String,
         path: String,
+        canonicalQuery: String = "",
+        semanticHeaders: [String: String] = [:],
         body: Data,
         accessScope: String
     ) -> String {
@@ -30,10 +32,41 @@ public enum ResponseCacheKey {
         input.append(0)
         input.append(contentsOf: path.utf8)
         input.append(0)
+        input.append(contentsOf: canonicalQuery.utf8)
+        input.append(0)
+        let normalizedHeaders: [(String, String)] = semanticHeaders.map { entry in
+            let name = entry.key.lowercased()
+            let value = entry.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (name, value)
+        }
+        let sortedHeaders = normalizedHeaders.sorted { lhs, rhs in
+            if lhs.0 != rhs.0 { return lhs.0 < rhs.0 }
+            return lhs.1 < rhs.1
+        }
+        for (name, value) in sortedHeaders {
+            input.append(contentsOf: name.utf8)
+            input.append(0x3A)
+            input.append(contentsOf: value.utf8)
+            input.append(0)
+        }
         input.append(contentsOf: accessScope.utf8)
         input.append(0)
         input.append(body)
         return SHA256.hash(data: input).map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+public enum ResponseCacheHeaderPolicy {
+    private static let allowedNames: Set<String> = [
+        "content-type",
+        "content-language"
+    ]
+
+    /// Cached gateway responses retain only representation metadata. Hop-by-hop
+    /// headers, cookies, authentication challenges, retry instructions and
+    /// upstream tracing identifiers must never be replayed to another request.
+    public static func sanitized(_ headers: [String: String]) -> [String: String] {
+        headers.filter { allowedNames.contains($0.key.lowercased()) }
     }
 }
 

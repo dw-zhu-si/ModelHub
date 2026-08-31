@@ -317,6 +317,39 @@ public enum ProviderEndpointSecurity {
             return sensitiveNames.contains { name.contains($0) }
         }
     }
+
+    /// Stable, non-secret identity used to bind a stored developer credential
+    /// to the provider type and every configured upstream origin. HTTP is only
+    /// accepted for an explicit loopback endpoint.
+    public static func credentialBindingIdentifier(for provider: ProviderConfig) -> String? {
+        let rawURLs = [provider.baseURL] + Array(provider.endpointURLs.values)
+        var origins: Set<String> = []
+        for raw in rawURLs {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty,
+                  let components = URLComponents(string: trimmed),
+                  isSafeConfigurationURL(components),
+                  let scheme = components.scheme?.lowercased(),
+                  let host = components.host?.lowercased()
+            else { return nil }
+            let isLoopback = ["127.0.0.1", "localhost", "::1"].contains(host)
+            guard scheme == "https" || (scheme == "http" && isLoopback) else {
+                return nil
+            }
+            var origin = URLComponents()
+            origin.scheme = scheme
+            origin.host = host
+            if let port = components.port,
+               !((scheme == "https" && port == 443) || (scheme == "http" && port == 80))
+            {
+                origin.port = port
+            }
+            guard let value = origin.string else { return nil }
+            origins.insert(value)
+        }
+        guard !origins.isEmpty else { return nil }
+        return ([provider.kind.rawValue] + origins.sorted()).joined(separator: "|")
+    }
 }
 
 public struct ProviderConfig: Codable, Identifiable, Hashable, Sendable {
@@ -810,6 +843,7 @@ public struct AppConfiguration: Codable, Sendable {
     public var workspaces: [WorkspaceConfig]
     public var virtualKeys: [VirtualAccessKey]
     public var securityAudit: [SecurityAuditEvent]
+    public var credentialPools: [CredentialPoolConfiguration]
 
     public init(
         providers: [ProviderConfig] = [],
@@ -822,7 +856,8 @@ public struct AppConfiguration: Codable, Sendable {
         usage: [UsageAggregate] = [],
         workspaces: [WorkspaceConfig] = [],
         virtualKeys: [VirtualAccessKey] = [],
-        securityAudit: [SecurityAuditEvent] = []
+        securityAudit: [SecurityAuditEvent] = [],
+        credentialPools: [CredentialPoolConfiguration] = []
     ) {
         self.providers = providers
         self.routes = routes
@@ -835,12 +870,13 @@ public struct AppConfiguration: Codable, Sendable {
         self.workspaces = workspaces
         self.virtualKeys = virtualKeys
         self.securityAudit = securityAudit
+        self.credentialPools = credentialPools
     }
 
     enum CodingKeys: String, CodingKey {
         case providers, routes, routing, server, modelHealth, modelHealthActivities,
              operational, usage,
-             workspaces, virtualKeys, securityAudit
+             workspaces, virtualKeys, securityAudit, credentialPools
     }
 
     public init(from decoder: Decoder) throws {
@@ -864,6 +900,10 @@ public struct AppConfiguration: Codable, Sendable {
         workspaces = try container.decodeIfPresent([WorkspaceConfig].self, forKey: .workspaces) ?? []
         virtualKeys = try container.decodeIfPresent([VirtualAccessKey].self, forKey: .virtualKeys) ?? []
         securityAudit = try container.decodeIfPresent([SecurityAuditEvent].self, forKey: .securityAudit) ?? []
+        credentialPools = try container.decodeIfPresent(
+            [CredentialPoolConfiguration].self,
+            forKey: .credentialPools
+        ) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -879,6 +919,7 @@ public struct AppConfiguration: Codable, Sendable {
         try container.encode(workspaces, forKey: .workspaces)
         try container.encode(virtualKeys, forKey: .virtualKeys)
         try container.encode(securityAudit, forKey: .securityAudit)
+        try container.encode(credentialPools, forKey: .credentialPools)
     }
 }
 
