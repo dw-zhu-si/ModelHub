@@ -39,6 +39,32 @@ final class LocalGatewayMediaBatchExecutorTests: XCTestCase {
         )
     }
 
+    func testSynchronousQianwenImageFieldCompletesWithArtifact() async throws {
+        MediaBatchURLProtocol.handler = { _ in
+            (200, Data(
+                #"{"output":{"choices":[{"message":{"content":[{"image":"https://example.invalid/qwen.png","type":"image"}]}}]},"usage":{"output_image_count":1}}"#.utf8
+            ))
+        }
+        let executor = makeExecutor(token: "local-token")
+        let metadata = MediaBatchMetadata(
+            kind: .image,
+            providerID: UUID(),
+            modelID: "qwen-image-3.0-pro"
+        )
+        await executor.register(payload(for: metadata), for: metadata.id)
+
+        let remoteID = try await executor.create(metadata)
+        let state = try await executor.poll(remoteTaskID: remoteID, metadata: metadata)
+        let result = await executor.result(for: metadata)
+
+        XCTAssertTrue(remoteID.hasPrefix("immediate-"))
+        XCTAssertEqual(state, .succeeded)
+        XCTAssertEqual(
+            result?.artifacts.first?.remoteURL?.absoluteString,
+            "https://example.invalid/qwen.png"
+        )
+    }
+
     func testSynchronousArtifactWinsOverRequestMetadata() async throws {
         let requests = LockedMediaRequests()
         MediaBatchURLProtocol.handler = { request in

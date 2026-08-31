@@ -32,7 +32,7 @@ dotnet publish windows/src/ModelHub.Windows/ModelHub.Windows.csproj -c Release -
 
 本版已经按已提交的 L3 决策改为优先申请 SignPath Foundation 免费开源签名。公开的[代码签名政策](../docs/CODE_SIGNING_POLICY.md)、两份受限 Artifact Configuration 和两阶段 GitHub Actions 流水线已写入仓库：第一阶段只签项目自有 `ModelHub.Windows.exe`/`ModelHub.Windows.dll`，第二阶段只签由这些已签文件生成的 x64/ARM64 Velopack `Setup.exe`。第三方二进制不会被 ModelHub 的 Foundation 签名覆盖；每次真实签名必须由维护者在 SignPath 人工批准。
 
-当前只完成了本地政策、脚本、配置与测试，尚未安装 SignPath GitHub App、授予仓库访问、提交 Foundation 申请或取得证书。工作流所需的 `SIGNPATH_*` 组织/项目变量和 API Token 必须在申请获批后通过 GitHub 的变量与秘密存储配置，不能写入源码或日志。
+当前已由用户账户安装 SignPath GitHub App，但检查时发现它被授予“所有仓库”访问，超过本项目需要的范围。继续前必须在动作时确认后收紧为仅 `dw-zhu-si/ModelHub`；App 固定要求读取 Actions、代码和元数据，并写入 Administration 以完成来源/构建策略集成。Foundation 申请尚未提交，也没有取得证书。工作流所需的 `SIGNPATH_*` 组织/项目变量和 API Token 必须在申请获批后通过 GitHub 的变量与秘密存储配置，不能写入源码或日志。
 
 ## 发布与真实 Windows 门禁
 

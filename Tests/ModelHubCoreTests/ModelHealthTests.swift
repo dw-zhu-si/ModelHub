@@ -291,6 +291,46 @@ final class ModelHealthTests: XCTestCase {
         XCTAssertEqual(record.quarantineCause, .modelAccessNotConfigured)
     }
 
+    func testQianwenImageResponseRequiresUsableGeneratedArtifact() {
+        let provider = ProviderConfig(
+            name: "千问AI平台（按量付费）",
+            kind: .qwen,
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+        let generated = ProviderResponse(
+            statusCode: 200,
+            headers: ["Content-Type": "application/json"],
+            body: Data(
+                #"{"output":{"choices":[{"message":{"content":[{"image":"https://example.invalid/qwen.png","type":"image"}]}}]},"usage":{"output_image_count":1}}"#.utf8
+            )
+        )
+        let emptySuccess = ProviderResponse(
+            statusCode: 200,
+            headers: ["Content-Type": "application/json"],
+            body: Data(#"{"output":{"choices":[]},"usage":{"output_image_count":0}}"#.utf8)
+        )
+
+        let accepted = ModelProbePolicy.nativeResponseAssessment(
+            generated,
+            provider: provider,
+            operation: .imageGeneration,
+            model: "qwen-image-3.0-pro"
+        )
+        let rejected = ModelProbePolicy.nativeResponseAssessment(
+            emptySuccess,
+            provider: provider,
+            operation: .imageGeneration,
+            model: "qwen-image-3.0-pro"
+        )
+
+        XCTAssertTrue(accepted.isAccepted)
+        XCTAssertEqual(accepted.availability, .available)
+        XCTAssertFalse(rejected.isAccepted)
+        XCTAssertEqual(rejected.availability, .unavailable)
+        XCTAssertEqual(rejected.gatewayStatusCode, 502)
+        XCTAssertTrue(rejected.detail.contains("可用图片制品"))
+    }
+
     func testMiniMaxSpeechProbeUsesOfficialBuiltInVoice() throws {
         let payload = try XCTUnwrap(
             ModelProbePolicy.nativeProbePayload(

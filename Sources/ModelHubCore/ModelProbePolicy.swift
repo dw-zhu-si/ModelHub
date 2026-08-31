@@ -297,6 +297,9 @@ public enum ModelProbePolicy {
             return transportFailure(response)
         }
         guard MiniMaxNativeAdapter.isMiniMax(provider) else {
+            if operation == .imageGeneration {
+                return imageArtifactAssessment(response)
+            }
             return transportSuccess(response.statusCode)
         }
         guard let object = try? JSONSerialization.jsonObject(with: response.body)
@@ -445,6 +448,65 @@ public enum ModelProbePolicy {
             gatewayStatusCode: statusCode,
             detail: "HTTP \(statusCode)"
         )
+    }
+
+    private static func imageArtifactAssessment(
+        _ response: ProviderResponse
+    ) -> NativeResponseAssessment {
+        let normalizedContentType = response.contentType.lowercased()
+        if normalizedContentType.hasPrefix("image/"), !response.body.isEmpty {
+            return transportSuccess(response.statusCode)
+        }
+        guard response.body.count <= 16 * 1_024 * 1_024,
+              let object = try? JSONSerialization.jsonObject(with: response.body),
+              containsUsableImageArtifact(object, depth: 0)
+        else {
+            return NativeResponseAssessment(
+                availability: .unavailable,
+                isAccepted: false,
+                gatewayStatusCode: 502,
+                detail: "HTTP \(response.statusCode) · 响应未包含可用图片制品"
+            )
+        }
+        return transportSuccess(response.statusCode)
+    }
+
+    private static func containsUsableImageArtifact(
+        _ value: Any,
+        depth: Int
+    ) -> Bool {
+        guard depth <= 16 else { return false }
+        if let dictionary = value as? [String: Any] {
+            for (key, child) in dictionary {
+                if ["url", "image", "image_url", "imageUrl"].contains(key),
+                   let raw = child as? String,
+                   let url = URL(string: raw),
+                   url.scheme?.lowercased() == "https",
+                   url.user == nil,
+                   url.password == nil,
+                   url.fragment == nil
+                {
+                    return true
+                }
+                if ["b64_json", "base64", "base64_data"].contains(key),
+                   let raw = child as? String,
+                   !raw.isEmpty,
+                   let decoded = Data(base64Encoded: raw, options: [.ignoreUnknownCharacters]),
+                   !decoded.isEmpty,
+                   decoded.count <= 16 * 1_024 * 1_024
+                {
+                    return true
+                }
+                if containsUsableImageArtifact(child, depth: depth + 1) {
+                    return true
+                }
+            }
+        } else if let array = value as? [Any] {
+            return array.contains {
+                containsUsableImageArtifact($0, depth: depth + 1)
+            }
+        }
+        return false
     }
 
     private static func transportFailure(_ response: ProviderResponse) -> NativeResponseAssessment {

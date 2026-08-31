@@ -371,7 +371,7 @@ actor LocalGatewayMediaBatchExecutor: MediaBatchExecuting {
     private static func findArtifactURLs(in value: Any, depth: Int) -> [URL] {
         guard depth <= 16 else { return [] }
         let keys: Set<String> = [
-            "url", "image_url", "imageUrl", "video_url", "videoUrl",
+            "url", "image", "image_url", "imageUrl", "video_url", "videoUrl",
             "audio_url", "audioUrl", "file_url", "fileUrl", "download_url"
         ]
         var found: [URL] = []
