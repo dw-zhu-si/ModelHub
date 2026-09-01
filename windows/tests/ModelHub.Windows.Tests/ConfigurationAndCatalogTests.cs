@@ -276,8 +276,14 @@ public sealed class ConfigurationAndCatalogTests
         await handler.Started.Task.WaitAsync(TimeSpan.FromSeconds(1));
 
         await gateway.StopAsync().WaitAsync(TimeSpan.FromSeconds(2));
-        using var completed = await request.WaitAsync(TimeSpan.FromSeconds(2));
-        Assert.NotNull(completed);
+        var completion = await Record.ExceptionAsync(async () =>
+        {
+            using var response = await request.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.NotNull(response);
+        });
+        Assert.True(
+            completion is null or HttpRequestException or OperationCanceledException,
+            $"Gateway shutdown must terminate the request without hanging; observed {completion?.GetType().Name}.");
     }
 
     [Fact]

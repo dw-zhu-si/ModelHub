@@ -23,7 +23,17 @@ function Resolve-SafeAbsolutePath {
         [Parameter(Mandatory = $true)] [string] $ParameterName
     )
 
-    if (-not [System.IO.Path]::IsPathFullyQualified($Path)) {
+    # Package inputs must stay on a local absolute drive path on Windows.  The
+    # .NET Framework used by Windows PowerShell 5.1 does not expose
+    # Path.IsPathFullyQualified, so use a bounded syntax check there and the
+    # long-standing IsPathRooted API for non-Windows dry-run tests.
+    $isFullyQualified = if ($env:OS -eq 'Windows_NT') {
+        $Path -match '^[A-Za-z]:[\\/]'
+    }
+    else {
+        [System.IO.Path]::IsPathRooted($Path)
+    }
+    if (-not $isFullyQualified) {
         throw "$ParameterName must be an absolute path."
     }
     $fullPath = [System.IO.Path]::GetFullPath($Path)

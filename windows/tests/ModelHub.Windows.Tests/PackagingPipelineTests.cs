@@ -272,7 +272,9 @@ public sealed class PackagingPipelineTests
             await File.WriteAllBytesAsync(certificate, [0x00]);
             var result = await InvokeDryRunAsync(runtime, "1.10.0", "67", outputRoot, certificate);
 
-            Assert.Equal(0, result.ExitCode);
+            Assert.True(
+                result.ExitCode == 0,
+                $"Packaging dry-run failed with exit code {result.ExitCode}:{Environment.NewLine}{result.Output}");
             Assert.Contains("\"ProducesArtifacts\":false", result.Output, StringComparison.Ordinal);
             Assert.Contains($"\"Architecture\":\"{architecture}\"", result.Output, StringComparison.Ordinal);
             Assert.Contains($"\"Channel\":\"{channel}\"", result.Output, StringComparison.Ordinal);
