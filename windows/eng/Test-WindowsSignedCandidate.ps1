@@ -11,17 +11,26 @@ $ErrorActionPreference = 'Stop'
 $Version = '1.10.0'
 $Build = 67
 
+function Test-SafePathIsFullyQualified {
+    param([Parameter(Mandatory = $true)] [string] $Path)
+
+    if ($env:OS -eq 'Windows_NT') {
+        return $Path -match '^[A-Za-z]:[\\/]'
+    }
+    return [System.IO.Path]::IsPathRooted($Path)
+}
+
 function Resolve-SafeAbsolutePath {
     param(
         [Parameter(Mandatory = $true)] [string] $Path,
         [Parameter(Mandatory = $true)] [string] $ParameterName
     )
-    if (-not [System.IO.Path]::IsPathFullyQualified($Path)) {
+    if (-not (Test-SafePathIsFullyQualified -Path $Path)) {
         throw "$ParameterName must be an absolute path."
     }
     $fullPath = [System.IO.Path]::GetFullPath($Path)
     $root = [System.IO.Path]::GetPathRoot($fullPath)
-    if ([string]::Equals($fullPath, $root, [System.StringComparison]::OrdinalIgnoreCase)) {
+    if ($fullPath -ieq $root) {
         throw "$ParameterName must not be a filesystem root."
     }
     return $fullPath

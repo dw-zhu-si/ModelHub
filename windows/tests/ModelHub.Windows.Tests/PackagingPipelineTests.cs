@@ -110,6 +110,20 @@ public sealed class PackagingPipelineTests
     }
 
     [Fact]
+    public void WindowsReleaseScriptsRemainCompatibleWithWindowsPowerShell51PathApis()
+    {
+        var engineeringRoot = Path.Combine(FindWindowsRoot(), "eng");
+        var releaseScripts = Directory.GetFiles(engineeringRoot, "*.ps1", SearchOption.TopDirectoryOnly);
+
+        Assert.NotEmpty(releaseScripts);
+        foreach (var releaseScript in releaseScripts)
+        {
+            var contents = File.ReadAllText(releaseScript);
+            Assert.DoesNotContain("::IsPathFullyQualified", contents, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void SignPathPolicyAndArtifactConfigurationsConstrainWhatMayBeSigned()
     {
         var windowsRoot = FindWindowsRoot();

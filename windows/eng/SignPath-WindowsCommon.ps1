@@ -10,6 +10,15 @@ $script:ModelHubCompanyName = '野路子工作室'
 $script:ModelHubMainExe = 'ModelHub.Windows.exe'
 $script:ModelHubAssembly = 'ModelHub.Windows.dll'
 
+function Test-ModelHubPathIsFullyQualified {
+    param([Parameter(Mandatory = $true)] [string] $Path)
+
+    if ($env:OS -eq 'Windows_NT') {
+        return $Path -match '^[A-Za-z]:[\\/]'
+    }
+    return [System.IO.Path]::IsPathRooted($Path)
+}
+
 function Assert-ModelHubApprovedRelease {
     param(
         [Parameter(Mandatory = $true)] [string] $Version,
@@ -30,13 +39,12 @@ function Resolve-ModelHubSafeAbsolutePath {
         [Parameter(Mandatory = $true)] [string] $ParameterName
     )
 
-    if (-not [System.IO.Path]::IsPathFullyQualified($Path)) {
+    if (-not (Test-ModelHubPathIsFullyQualified -Path $Path)) {
         throw "$ParameterName must be an absolute path."
     }
     $fullPath = [System.IO.Path]::GetFullPath($Path)
     $pathRoot = [System.IO.Path]::GetPathRoot($fullPath)
-    $trimCharacters = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
-    if ($fullPath.TrimEnd($trimCharacters) -eq $pathRoot.TrimEnd($trimCharacters)) {
+    if ($fullPath -ieq $pathRoot) {
         throw "$ParameterName must not be a filesystem root."
     }
     return $fullPath

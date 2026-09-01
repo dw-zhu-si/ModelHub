@@ -210,7 +210,18 @@ public sealed class LocalGatewayService : IAsyncDisposable
         }
         finally
         {
-            context.Response.Close();
+            try
+            {
+                context.Response.Close();
+            }
+            catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Listener shutdown may dispose an in-flight response first.
+            }
+            catch (HttpListenerException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Listener shutdown owns the connection and may already have closed it.
+            }
         }
     }
 

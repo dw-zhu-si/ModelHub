@@ -17,23 +17,25 @@ $ApprovedBuild = 67
 $ApprovedVelopackVersion = '1.2.0'
 $MainExe = 'ModelHub.Windows.exe'
 
+function Test-SafePathIsFullyQualified {
+    param([Parameter(Mandatory = $true)] [string] $Path)
+
+    # Public release inputs are deliberately limited to local drive paths on
+    # Windows. Windows PowerShell 5.1 runs on .NET Framework, which does not
+    # expose Path.IsPathFullyQualified.
+    if ($env:OS -eq 'Windows_NT') {
+        return $Path -match '^[A-Za-z]:[\\/]'
+    }
+    return [System.IO.Path]::IsPathRooted($Path)
+}
+
 function Resolve-SafeAbsolutePath {
     param(
         [Parameter(Mandatory = $true)] [string] $Path,
         [Parameter(Mandatory = $true)] [string] $ParameterName
     )
 
-    # Package inputs must stay on a local absolute drive path on Windows.  The
-    # .NET Framework used by Windows PowerShell 5.1 does not expose
-    # Path.IsPathFullyQualified, so use a bounded syntax check there and the
-    # long-standing IsPathRooted API for non-Windows dry-run tests.
-    $isFullyQualified = if ($env:OS -eq 'Windows_NT') {
-        $Path -match '^[A-Za-z]:[\\/]'
-    }
-    else {
-        [System.IO.Path]::IsPathRooted($Path)
-    }
-    if (-not $isFullyQualified) {
+    if (-not (Test-SafePathIsFullyQualified -Path $Path)) {
         throw "$ParameterName must be an absolute path."
     }
     $fullPath = [System.IO.Path]::GetFullPath($Path)
@@ -258,7 +260,7 @@ if ([string]::IsNullOrWhiteSpace($ExpectedPublisher) -or $ExpectedPublisher.Leng
     throw 'ExpectedPublisher is invalid.'
 }
 if ([string]::IsNullOrWhiteSpace($SigningCertificatePath) -or
-    -not [System.IO.Path]::IsPathFullyQualified($SigningCertificatePath) -or
+    -not (Test-SafePathIsFullyQualified -Path $SigningCertificatePath) -or
     [System.IO.Path]::GetExtension($SigningCertificatePath) -ine '.pfx' -or
     -not (Test-Path -LiteralPath $SigningCertificatePath -PathType Leaf)) {
     throw 'A trusted Authenticode certificate file is required; self-signed fallback is prohibited.'
