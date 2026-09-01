@@ -28,11 +28,11 @@ function Resolve-SafeAbsolutePath {
     }
     $fullPath = [System.IO.Path]::GetFullPath($Path)
     $pathRoot = [System.IO.Path]::GetPathRoot($fullPath)
-    # Windows PowerShell 5.1 expands a char[] passed to String.TrimEnd into
-    # multiple method arguments.  GetFullPath/GetPathRoot already normalize a
-    # filesystem root, so a direct ordinal comparison is both safer and
-    # portable across Windows PowerShell and PowerShell Core.
-    if ([string]::Equals($fullPath, $pathRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    # Windows PowerShell 5.1 expands a char[] passed to String.TrimEnd and can
+    # also resolve static String.Equals overloads differently from PowerShell
+    # Core. GetFullPath/GetPathRoot already normalize a filesystem root, so a
+    # scalar case-insensitive operator avoids both method-binding hazards.
+    if ($fullPath -ieq $pathRoot) {
         throw "$ParameterName must not be a filesystem root."
     }
     return $fullPath
