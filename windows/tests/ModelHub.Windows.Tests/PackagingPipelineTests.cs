@@ -85,6 +85,28 @@ public sealed class PackagingPipelineTests
         Assert.DoesNotContain("WINDOWS_AUTHENTICODE_PASSWORD", workflow, StringComparison.Ordinal);
         Assert.DoesNotContain("Import-PfxCertificate", workflow, StringComparison.Ordinal);
         Assert.DoesNotContain("New-SelfSignedCertificate", workflow, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("windows-11-arm", workflow, StringComparison.Ordinal);
+        Assert.Contains("Test-WindowsNativePublish.ps1", workflow, StringComparison.Ordinal);
+        Assert.Contains("Test-WindowsSignedCandidate.ps1", workflow, StringComparison.Ordinal);
+        Assert.Contains("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093", workflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NativeWindowsAcceptanceRequiresTrustedSignaturesDefenderAndUninstall()
+    {
+        var windowsRoot = FindWindowsRoot();
+        var nativeProbe = File.ReadAllText(Path.Combine(windowsRoot, "eng", "Test-WindowsNativePublish.ps1"));
+        var signedAcceptance = File.ReadAllText(Path.Combine(windowsRoot, "eng", "Test-WindowsSignedCandidate.ps1"));
+        var program = File.ReadAllText(Path.Combine(windowsRoot, "src", "ModelHub.Windows", "Program.cs"));
+
+        Assert.Contains("--acceptance-probe-output", program, StringComparison.Ordinal);
+        Assert.Contains("Emulation is not accepted", nativeProbe, StringComparison.Ordinal);
+        Assert.Contains("Get-AuthenticodeSignature", signedAcceptance, StringComparison.Ordinal);
+        Assert.Contains("TimeStamperCertificate", signedAcceptance, StringComparison.Ordinal);
+        Assert.Contains("Get-MpComputerStatus", signedAcceptance, StringComparison.Ordinal);
+        Assert.Contains("Start-MpScan", signedAcceptance, StringComparison.Ordinal);
+        Assert.Contains("'uninstall'", signedAcceptance, StringComparison.Ordinal);
+        Assert.Contains("requires_separate_interactive_evidence", signedAcceptance, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -105,7 +127,7 @@ public sealed class PackagingPipelineTests
             "modelhub-velopack-setups.xml"));
 
         Assert.Contains("Free code signing provided by SignPath.io, certificate by SignPath Foundation.", policy, StringComparison.Ordinal);
-        Assert.Contains("申请中", policy, StringComparison.Ordinal);
+        Assert.Contains("人工审核中", policy, StringComparison.Ordinal);
         Assert.Contains("dw-zhu-si", policy, StringComparison.Ordinal);
         Assert.Contains("ModelHub.Windows.exe", publishConfiguration, StringComparison.Ordinal);
         Assert.Contains("ModelHub.Windows.dll", publishConfiguration, StringComparison.Ordinal);

@@ -33,11 +33,15 @@ permissions:
 jobs:
   validate:
     name: Validate ${{ matrix.rid }}
-    runs-on: windows-2022
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        rid: [win-x64, win-arm64]
+        include:
+          - rid: win-x64
+            runner: windows-2022
+          - rid: win-arm64
+            runner: windows-11-arm
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
@@ -53,6 +57,13 @@ jobs:
         run: dotnet test windows/ModelHub.Windows.sln -c Release --no-build --logger "console;verbosity=normal"
       - name: Publish untrusted candidate
         run: dotnet publish windows/src/ModelHub.Windows/ModelHub.Windows.csproj -c Release -r ${{ matrix.rid }} --self-contained true --no-restore -o windows/artifacts/${{ matrix.rid }}
+      - name: Verify native runner and execute ModelHub acceptance probe
+        shell: pwsh
+        run: |
+          & ./windows/eng/Test-WindowsNativePublish.ps1 `
+            -Runtime '${{ matrix.rid }}' `
+            -PublishRoot "$env:GITHUB_WORKSPACE\windows\artifacts\${{ matrix.rid }}" `
+            -ReceiptPath "$env:GITHUB_WORKSPACE\windows\artifacts\${{ matrix.rid }}\native-acceptance.json"
       - name: Upload untrusted build evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -159,6 +170,43 @@ jobs:
           if-no-files-found: error
           path: windows/signpath-final/stable/${{ inputs.version }}/build-67
           retention-days: 7
+
+  signed-native-acceptance:
+    name: Signed native acceptance ${{ matrix.rid }}
+    needs: trusted-package
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.trusted_release
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            runner: windows-2022
+          - rid: win-arm64
+            runner: windows-11-arm
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Download exact SignPath-verified candidates
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ModelHub-Windows-${{ inputs.version }}-build-67-SignPath-candidates
+          path: windows/signed-candidates
+      - name: Verify trusted signature, install, start, scan and uninstall on native Windows
+        shell: pwsh
+        run: |
+          & ./windows/eng/Test-WindowsSignedCandidate.ps1 `
+            -Runtime '${{ matrix.rid }}' `
+            -ArtifactRoot "$env:GITHUB_WORKSPACE\windows\signed-candidates" `
+            -OutputRoot "$env:GITHUB_WORKSPACE\windows\acceptance\${{ matrix.rid }}"
+      - name: Upload native Windows acceptance evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ModelHub-Windows-${{ inputs.version }}-build-67-${{ matrix.rid }}-acceptance
+          if-no-files-found: error
+          path: windows/acceptance/${{ matrix.rid }}
+          retention-days: 30
 
 # This workflow intentionally never creates a GitHub Release. A separate approved release workflow
 # may upload only artifacts that have passed the documented real-Windows install/upgrade/uninstall gate.

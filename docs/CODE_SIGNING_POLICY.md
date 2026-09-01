@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-Windows 可信签名处于 **SignPath Foundation 申请准备完成、外部申请尚未提交** 状态。在申请获批、GitHub 来源验证接通、签名流水线实际通过以及 x64/ARM64 真机门禁完成之前，ModelHub 不会把任何 Windows 安装包描述为已签名或可公开发布。
+Windows 可信签名处于 **SignPath Foundation 申请已提交、人工审核中** 状态。GitHub App 已收紧为仅访问 `dw-zhu-si/ModelHub`，并保留 SignPath 固定要求的 Actions、代码与元数据读取以及 Administration 写入权限。在 Foundation 批准、GitHub 来源验证接通、签名流水线实际通过以及 x64/ARM64 真机门禁完成之前，ModelHub 不会把任何 Windows 安装包描述为已签名或可公开发布。
 
 计划采用以下开源签名声明：
 

@@ -32,7 +32,7 @@ dotnet publish windows/src/ModelHub.Windows/ModelHub.Windows.csproj -c Release -
 
 本版已经按已提交的 L3 决策改为优先申请 SignPath Foundation 免费开源签名。公开的[代码签名政策](../docs/CODE_SIGNING_POLICY.md)、两份受限 Artifact Configuration 和两阶段 GitHub Actions 流水线已写入仓库：第一阶段只签项目自有 `ModelHub.Windows.exe`/`ModelHub.Windows.dll`，第二阶段只签由这些已签文件生成的 x64/ARM64 Velopack `Setup.exe`。第三方二进制不会被 ModelHub 的 Foundation 签名覆盖；每次真实签名必须由维护者在 SignPath 人工批准。
 
-当前已由用户账户安装 SignPath GitHub App，但检查时发现它被授予“所有仓库”访问，超过本项目需要的范围。继续前必须在动作时确认后收紧为仅 `dw-zhu-si/ModelHub`；App 固定要求读取 Actions、代码和元数据，并写入 Administration 以完成来源/构建策略集成。Foundation 申请尚未提交，也没有取得证书。工作流所需的 `SIGNPATH_*` 组织/项目变量和 API Token 必须在申请获批后通过 GitHub 的变量与秘密存储配置，不能写入源码或日志。
+SignPath GitHub App 已收紧为仅访问 `dw-zhu-si/ModelHub`；App 固定要求读取 Actions、代码和元数据，并写入 Administration 以完成来源/构建策略集成。Foundation 申请已提交并处于人工审核中，尚未取得证书。工作流所需的 `SIGNPATH_*` 组织/项目变量和 API Token 必须在申请获批后通过 GitHub 的变量与秘密存储配置，不能写入源码或日志。
 
 ## 发布与真实 Windows 门禁
 
@@ -42,11 +42,11 @@ dotnet publish windows/src/ModelHub.Windows/ModelHub.Windows.csproj -c Release -
 2. 在真实 Windows 设备或被许可的 Windows 11 VM 中独立验证安装、启动、回环 API、覆盖升级、静默/交互卸载、Defender 和 SmartScreen。
 3. 记录安装器哈希、签名验证、Windows 版本、架构、安装目录与残留结果；ARM 设备上的 x64 仿真不能替代物理 x64 验收。
 
-目前本机 Parallels Windows 11 ARM 的试用许可已过期，SignPath Foundation 申请也尚未提交/获批。因此本目录中的构建产物只能称为“macOS 交叉编译的未签名候选”，不能称为已验证或可公开发布的 Windows 安装包。
+目前本机 Parallels Windows 11 ARM 的试用许可已过期，SignPath Foundation 申请已提交但尚未获批。因此本目录中的构建产物只能称为“macOS 交叉编译的未签名候选”，不能称为已验证或可公开发布的 Windows 安装包。
 
 ## 当前验证边界
 
-- Release 构建与 183 项自动化测试已在 macOS 开发机通过，0 warning/0 error；`win-x64` 与 `win-arm64` self-contained 输出已确认分别为 PE x86-64 与 AArch64。
+- Release 构建与 184 项自动化测试已在 macOS 开发机通过，0 warning/0 error；`win-x64` 与 `win-arm64` self-contained 输出已确认分别为 PE x86-64 与 AArch64。工作流已为两个架构分别指定原生 `windows-2022` x64 与 `windows-11-arm` runner，并要求候选在对应原生架构执行版本回执。
 - SignPath 政策、受限 XML、固定 commit 的官方 GitHub Action、三阶段 PowerShell 流水线和 14 项打包合同测试已在本机通过语法/XML/YAML与自动化校验；这只证明本地合同成立，不代表 Foundation 已批准或真实签名已执行。
 - 自动化已覆盖协议转换、流式传输、媒体任务、路由、健康恢复、订阅解析、Controller 节点切换、失败关闭、Credential Manager 边界、OAuth、配置导入导出、更新与打包合同。
 - 这些证据不能替代 Windows 真机运行。正式发布仍需可信 Authenticode 证书、RFC 3161 时间戳，以及真实 x64/ARM64 Windows 上的安装、启动、节点切换、网关调用、覆盖升级、卸载、Defender、SmartScreen 和 UAC 验收。
