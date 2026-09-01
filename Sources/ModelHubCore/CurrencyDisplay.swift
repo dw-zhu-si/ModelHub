@@ -176,16 +176,74 @@ public final class CurrencyRateClient: @unchecked Sendable {
     )!
 
     private let session: URLSession
+    private let recoverySessionFactory: (@Sendable () -> URLSession)?
 
-    public init(session: URLSession = .shared) {
+    public init() {
+        self.session = URLSession(
+            configuration: ProviderNetworkSession.directConfiguration()
+        )
+        self.recoverySessionFactory = {
+            URLSession(configuration: ProviderNetworkSession.directConfiguration())
+        }
+    }
+
+    public init(session: URLSession) {
         self.session = session
+        self.recoverySessionFactory = nil
+    }
+
+    init(
+        session: URLSession,
+        recoverySessionFactory: @escaping @Sendable () -> URLSession
+    ) {
+        self.session = session
+        self.recoverySessionFactory = recoverySessionFactory
     }
 
     public func fetch(timeoutInterval: TimeInterval = 15) async throws -> CurrencyRateSnapshot {
+        try await fetch(
+            timeoutInterval: timeoutInterval,
+            retryDelayNanoseconds: 150_000_000
+        )
+    }
+
+    func fetch(
+        timeoutInterval: TimeInterval,
+        retryDelayNanoseconds: UInt64
+    ) async throws -> CurrencyRateSnapshot {
         var request = URLRequest(url: Self.endpoint, timeoutInterval: timeoutInterval)
         request.httpMethod = "GET"
         request.setValue("application/xml,text/xml", forHTTPHeaderField: "Accept")
-        request.cachePolicy = .reloadRevalidatingCacheData
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+
+        var requestSession = session
+        var recoverySession: URLSession?
+        defer { recoverySession?.finishTasksAndInvalidate() }
+
+        for attempt in 0...1 {
+            do {
+                return try await performFetch(request, session: requestSession)
+            } catch let error as URLError {
+                guard attempt == 0,
+                      error.code == .secureConnectionFailed,
+                      let recoverySessionFactory
+                else { throw error }
+
+                let freshSession = recoverySessionFactory()
+                recoverySession = freshSession
+                requestSession = freshSession
+                if retryDelayNanoseconds > 0 {
+                    try await Task.sleep(nanoseconds: retryDelayNanoseconds)
+                }
+            }
+        }
+        preconditionFailure("TLS retry loop must either return or throw")
+    }
+
+    private func performFetch(
+        _ request: URLRequest,
+        session: URLSession
+    ) async throws -> CurrencyRateSnapshot {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse,
               (200..<300).contains(http.statusCode),
