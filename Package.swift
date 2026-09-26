@@ -10,16 +10,22 @@ let package = Package(
         .executable(name: "ModelHub", targets: ["ModelHub"]),
         .executable(name: "ModelHubWidget", targets: ["ModelHubWidget"]),
         .executable(name: "ModelHubACP", targets: ["ModelHubACP"]),
-        .library(name: "ModelHubCore", targets: ["ModelHubCore"])
+        .library(name: "ModelHubCore", targets: ["ModelHubCore"]),
+        .library(name: "ModelHubMobileAccess", targets: ["ModelHubMobileAccess"])
     ],
     targets: [
         .target(
             name: "ModelHubCore",
             path: "Sources/ModelHubCore"
         ),
+        .target(
+            name: "ModelHubMobileAccess",
+            dependencies: ["ModelHubCore"],
+            path: "Sources/ModelHubMobileAccess"
+        ),
         .executableTarget(
             name: "ModelHub",
-            dependencies: ["ModelHubCore", "ModelHubWidgetSupport"],
+            dependencies: ["ModelHubCore", "ModelHubMobileAccess", "ModelHubWidgetSupport"],
             path: "Sources/ModelHub"
         ),
         .target(
@@ -56,6 +62,11 @@ let package = Package(
             name: "ModelHubWidgetSupportTests",
             dependencies: ["ModelHubWidgetSupport"],
             path: "Tests/ModelHubWidgetSupportTests"
+        ),
+        .testTarget(
+            name: "ModelHubMobileAccessTests",
+            dependencies: ["ModelHubCore", "ModelHubMobileAccess"],
+            path: "Tests/ModelHubMobileAccessTests"
         )
     ]
 )

@@ -2,6 +2,12 @@
 dist/
 .DS_Store
 .swiftpm/
+mobile/.gradle/
+mobile/.kotlin/
+mobile/**/build/
+mobile/local.properties
+mobile/**/xcuserdata/
+mobile/**/*.xcuserstate
 .env
 .env.*
 .idea/
@@ -20,9 +26,12 @@ docs/APP_STORE_RELEASE_READINESS.md
 *.mobileprovision
 *.cer
 *.p12
+*.p8
 *.key
 *.pem
 *.pfx
+*.jks
+*.keystore
 *.log
 submissions/
 docs/备案/

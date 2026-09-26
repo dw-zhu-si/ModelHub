@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: ModelHub Local Gateway API
-  version: 1.10.0
+  version: 1.11.0
   description: >
     模型枢纽提供的本机统一接口，覆盖聊天、图像、视频、音乐、语音、转录、
     Embedding 与 Rerank。服务仅监听 127.0.0.1，客户端使用应用中生成的
@@ -10,6 +10,10 @@ info:
     所有 HTTP 响应都使用 X-ModelHub-Request-ID 返回有界请求关联标识。
     可能计费的非流式 POST 请求可使用 Idempotency-Key；路由请求可使用
     X-ModelHub-Session-ID 提供只保存摘要的会话亲和提示。
+    移动伴侣使用默认关闭的独立 TLS 1.3 服务（固定端口 11470），只开放
+    /mobile/v1 白名单；首次连接必须固定二维码中的证书 SHA-256 指纹，完成
+    单次短时配对并经桌面明确批准。移动请求使用设备 P-256 签名、时间戳和 nonce，
+    不复用本地 Bearer 令牌，也不返回供应商秘密。
 servers:
   - url: http://127.0.0.1:11435
 security:
@@ -554,12 +558,117 @@ paths:
           $ref: "#/components/responses/NativeResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /mobile/v1/pairing/complete:
+    post:
+      summary: 提交移动设备配对申请
+      description: >
+        仅在证书固定的 TLS 1.3 连接上使用。配对会话最多有效 2 分钟且只能提交一次；
+        成功仅进入 awaiting_approval，不会直接授予权限。请求体上限 16 KiB。
+      servers:
+        - url: https://modelhub.local:11470
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MobilePairingCompletion"
+      responses:
+        "202":
+          description: 已进入桌面审批队列
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MobilePairingSubmission"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: 一次性配对凭据无效
+        "409":
+          description: 同一设备公钥已经处于有效配对状态
+        "410":
+          description: 配对会话已过期、已使用或不存在
+        "413":
+          description: 请求体超过 16 KiB
+        "503":
+          description: 配对会话或已配对设备达到有界容量上限
+  /mobile/v1/pairing/status:
+    post:
+      summary: 查询桌面配对审批结果
+      description: >
+        使用配对请求 ID 与原始一次性秘密查询；服务端只保存秘密摘要。
+        批准后返回设备 ID 和 viewer 权限，不返回长期共享令牌。
+      servers:
+        - url: https://modelhub.local:11470
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MobilePairingStatusRequest"
+      responses:
+        "200":
+          description: 当前审批状态
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MobilePairingStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: 配对秘密无效
+        "410":
+          description: 配对申请已过期或不存在
+  /mobile/v1/bootstrap:
+    get:
+      summary: 获取移动伴侣只读概览
+      description: >
+        只返回网关版本、默认健康模型、启用数量和供应商健康聚合；不返回 base URL、
+        API Key、OAuth 令牌、代理订阅地址、完整配置或请求正文。请求时间允许偏差 90 秒，
+        nonce 单次使用，已撤销设备立即失败。
+      servers:
+        - url: https://modelhub.local:11470
+      security:
+        - mobileDeviceID: []
+          mobileTimestamp: []
+          mobileNonce: []
+          mobileSignature: []
+      responses:
+        "200":
+          description: 最小化的只读概览
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MobileBootstrap"
+        "401":
+          description: 设备签名无效、过期、重放或已撤销
+        "403":
+          description: 设备缺少 viewer 权限
+        "429":
+          description: 设备请求或 nonce 容量达到上限
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: ModelHub token
+    mobileDeviceID:
+      type: apiKey
+      in: header
+      name: X-ModelHub-Device-ID
+    mobileTimestamp:
+      type: apiKey
+      in: header
+      name: X-ModelHub-Timestamp
+    mobileNonce:
+      type: apiKey
+      in: header
+      name: X-ModelHub-Nonce
+    mobileSignature:
+      type: apiKey
+      in: header
+      name: X-ModelHub-Signature
   headers:
     RequestID:
       description: 用于将本次响应与本地请求日志关联；最长 80 个安全 ASCII 字符。
@@ -635,6 +744,147 @@ components:
       schema:
         type: string
   schemas:
+    MobilePairingCompletion:
+      type: object
+      additionalProperties: false
+      required: [session_id, secret, device_name, public_key]
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        secret:
+          type: string
+          minLength: 40
+          maxLength: 128
+        device_name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        public_key:
+          type: string
+          description: Base64 编码的 P-256 X9.63 公钥，解码后固定为 65 字节。
+    MobilePairingSubmission:
+      type: object
+      additionalProperties: false
+      required: [request_id, state, expires_at, poll_after_seconds]
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        state:
+          const: awaiting_approval
+        expires_at:
+          type: string
+          format: date-time
+        poll_after_seconds:
+          type: integer
+          minimum: 1
+    MobilePairingStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [request_id, secret]
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        secret:
+          type: string
+          minLength: 40
+          maxLength: 128
+    MobilePairingStatus:
+      type: object
+      additionalProperties: false
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [awaiting_approval, approved, rejected]
+        credential:
+          $ref: "#/components/schemas/MobileDeviceCredential"
+    MobileDeviceCredential:
+      type: object
+      additionalProperties: false
+      required: [device_id, device_name, permissions, paired_at]
+      properties:
+        device_id:
+          type: string
+          format: uuid
+        device_name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+            enum: [viewer, chat, operator]
+        paired_at:
+          type: string
+          format: date-time
+    MobileBootstrap:
+      type: object
+      additionalProperties: false
+      required: [overview, granted_permissions]
+      properties:
+        overview:
+          $ref: "#/components/schemas/MobileGatewayOverview"
+        granted_permissions:
+          type: array
+          items:
+            type: string
+            enum: [viewer, chat, operator]
+    MobileGatewayOverview:
+      type: object
+      description: 只读、脱敏的移动首屏快照；字段使用 Codable 属性名。
+      additionalProperties: false
+      required:
+        - protocolVersion
+        - gatewayVersion
+        - generatedAt
+        - isGatewayRunning
+        - enabledProviderCount
+        - enabledRouteCount
+        - modelHealth
+        - providers
+      properties:
+        protocolVersion:
+          type: string
+        gatewayVersion:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        isGatewayRunning:
+          type: boolean
+        defaultModel:
+          type: [string, "null"]
+        enabledProviderCount:
+          type: integer
+          minimum: 0
+        enabledRouteCount:
+          type: integer
+          minimum: 0
+        modelHealth:
+          type: object
+          additionalProperties: false
+          required: [total, available, unavailable, unknown, configurationRequired, unsupported]
+          properties:
+            total: { type: integer, minimum: 0 }
+            available: { type: integer, minimum: 0 }
+            unavailable: { type: integer, minimum: 0 }
+            unknown: { type: integer, minimum: 0 }
+            configurationRequired: { type: integer, minimum: 0 }
+            unsupported: { type: integer, minimum: 0 }
+        providers:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, totalModels, availableModels, quarantinedModels]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              totalModels: { type: integer, minimum: 0 }
+              availableModels: { type: integer, minimum: 0 }
+              quarantinedModels: { type: integer, minimum: 0 }
     Health:
       type: object
       required: [status, service, providers, routes, observability]

@@ -89,14 +89,16 @@ struct HTTPResponse: Sendable {
         return HTTPResponse(statusCode: statusCode, headers: updatedHeaders, body: body)
     }
 
-    func serialized() -> Data {
+    func serialized(accessControlAllowOrigin: String? = "http://127.0.0.1") -> Data {
         var allHeaders = headers
         allHeaders["Content-Length"] = String(body.count)
         allHeaders["Connection"] = "close"
-        allHeaders["Access-Control-Allow-Origin"] = "http://127.0.0.1"
-        allHeaders["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Idempotency-Key, X-ModelHub-Session-ID, X-ModelHub-Request-ID, X-Request-ID"
-        allHeaders["Access-Control-Expose-Headers"] = "X-ModelHub-Request-ID, X-ModelHub-Idempotent-Replay"
-        allHeaders["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        if let accessControlAllowOrigin {
+            allHeaders["Access-Control-Allow-Origin"] = accessControlAllowOrigin
+            allHeaders["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Idempotency-Key, X-ModelHub-Session-ID, X-ModelHub-Request-ID, X-Request-ID"
+            allHeaders["Access-Control-Expose-Headers"] = "X-ModelHub-Request-ID, X-ModelHub-Idempotent-Replay"
+            allHeaders["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        }
 
         var head = "HTTP/1.1 \(statusCode) \(httpReasonPhrase(statusCode))\r\n"
         for (key, value) in allHeaders {
@@ -122,14 +124,16 @@ struct HTTPStreamResponse: Sendable {
         return HTTPStreamResponse(statusCode: statusCode, headers: updatedHeaders, body: body)
     }
 
-    func serializedHead() -> Data {
+    func serializedHead(accessControlAllowOrigin: String? = "http://127.0.0.1") -> Data {
         var allHeaders = headers
         allHeaders["Transfer-Encoding"] = "chunked"
         allHeaders["Connection"] = "close"
         allHeaders["Cache-Control"] = "no-cache"
-        allHeaders["Access-Control-Allow-Origin"] = "http://127.0.0.1"
-        allHeaders["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Idempotency-Key, X-ModelHub-Session-ID, X-ModelHub-Request-ID, X-Request-ID"
-        allHeaders["Access-Control-Expose-Headers"] = "X-ModelHub-Request-ID"
+        if let accessControlAllowOrigin {
+            allHeaders["Access-Control-Allow-Origin"] = accessControlAllowOrigin
+            allHeaders["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Idempotency-Key, X-ModelHub-Session-ID, X-ModelHub-Request-ID, X-Request-ID"
+            allHeaders["Access-Control-Expose-Headers"] = "X-ModelHub-Request-ID"
+        }
         var head = "HTTP/1.1 \(statusCode) \(httpReasonPhrase(statusCode))\r\n"
         for (key, value) in allHeaders { head += "\(key): \(value)\r\n" }
         head += "\r\n"
@@ -640,36 +644,58 @@ final class LocalAPIServer: @unchecked Sendable {
     private let handler: Handler
     private let streamHandler: StreamHandler?
     private let connectionPolicy: HTTPServerConnectionPolicy
+    private let accessControlAllowOrigin: String?
     private var listener: NWListener?
     private var connections: [ObjectIdentifier: NWConnection] = [:]
     private var idleTimeouts: [ObjectIdentifier: DispatchWorkItem] = [:]
     private var absoluteRequestTimeouts: [ObjectIdentifier: DispatchWorkItem] = [:]
     private var connectionTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
-    private let requestParser = HTTPRequestParser()
-    private let maximumBufferedBytes = 33 * 1_024 * 1_024
+    private let requestParser: HTTPRequestParser
+    private let maximumBufferedBytes: Int
     private var bufferedBytesByConnection: [ObjectIdentifier: Int] = [:]
     private var totalBufferedBytes = 0
-    private let maximumTotalBufferedBytes = 128 * 1_024 * 1_024
+    private let maximumTotalBufferedBytes: Int
 
     init(
         handler: @escaping Handler,
         streamHandler: StreamHandler? = nil,
-        connectionPolicy: HTTPServerConnectionPolicy = HTTPServerConnectionPolicy()
+        connectionPolicy: HTTPServerConnectionPolicy = HTTPServerConnectionPolicy(),
+        maximumBodyBytes: Int = 32 * 1_024 * 1_024,
+        maximumHeaderBytes: Int = 64 * 1_024,
+        maximumTotalBufferedBytes: Int = 128 * 1_024 * 1_024,
+        accessControlAllowOrigin: String? = "http://127.0.0.1"
     ) {
         self.handler = handler
         self.streamHandler = streamHandler
         self.connectionPolicy = connectionPolicy
+        let boundedBodyBytes = min(max(maximumBodyBytes, 1_024), 32 * 1_024 * 1_024)
+        let boundedHeaderBytes = min(max(maximumHeaderBytes, 4 * 1_024), 64 * 1_024)
+        self.requestParser = HTTPRequestParser(
+            maximumBodyBytes: boundedBodyBytes,
+            maximumHeaderBytes: boundedHeaderBytes
+        )
+        self.maximumBufferedBytes = boundedBodyBytes + boundedHeaderBytes + 1_024
+        self.maximumTotalBufferedBytes = max(
+            self.maximumBufferedBytes,
+            min(maximumTotalBufferedBytes, 128 * 1_024 * 1_024)
+        )
+        self.accessControlAllowOrigin = accessControlAllowOrigin
     }
 
-    func start(port: UInt16, stateChanged: @escaping @Sendable (Result<UInt16, Error>) -> Void) throws {
+    func start(
+        port: UInt16,
+        host: NWEndpoint.Host = NWEndpoint.Host("127.0.0.1"),
+        parameters: NWParameters? = nil,
+        stateChanged: @escaping @Sendable (Result<UInt16, Error>) -> Void
+    ) throws {
         stop()
         let endpointPort = NWEndpoint.Port(rawValue: port) ?? .any
-        let parameters = NWParameters.tcp
-        parameters.requiredLocalEndpoint = .hostPort(
-            host: NWEndpoint.Host("127.0.0.1"),
+        let listenerParameters = parameters ?? NWParameters.tcp
+        listenerParameters.requiredLocalEndpoint = .hostPort(
+            host: host,
             port: endpointPort
         )
-        let listener = try NWListener(using: parameters)
+        let listener = try NWListener(using: listenerParameters)
         self.listener = listener
 
         listener.stateUpdateHandler = { state in
@@ -802,7 +828,7 @@ final class LocalAPIServer: @unchecked Sendable {
 
     private func receive(on connection: NWConnection, parser: HTTPRequestStreamParser) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 1_048_576) {
-            [weak self] data, _, isComplete, error in
+            [weak self, connection] data, _, isComplete, error in
             guard let self else { return }
             let identifier = ObjectIdentifier(connection)
             guard self.connections[identifier] != nil else { return }
@@ -899,14 +925,18 @@ final class LocalAPIServer: @unchecked Sendable {
     }
 
     private func send(_ response: HTTPResponse, on connection: NWConnection) {
-        connection.send(content: response.serialized(), completion: .contentProcessed { _ in
+        connection.send(content: response.serialized(
+            accessControlAllowOrigin: accessControlAllowOrigin
+        ), completion: .contentProcessed { _ in
             connection.cancel()
         })
     }
 
     private func send(_ response: HTTPStreamResponse, on connection: NWConnection) async {
         do {
-            try await sendData(response.serializedHead(), on: connection)
+            try await sendData(response.serializedHead(
+                accessControlAllowOrigin: accessControlAllowOrigin
+            ), on: connection)
             for try await bodyChunk in response.body {
                 try Task.checkCancellation()
                 guard !bodyChunk.isEmpty else { continue }

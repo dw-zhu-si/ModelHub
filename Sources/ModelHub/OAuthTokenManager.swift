@@ -453,11 +453,11 @@ final class LoopbackOAuthAuthorizationSession: OAuthAuthorizationSessioning,
 
     private func openBrowser(_ authorizationURL: URL) {
         let opener = browserOpener
-        Task {
+        Task { [self] in
             do {
                 try await opener.open(authorizationURL)
             } catch {
-                queue.async { [weak self] in
+                self.queue.async { [weak self] in
                     self?.finish(.failure(OAuthAuthorizationFlowError.sessionFailed))
                 }
             }

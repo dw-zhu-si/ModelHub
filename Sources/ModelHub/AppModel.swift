@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import ModelHubCore
+import ModelHubMobileAccess
 import ModelHubWidgetSupport
 import ServiceManagement
 import UniformTypeIdentifiers
@@ -435,6 +436,14 @@ final class AppModel: ObservableObject {
     @Published private(set) var localHealthAlertsEnabled = false
     @Published private(set) var mediaBatchJobs: [MediaBatchJob] = []
     @Published private(set) var mediaBatchPaused = false
+    @Published private(set) var isMobileAccessEnabled = false
+    @Published private(set) var isMobileAccessRunning = false
+    @Published private(set) var mobileAccessEndpoint: URL?
+    @Published private(set) var mobileAccessCertificateFingerprint: String?
+    @Published private(set) var mobileAccessError: String?
+    @Published private(set) var activeMobilePairingSession: MobilePairingSession?
+    @Published private(set) var pendingMobilePairings: [MobilePendingPairingRequest] = []
+    @Published private(set) var pairedMobileDevices: [MobilePairedDevice] = []
 
     private let router = RoutingEngine()
     private let providerClient = ProviderClient()
@@ -478,7 +487,10 @@ final class AppModel: ObservableObject {
     private let currencyRateClient = CurrencyRateClient()
     private let modelProxyRuntime = ModelProxyRuntimeManager()
     private let applicationUpdateClient = ApplicationUpdateClient()
+    private let mobilePairingCoordinator: MobilePairingCoordinator
     private var server: LocalAPIServer?
+    private var mobileAccessService: MobileAccessService?
+    private var lastMobileDeviceActivityPersistenceAt: Date?
     private var didBootstrap = false
     private var modelTestTask: Task<Void, Never>?
     private var pendingPersistenceTask: Task<Void, Never>?
@@ -513,6 +525,7 @@ final class AppModel: ObservableObject {
     private static let automaticApplicationUpdateChecksKey = "automaticApplicationUpdateChecks"
     private static let localHealthAlertsEnabledKey = "localHealthAlertsEnabled"
     private static let lastApplicationUpdateCheckKey = "lastApplicationUpdateCheck"
+    private static let mobileAccessEnabledKey = "mobileAccessEnabled"
     private static let verificationTimestampFormatter = ISO8601DateFormatter()
     private static let usageLedgerDirectoryURL =
         (try? UsageLedgerStore.defaultApplicationSupportDirectory())
@@ -527,7 +540,38 @@ final class AppModel: ObservableObject {
             KeychainCredentialSecretDeleter()
     ) {
         self.credentialSecretDeleter = credentialSecretDeleter
+        self.mobilePairingCoordinator = MobilePairingCoordinator(
+            persistedDevices: MobileDeviceStore.load()
+        )
     }
+
+    private lazy var mobileAccessRouter = MobileAccessRouter(
+        coordinator: mobilePairingCoordinator,
+        overviewProvider: { [weak self] in
+            await MainActor.run {
+                guard let self else {
+                    return MobileOverviewBuilder.make(
+                        configuration: AppConfiguration(),
+                        gatewayVersion: "unknown",
+                        isGatewayRunning: false
+                    )
+                }
+                return MobileOverviewBuilder.make(
+                    configuration: self.configuration,
+                    gatewayVersion: Bundle.main.object(
+                        forInfoDictionaryKey: "CFBundleShortVersionString"
+                    ) as? String ?? "development",
+                    isGatewayRunning: self.isServerRunning
+                )
+            }
+        },
+        pairingSubmitted: { [weak self] in
+            await self?.refreshMobileAccessState(persistDevices: false)
+        },
+        deviceActivityObserved: { [weak self] in
+            await self?.refreshMobileDeviceActivity()
+        }
+    )
 
     nonisolated private static func makePassiveHealthEventBuffer(
         monitor: PassiveHealthMonitor,
@@ -1190,7 +1234,11 @@ final class AppModel: ObservableObject {
         localHealthAlertsEnabled = UserDefaults.standard.bool(
             forKey: Self.localHealthAlertsEnabledKey
         )
+        isMobileAccessEnabled = UserDefaults.standard.bool(
+            forKey: Self.mobileAccessEnabledKey
+        )
         Task { await localHealthAlertDelivery.setEnabled(localHealthAlertsEnabled) }
+        Task { await refreshMobileAccessState(persistDevices: false) }
         scheduleAutomaticApplicationUpdateCheck()
         Task { await initializeSecretsWithoutInteraction() }
         Task { await initializeAgentSecretWithoutInteraction() }
@@ -1207,6 +1255,9 @@ final class AppModel: ObservableObject {
         #endif
         if configuration.server.startAutomatically && !disablesAutomaticServer {
             startServer()
+        }
+        if isMobileAccessEnabled && !disablesAutomaticServer {
+            startMobileAccess()
         }
         if initializeSecrets {
             _ = gatewayToken
@@ -3478,6 +3529,170 @@ final class AppModel: ObservableObject {
             credentialPoolSelector: credentialPoolSelector,
             oauthTokenManager: oauthTokenManager
         )
+    }
+
+    func setMobileAccessEnabled(_ enabled: Bool) {
+        guard isMobileAccessEnabled != enabled else { return }
+        isMobileAccessEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.mobileAccessEnabledKey)
+        if enabled {
+            startMobileAccess()
+        } else {
+            stopMobileAccess()
+        }
+    }
+
+    func startMobileAccess() {
+        guard isMobileAccessEnabled, !isMobileAccessRunning, mobileAccessService == nil else {
+            return
+        }
+        mobileAccessError = nil
+        do {
+            let identity = try MobileTLSIdentityStore.loadOrCreate()
+            let service = MobileAccessService(
+                router: mobileAccessRouter,
+                identity: identity
+            )
+            mobileAccessService = service
+            mobileAccessCertificateFingerprint = identity.fingerprint
+            try service.start { [weak self, weak service] result in
+                Task { @MainActor in
+                    guard let self,
+                          let service,
+                          self.mobileAccessService === service
+                    else { return }
+                    switch result {
+                    case .success(let port):
+                        self.isMobileAccessRunning = true
+                        self.mobileAccessError = nil
+                        self.updateMobileAccessEndpoint(port: port)
+                    case .failure(let error):
+                        self.isMobileAccessRunning = false
+                        self.mobileAccessEndpoint = nil
+                        self.mobileAccessError = error.localizedDescription
+                        self.mobileAccessService = nil
+                    }
+                }
+            }
+        } catch {
+            mobileAccessService = nil
+            isMobileAccessRunning = false
+            mobileAccessEndpoint = nil
+            mobileAccessError = error.localizedDescription
+        }
+    }
+
+    func stopMobileAccess() {
+        mobileAccessService?.stop()
+        mobileAccessService = nil
+        isMobileAccessRunning = false
+        mobileAccessEndpoint = nil
+        activeMobilePairingSession = nil
+        Task { await mobilePairingCoordinator.invalidatePairingSessions() }
+    }
+
+    func createMobilePairingSession() {
+        guard isMobileAccessRunning,
+              let mobileAccessEndpoint,
+              let mobileAccessCertificateFingerprint
+        else {
+            notice = L10n.text("请先开启移动访问，并确认本机已有可用的局域网或 VPN 地址。")
+            return
+        }
+        Task {
+            do {
+                let session = try await mobilePairingCoordinator.createPairingSession(
+                    serviceURL: mobileAccessEndpoint,
+                    certificateFingerprint: mobileAccessCertificateFingerprint
+                )
+                activeMobilePairingSession = session
+            } catch {
+                notice = error.localizedDescription
+            }
+        }
+    }
+
+    var mobilePairingPayload: String? {
+        guard let activeMobilePairingSession,
+              let data = try? JSONEncoder.mobile.encode(activeMobilePairingSession)
+        else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    func dismissMobilePairingSession() {
+        activeMobilePairingSession = nil
+    }
+
+    func approveMobilePairing(_ request: MobilePendingPairingRequest) {
+        Task {
+            do {
+                try await mobilePairingCoordinator.approvePairing(requestID: request.id)
+                await refreshMobileAccessState(persistDevices: true)
+                notice = L10n.format("已批准设备“%@”，仅授予只读概览权限。", request.deviceName)
+            } catch {
+                notice = error.localizedDescription
+            }
+        }
+    }
+
+    func rejectMobilePairing(_ request: MobilePendingPairingRequest) {
+        Task {
+            do {
+                try await mobilePairingCoordinator.rejectPairing(requestID: request.id)
+                await refreshMobileAccessState(persistDevices: false)
+            } catch {
+                notice = error.localizedDescription
+            }
+        }
+    }
+
+    func revokeMobileDevice(_ device: MobilePairedDevice) {
+        Task {
+            do {
+                try await mobilePairingCoordinator.revoke(deviceID: device.id)
+                await refreshMobileAccessState(persistDevices: true)
+                notice = L10n.format("已撤销设备“%@”；后续请求将立即失败。", device.name)
+            } catch {
+                notice = error.localizedDescription
+            }
+        }
+    }
+
+    @discardableResult
+    func refreshMobileAccessState(persistDevices: Bool) async -> Bool {
+        let devices = await mobilePairingCoordinator.devices()
+        let pending = await mobilePairingCoordinator.pendingPairingRequests()
+        pairedMobileDevices = devices
+        pendingMobilePairings = pending
+        guard persistDevices else { return true }
+        do {
+            try MobileDeviceStore.save(devices)
+            return true
+        } catch {
+            mobileAccessError = error.localizedDescription
+            return false
+        }
+    }
+
+    private func refreshMobileDeviceActivity(now: Date = .now) async {
+        let shouldPersist = lastMobileDeviceActivityPersistenceAt.map {
+            now.timeIntervalSince($0) >= 60
+        } ?? true
+        let succeeded = await refreshMobileAccessState(persistDevices: shouldPersist)
+        if shouldPersist, succeeded {
+            lastMobileDeviceActivityPersistenceAt = now
+        }
+    }
+
+    private func updateMobileAccessEndpoint(port: UInt16) {
+        guard let address = MobileAccessNetworkAddress.preferredIPv4Address(),
+              let url = URL(string: "https://\(address):\(port)")
+        else {
+            mobileAccessEndpoint = nil
+            mobileAccessError = L10n.text("TLS 服务已启动，但未找到可用于配对的局域网或 VPN IPv4 地址。")
+            return
+        }
+        mobileAccessEndpoint = url
     }
 
     func startServer() {

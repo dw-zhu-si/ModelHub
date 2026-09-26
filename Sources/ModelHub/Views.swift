@@ -1,6 +1,8 @@
 import SwiftUI
 import AppKit
+import CoreImage.CIFilterBuiltins
 import ModelHubCore
+import ModelHubMobileAccess
 import UniformTypeIdentifiers
 
 struct ContentView: View {
@@ -4831,6 +4833,108 @@ struct SettingsView: View {
                 Toggle("要求 Bearer 访问令牌", isOn: $requireAuthentication)
             }
 
+            Section("移动伴侣访问") {
+                Toggle(
+                    "启用 iPhone、iPad 与 Android 安全访问",
+                    isOn: Binding(
+                        get: { model.isMobileAccessEnabled },
+                        set: { model.setMobileAccessEnabled($0) }
+                    )
+                )
+                Text("默认关闭；启用后只在独立端口 11470 提供 TLS 1.3 移动接口，不改变 127.0.0.1:11435 本地 API。移动端不会获得供应商密钥或全局网关令牌。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if model.isMobileAccessEnabled {
+                    LabeledContent("运行状态") {
+                        Label(
+                            model.isMobileAccessRunning ? "TLS 服务运行中" : "未运行",
+                            systemImage: model.isMobileAccessRunning
+                                ? "lock.shield.fill"
+                                : "lock.slash"
+                        )
+                        .foregroundStyle(model.isMobileAccessRunning ? .green : .secondary)
+                    }
+                    if let endpoint = model.mobileAccessEndpoint {
+                        LabeledContent("配对地址") {
+                            Text(endpoint.absoluteString)
+                                .font(.system(.body, design: .monospaced))
+                                .textSelection(.enabled)
+                        }
+                    }
+                    if let fingerprint = model.mobileAccessCertificateFingerprint {
+                        LabeledContent("证书指纹") {
+                            Text(fingerprint)
+                                .font(.system(.caption, design: .monospaced))
+                                .lineLimit(1)
+                                .textSelection(.enabled)
+                        }
+                    }
+                    if let error = model.mobileAccessError {
+                        Label(error, systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+
+                    HStack {
+                        Button("生成 2 分钟配对二维码") {
+                            model.createMobilePairingSession()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!model.isMobileAccessRunning || model.mobileAccessEndpoint == nil)
+                        Button("刷新设备状态") {
+                            Task { await model.refreshMobileAccessState(persistDevices: false) }
+                        }
+                    }
+
+                    if !model.pendingMobilePairings.isEmpty {
+                        Text("待批准设备")
+                            .font(.headline)
+                        ForEach(model.pendingMobilePairings) { request in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(request.deviceName)
+                                    Text("公钥指纹 \(request.publicKeyFingerprint.prefix(16))…")
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button("拒绝", role: .destructive) {
+                                    model.rejectMobilePairing(request)
+                                }
+                                Button("批准只读") {
+                                    model.approveMobilePairing(request)
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                        }
+                    }
+
+                    if !model.pairedMobileDevices.isEmpty {
+                        Text("已配对设备")
+                            .font(.headline)
+                        ForEach(model.pairedMobileDevices) { device in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(device.name)
+                                    Text(device.isRevoked
+                                         ? "已撤销"
+                                         : "只读概览 · \(device.lastSeenAt?.formatted(date: .abbreviated, time: .shortened) ?? "尚未连接")")
+                                        .font(.caption)
+                                        .foregroundStyle(device.isRevoked ? .red : .secondary)
+                                }
+                                Spacer()
+                                if !device.isRevoked {
+                                    Button("撤销", role: .destructive) {
+                                        model.revokeMobileDevice(device)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             Section("系统启动") {
                 Toggle(
                     "登录时自动启动 ModelHub",
@@ -4989,6 +5093,17 @@ struct SettingsView: View {
                 providers: model.providers
             )
         }
+        .sheet(
+            item: Binding(
+                get: { model.activeMobilePairingSession },
+                set: { if $0 == nil { model.dismissMobilePairingSession() } }
+            )
+        ) { session in
+            MobilePairingSheet(
+                session: session,
+                payload: model.mobilePairingPayload ?? ""
+            )
+        }
     }
 
     @discardableResult
@@ -5002,6 +5117,68 @@ struct SettingsView: View {
             restart: restart
         )
         return true
+    }
+}
+
+private struct MobilePairingSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let session: MobilePairingSession
+    let payload: String
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "iphone.and.arrow.forward")
+                .font(.system(size: 34, weight: .semibold))
+                .foregroundStyle(MHDesign.accent)
+            Text("扫描以请求配对")
+                .font(.title2.bold())
+            Text("扫码只会提交设备公钥；仍需回到这台 Mac 明确批准，设备才能读取概览。")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+            if let image = MobilePairingQRCode.image(for: payload) {
+                Image(nsImage: image)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: 260, height: 260)
+                    .accessibilityLabel("ModelHub 移动设备配对二维码")
+            } else {
+                ContentUnavailableView(
+                    "无法生成二维码",
+                    systemImage: "qrcode",
+                    description: Text("请关闭后重新生成配对会话。")
+                )
+            }
+            VStack(spacing: 5) {
+                Text(session.serviceURL.absoluteString)
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                Text("有效期至 \(session.expiresAt.formatted(date: .omitted, time: .standard))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Button("完成") { dismiss() }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+        }
+        .padding(28)
+        .frame(width: 430, height: 560)
+    }
+}
+
+private enum MobilePairingQRCode {
+    static func image(for payload: String) -> NSImage? {
+        guard !payload.isEmpty else { return nil }
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(payload.utf8)
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage?.transformed(
+            by: CGAffineTransform(scaleX: 10, y: 10)
+        ),
+        let cgImage = CIContext(options: [.useSoftwareRenderer: false]).createCGImage(
+            output,
+            from: output.extent
+        ) else { return nil }
+        return NSImage(cgImage: cgImage, size: NSSize(width: 260, height: 260))
     }
 }
 
