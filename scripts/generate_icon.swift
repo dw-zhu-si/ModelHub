@@ -1,12 +1,14 @@
 import AppKit
 import Foundation
 
-guard CommandLine.arguments.count == 2 else {
-    fputs("usage: generate_icon.swift <output.png>\n", stderr)
+guard CommandLine.arguments.count == 2 ||
+        (CommandLine.arguments.count == 3 && CommandLine.arguments[2] == "--square") else {
+    fputs("usage: generate_icon.swift <output.png> [--square]\n", stderr)
     exit(2)
 }
 
 let output = URL(fileURLWithPath: CommandLine.arguments[1])
+let squareCanvas = CommandLine.arguments.count == 3
 let size = NSSize(width: 1024, height: 1024)
 let image = NSImage(size: size)
 
@@ -17,11 +19,11 @@ guard let context = NSGraphicsContext.current?.cgContext else {
 }
 
 let canvas = CGRect(origin: .zero, size: size)
-let outer = canvas.insetBy(dx: 42, dy: 42)
+let outer = squareCanvas ? canvas : canvas.insetBy(dx: 42, dy: 42)
 let path = CGPath(
     roundedRect: outer,
-    cornerWidth: 220,
-    cornerHeight: 220,
+    cornerWidth: squareCanvas ? 0 : 220,
+    cornerHeight: squareCanvas ? 0 : 220,
     transform: nil
 )
 let colorSpace = CGColorSpaceCreateDeviceRGB()
@@ -87,10 +89,39 @@ for (point, radius) in nodes {
 
 image.unlockFocus()
 
-guard let tiff = image.tiffRepresentation,
-      let bitmap = NSBitmapImageRep(data: tiff),
-      let png = bitmap.representation(using: .png, properties: [:])
-else {
+let bitmap: NSBitmapImageRep
+if squareCanvas {
+    var proposedRect = canvas
+    guard let sourceImage = image.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil),
+          let rgbContext = CGContext(
+              data: nil,
+              width: 1024,
+              height: 1024,
+              bitsPerComponent: 8,
+              bytesPerRow: 1024 * 4,
+              space: colorSpace,
+              bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+          )
+    else {
+        fputs("unable to create opaque icon context\n", stderr)
+        exit(1)
+    }
+    rgbContext.draw(sourceImage, in: canvas)
+    guard let opaqueImage = rgbContext.makeImage() else {
+        fputs("unable to create opaque icon image\n", stderr)
+        exit(1)
+    }
+    bitmap = NSBitmapImageRep(cgImage: opaqueImage)
+} else {
+    guard let tiff = image.tiffRepresentation,
+          let desktopBitmap = NSBitmapImageRep(data: tiff) else {
+        fputs("unable to encode icon\n", stderr)
+        exit(1)
+    }
+    bitmap = desktopBitmap
+}
+
+guard let png = bitmap.representation(using: .png, properties: [:]) else {
     fputs("unable to encode icon\n", stderr)
     exit(1)
 }

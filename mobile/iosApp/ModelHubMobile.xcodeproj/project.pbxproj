@@ -12,6 +12,7 @@
 		100000000000000000000104 /* PinnedGatewayTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000204 /* PinnedGatewayTransport.swift */; };
 		100000000000000000000105 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000205 /* QRScannerView.swift */; };
 		100000000000000000000106 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000206 /* Views.swift */; };
+		100000000000000000000107 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000208 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -23,6 +24,7 @@
 		100000000000000000000205 /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
 		100000000000000000000206 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
 		100000000000000000000207 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		100000000000000000000208 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -53,6 +55,7 @@
 				100000000000000000000205 /* QRScannerView.swift */,
 				100000000000000000000206 /* Views.swift */,
 				100000000000000000000207 /* Info.plist */,
+				100000000000000000000208 /* Assets.xcassets */,
 			);
 			path = ModelHubMobile;
 			sourceTree = "<group>";
@@ -107,7 +110,7 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		100000000000000000000602 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		100000000000000000000602 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (100000000000000000000107 /* Assets.xcassets in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
@@ -178,6 +181,7 @@
 		100000000000000000000A03 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -199,6 +203,7 @@
 		100000000000000000000A04 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
