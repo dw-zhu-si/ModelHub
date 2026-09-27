@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR=${0:A:h}
 PROJECT_ROOT=${SCRIPT_DIR:h}
 BUILD_CONFIGURATION=${1:-release}
+PRODUCT_CONFIGURATION=${(C)BUILD_CONFIGURATION}
 APP_NAME=ModelHub
 WIDGET_NAME=ModelHubWidget
 ACP_NAME=ModelHubACP
@@ -46,31 +47,36 @@ remove_item "${PACKAGE_SCRATCH_DIR}"
 mkdir -p "${PACKAGE_CLANG_CACHE_DIR}" "${PACKAGE_SWIFTPM_CACHE_DIR}" "${DIST_DIR}"
 
 for triple in arm64-apple-macosx x86_64-apple-macosx; do
+    triple_scratch="${PACKAGE_SCRATCH_DIR}/${triple}"
     env CLANG_MODULE_CACHE_PATH="${PACKAGE_CLANG_CACHE_DIR}" \
         SWIFTPM_CACHE_PATH="${PACKAGE_SWIFTPM_CACHE_DIR}" \
         swift build -c "${BUILD_CONFIGURATION}" \
             --triple "${triple}" \
-            --scratch-path "${PACKAGE_SCRATCH_DIR}"
+            --scratch-path "${triple_scratch}"
 done
 
 remove_item "${ICONSET_DIR}"
 mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}" "${ICONSET_DIR}" "${WIDGET_MACOS_DIR}" "${WIDGET_RESOURCES_DIR}"
 
 lipo -create \
-    "${PACKAGE_SCRATCH_DIR}/arm64-apple-macosx/${BUILD_CONFIGURATION}/ModelHub" \
-    "${PACKAGE_SCRATCH_DIR}/x86_64-apple-macosx/${BUILD_CONFIGURATION}/ModelHub" \
+    "${PACKAGE_SCRATCH_DIR}/arm64-apple-macosx/out/Products/${PRODUCT_CONFIGURATION}/ModelHub" \
+    "${PACKAGE_SCRATCH_DIR}/x86_64-apple-macosx/out/Products/${PRODUCT_CONFIGURATION}/ModelHub" \
     -output "${MACOS_DIR}/ModelHub"
 lipo -create \
-    "${PACKAGE_SCRATCH_DIR}/arm64-apple-macosx/${BUILD_CONFIGURATION}/${ACP_NAME}" \
-    "${PACKAGE_SCRATCH_DIR}/x86_64-apple-macosx/${BUILD_CONFIGURATION}/${ACP_NAME}" \
+    "${PACKAGE_SCRATCH_DIR}/arm64-apple-macosx/out/Products/${PRODUCT_CONFIGURATION}/${ACP_NAME}" \
+    "${PACKAGE_SCRATCH_DIR}/x86_64-apple-macosx/out/Products/${PRODUCT_CONFIGURATION}/${ACP_NAME}" \
     -output "${MACOS_DIR}/${ACP_NAME}"
 lipo -create \
-    "${PACKAGE_SCRATCH_DIR}/arm64-apple-macosx/${BUILD_CONFIGURATION}/${WIDGET_NAME}" \
-    "${PACKAGE_SCRATCH_DIR}/x86_64-apple-macosx/${BUILD_CONFIGURATION}/${WIDGET_NAME}" \
+    "${PACKAGE_SCRATCH_DIR}/arm64-apple-macosx/out/Products/${PRODUCT_CONFIGURATION}/${WIDGET_NAME}" \
+    "${PACKAGE_SCRATCH_DIR}/x86_64-apple-macosx/out/Products/${PRODUCT_CONFIGURATION}/${WIDGET_NAME}" \
     -output "${WIDGET_MACOS_DIR}/${WIDGET_NAME}"
-lipo "${MACOS_DIR}/ModelHub" -verify_arch arm64 x86_64
-lipo "${MACOS_DIR}/${ACP_NAME}" -verify_arch arm64 x86_64
-lipo "${WIDGET_MACOS_DIR}/${WIDGET_NAME}" -verify_arch arm64 x86_64
+for binary in \
+    "${MACOS_DIR}/ModelHub" \
+    "${MACOS_DIR}/${ACP_NAME}" \
+    "${WIDGET_MACOS_DIR}/${WIDGET_NAME}"; do
+    lipo "${binary}" -verify_arch arm64
+    lipo "${binary}" -verify_arch x86_64
+done
 cp "packaging/Info.plist" "${CONTENTS_DIR}/Info.plist"
 cp "packaging/WidgetInfo.plist" "${WIDGET_CONTENTS_DIR}/Info.plist"
 
