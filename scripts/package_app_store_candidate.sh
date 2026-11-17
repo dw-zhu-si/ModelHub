@@ -68,7 +68,12 @@ codesign --force --options runtime --timestamp="${TIMESTAMP_URL}" --sign "${APP_
     --entitlements "${PROJECT_ROOT}/packaging/ModelHubAppStore.entitlements" \
     "${CANDIDATE_APP}"
 codesign --verify --deep --strict "${CANDIDATE_APP}"
-lipo "${CANDIDATE_APP}/Contents/MacOS/ModelHub" -verify_arch arm64 x86_64
+for binary in \
+    "${CANDIDATE_APP}/Contents/MacOS/ModelHub" \
+    "${CANDIDATE_APP}/Contents/MacOS/ModelHubACP" \
+    "${CANDIDATE_APP}/Contents/PlugIns/ModelHubWidget.appex/Contents/MacOS/ModelHubWidget"; do
+    /bin/zsh "${SCRIPT_DIR}/verify_universal_binary.sh" "${binary}"
+done
 if ! nm -u "${CANDIDATE_APP}/Contents/PlugIns/ModelHubWidget.appex/Contents/MacOS/ModelHubWidget" | \
     /usr/bin/grep -q '_NSExtensionMain'; then
     echo "Widget 缺少 App Extension 入口 _NSExtensionMain" >&2
