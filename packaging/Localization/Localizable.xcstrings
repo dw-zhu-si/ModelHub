@@ -53765,6 +53765,77 @@
         }
       }
     },
+    "模型热更新未完成：%@；继续使用本地已保存的 %lld 个模型，现有目录和检测状态未修改。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لم يكتمل التحديث الفوري للنماذج: %@؛ سيستمر استخدام %lld نموذجًا محفوظًا محليًا، ولم يتغير الدليل الحالي أو حالات الفحص."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Modellaktualisierung wurde nicht abgeschlossen: %@; die %lld lokal gespeicherten Modelle werden weiterverwendet. Der vorhandene Katalog und die Prüfzustände wurden nicht geändert."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Model hot update did not complete: %@; continuing to use %lld locally saved models. The existing catalog and verification states were not changed."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La actualización en caliente del modelo no se completó: %@; se seguirán usando %lld modelos guardados localmente. El catálogo y los estados de verificación existentes no se modificaron."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’actualisation à chaud des modèles n’a pas abouti : %@ ; les %lld modèles enregistrés localement restent utilisés. Le catalogue et les états de vérification existants n’ont pas été modifiés."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "モデルのホット更新は完了しませんでした：%@。ローカルに保存済みの %lld モデルを引き続き使用し、既存のカタログと検証状態は変更していません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모델 핫 업데이트가 완료되지 않았습니다: %@. 로컬에 저장된 모델 %lld개를 계속 사용하며 기존 카탈로그와 검사 상태는 변경하지 않았습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A atualização dinâmica dos modelos não foi concluída: %@; os %lld modelos salvos localmente continuarão em uso. O catálogo e os estados de verificação existentes não foram alterados."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Горячее обновление моделей не завершено: %@; продолжается использование %lld локально сохранённых моделей. Существующий каталог и состояния проверки не изменены."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型热更新未完成：%@；继续使用本地已保存的 %lld 个模型，现有目录和检测状态未修改。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型熱更新未完成：%@；繼續使用本地已儲存的 %lld 個模型，現有目錄和檢測狀態未修改。"
+          }
+        }
+      }
+    },
     "模型目录、代理订阅和价格可在运行时热更新；应用代码只通过当前受信任发行渠道更新，不下载或执行远程代码。" : {
       "localizations" : {
         "ar" : {

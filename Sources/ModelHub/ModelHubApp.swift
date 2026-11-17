@@ -1,35 +1,238 @@
 import SwiftUI
 
 @MainActor
-private enum ModelHubWindowController {
+enum ModelHubWindowPresentationPlan: Equatable {
+    case showExisting
+    case waitForMainWindow
+    case createFallbackWindow
+}
+
+@MainActor
+final class ModelHubMainWindowDelegateProxy: NSObject, NSWindowDelegate {
+    nonisolated(unsafe) private let forwardedDelegate: (any NSWindowDelegate)?
+
+    init(forwarding delegate: (any NSWindowDelegate)?) {
+        forwardedDelegate = delegate
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if ModelHubWindowController.isTerminationRequested {
+            return true
+        }
+        sender.orderOut(nil)
+        DispatchQueue.main.async {
+            let hasVisibleWindow = NSApplication.shared.windows.contains {
+                $0.isVisible && $0.canBecomeKey && !($0 is NSPanel)
+            }
+            if !hasVisibleWindow {
+                NSApplication.shared.setActivationPolicy(.accessory)
+            }
+        }
+        return false
+    }
+
+    override func responds(to selector: Selector!) -> Bool {
+        super.responds(to: selector)
+            || (forwardedDelegate?.responds(to: selector) ?? false)
+    }
+
+    override func forwardingTarget(for selector: Selector!) -> Any? {
+        if forwardedDelegate?.responds(to: selector) == true {
+            return forwardedDelegate
+        }
+        return super.forwardingTarget(for: selector)
+    }
+}
+
+@MainActor
+enum ModelHubWindowController {
+    private static let presentationRetryDelay = DispatchTimeInterval.milliseconds(100)
+    private static let presentationRetryLimit = 12
+    private static var makeFallbackWindow: (() -> NSWindow)?
+    private static var mainWindow: NSWindow?
+    private static var mainWindowDelegate: ModelHubMainWindowDelegateProxy?
+    private static var pendingPresentation: DispatchWorkItem?
+    private(set) static var isTerminationRequested = false
+
+    static func registerFallbackWindowFactory(_ factory: @escaping () -> NSWindow) {
+        makeFallbackWindow = factory
+    }
+
+    static func presentationPlan(
+        hasExistingWindow: Bool,
+        remainingAttempts: Int,
+        canCreateFallbackWindow: Bool
+    ) -> ModelHubWindowPresentationPlan {
+        if hasExistingWindow {
+            return .showExisting
+        }
+        if remainingAttempts > 0 {
+            return .waitForMainWindow
+        }
+        return canCreateFallbackWindow ? .createFallbackWindow : .waitForMainWindow
+    }
+
+    static func registerMainWindow(_ window: NSWindow) {
+        guard mainWindow !== window else { return }
+        if mainWindow != nil {
+            window.orderOut(nil)
+            return
+        }
+        let delegate = ModelHubMainWindowDelegateProxy(forwarding: window.delegate)
+        window.isReleasedWhenClosed = false
+        window.delegate = delegate
+        mainWindow = window
+        mainWindowDelegate = delegate
+    }
+
+    static func prepareForTermination() {
+        isTerminationRequested = true
+        pendingPresentation?.cancel()
+        pendingPresentation = nil
+    }
+
     static func hideMainWindows() {
-        NSApplication.shared.windows
+        let windows = NSApplication.shared.windows
             .filter { $0.canBecomeKey && !($0 is NSPanel) }
-            .forEach { $0.orderOut(nil) }
+        windows.forEach { $0.orderOut(nil) }
     }
 
     static func showMainWindow() {
-        NSApplication.shared.activate(ignoringOtherApps: true)
-        if let window = NSApplication.shared.windows.first(where: {
+        pendingPresentation?.cancel()
+        pendingPresentation = nil
+        attemptToShowMainWindow(remainingAttempts: presentationRetryLimit)
+    }
+
+    private static func attemptToShowMainWindow(remainingAttempts: Int) {
+        let window = mainWindow ?? NSApplication.shared.windows.first(where: {
             $0.canBecomeKey && !($0 is NSPanel)
-        }) {
-            window.makeKeyAndOrderFront(nil)
+        })
+        switch presentationPlan(
+            hasExistingWindow: window != nil,
+            remainingAttempts: remainingAttempts,
+            canCreateFallbackWindow: makeFallbackWindow != nil
+        ) {
+        case .showExisting:
+            if let window {
+                registerMainWindow(window)
+                activateForMainWindow()
+                window.makeKeyAndOrderFront(nil)
+            }
+            pendingPresentation = nil
+        case .waitForMainWindow:
+            guard remainingAttempts > 0, !isTerminationRequested else {
+                pendingPresentation = nil
+                return
+            }
+            let workItem = DispatchWorkItem {
+                attemptToShowMainWindow(remainingAttempts: remainingAttempts - 1)
+            }
+            pendingPresentation = workItem
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + presentationRetryDelay,
+                execute: workItem
+            )
+        case .createFallbackWindow:
+            guard let makeFallbackWindow, !isTerminationRequested else { return }
+            let fallbackWindow = makeFallbackWindow()
+            registerMainWindow(fallbackWindow)
+            activateForMainWindow()
+            fallbackWindow.makeKeyAndOrderFront(nil)
+            pendingPresentation = nil
         }
+    }
+
+    private static func activateForMainWindow() {
+        NSApplication.shared.setActivationPolicy(.regular)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+}
+
+private struct ModelHubWindowCapture: NSViewRepresentable {
+    func makeNSView(context: Context) -> WindowCaptureView {
+        WindowCaptureView()
+    }
+
+    func updateNSView(_ nsView: WindowCaptureView, context: Context) {
+        nsView.registerWindowIfAvailable()
+    }
+
+    @MainActor
+    final class WindowCaptureView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            registerWindowIfAvailable()
+        }
+
+        func registerWindowIfAvailable() {
+            guard let window else { return }
+            DispatchQueue.main.async { [weak window] in
+                guard let window else { return }
+                ModelHubWindowController.registerMainWindow(window)
+            }
+        }
+    }
+}
+
+private struct ModelHubRootView: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        ContentView()
+            .environmentObject(model)
+            .environment(\.locale, model.interfaceLocale)
+            .background(
+                ModelHubWindowCapture()
+                    .frame(width: 0, height: 0)
+                    .accessibilityHidden(true)
+            )
+            .onAppear {
+                model.restoreRequestedLaunchAtLogin()
+                model.refreshLaunchAtLoginStatus()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                model.stopModelProxyRuntime()
+                model.stopMobileAccess()
+                model.flushPendingPersistence(waitUntilFinished: true)
+            }
+            .frame(minWidth: 980, minHeight: 680)
+    }
+}
+
+@MainActor
+private enum ModelHubMainWindowFactory {
+    private static let frameAutosaveName = "ModelHubMainWindow"
+
+    static func make(model: AppModel) -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1_240, height: 820),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "ModelHub"
+        window.identifier = NSUserInterfaceItemIdentifier("modelhub-main")
+        window.toolbarStyle = .unified
+        window.minSize = NSSize(width: 980, height: 680)
+        window.contentViewController = NSHostingController(
+            rootView: ModelHubRootView(model: model)
+        )
+        if !window.setFrameUsingName(frameAutosaveName) {
+            window.center()
+        }
+        window.setFrameAutosaveName(frameAutosaveName)
+        return window
     }
 }
 
 @MainActor
 final class ModelHubApplicationDelegate: NSObject, NSApplicationDelegate {
-    private static let hasCompletedFirstLaunchKey = "hasCompletedFirstLaunch"
     private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
         installStatusItem()
 
-        let defaults = UserDefaults.standard
-        let isFirstLaunch = !defaults.bool(forKey: Self.hasCompletedFirstLaunchKey)
-        defaults.set(true, forKey: Self.hasCompletedFirstLaunchKey)
         #if DEBUG
         let environment = ProcessInfo.processInfo.environment
         let visualInspection = environment[
@@ -40,17 +243,14 @@ final class ModelHubApplicationDelegate: NSObject, NSApplicationDelegate {
         } else if environment["MODELHUB_VISUAL_APPEARANCE"] == "light" {
             NSApplication.shared.appearance = NSAppearance(named: .aqua)
         }
+        let presentationDelay: DispatchTimeInterval = visualInspection
+            ? .milliseconds(600)
+            : .milliseconds(150)
         #else
-        let visualInspection = false
+        let presentationDelay: DispatchTimeInterval = .milliseconds(150)
         #endif
-        if isFirstLaunch || visualInspection {
-            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(600)) {
-                ModelHubWindowController.showMainWindow()
-            }
-        } else {
-            DispatchQueue.main.async {
-                ModelHubWindowController.hideMainWindows()
-            }
+        DispatchQueue.main.asyncAfter(deadline: .now() + presentationDelay) {
+            ModelHubWindowController.showMainWindow()
         }
     }
 
@@ -90,7 +290,15 @@ final class ModelHubApplicationDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func quitApplication() {
+        ModelHubWindowController.prepareForTermination()
         NSApplication.shared.terminate(nil)
+    }
+
+    func applicationShouldTerminate(
+        _ sender: NSApplication
+    ) -> NSApplication.TerminateReply {
+        ModelHubWindowController.prepareForTermination()
+        return .terminateNow
     }
 
     func applicationShouldHandleReopen(
@@ -132,23 +340,14 @@ struct ModelHubApp: App {
         #else
         model.bootstrap(initializeSecrets: false)
         #endif
+        ModelHubWindowController.registerFallbackWindowFactory {
+            ModelHubMainWindowFactory.make(model: model)
+        }
     }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(model)
-                .environment(\.locale, model.interfaceLocale)
-                .onAppear {
-                    model.restoreRequestedLaunchAtLogin()
-                    model.refreshLaunchAtLoginStatus()
-                }
-                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
-                    model.stopModelProxyRuntime()
-                    model.stopMobileAccess()
-                    model.flushPendingPersistence(waitUntilFinished: true)
-                }
-                .frame(minWidth: 980, minHeight: 680)
+            ModelHubRootView(model: model)
         }
         .defaultSize(width: 1_240, height: 820)
         .windowToolbarStyle(.unified)

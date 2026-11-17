@@ -79,6 +79,7 @@ public enum ProviderModelCatalogError: LocalizedError, Equatable {
     case redirectedToDifferentOrigin
     case nonHTTPResponse
     case secureConnectionFailed
+    case httpsProxyConnectionFailed
     case networkUnavailable
     case timedOut
     case responseTooLarge(maximumBytes: Int)
@@ -87,6 +88,15 @@ public enum ProviderModelCatalogError: LocalizedError, Equatable {
     case rejected(statusCode: Int, providerKind: ProviderKind)
     case invalidResponse
     case noModels
+
+    public var isTransientNetworkFailure: Bool {
+        switch self {
+        case .httpsProxyConnectionFailed, .networkUnavailable, .timedOut:
+            true
+        default:
+            false
+        }
+    }
 
     public var errorDescription: String? {
         switch self {
@@ -108,6 +118,8 @@ public enum ProviderModelCatalogError: LocalizedError, Equatable {
             "供应商返回了非 HTTP 响应"
         case .secureConnectionFailed:
             "TLS 安全连接失败；ModelHub 未绕过证书校验。请检查 VPN/TUN、代理或系统时间后重试"
+        case .httpsProxyConnectionFailed:
+            "HTTPS 代理连接失败；请确认 Clash/VPN/TUN 的代理内核和当前节点可用，或关闭其网络接管后重试"
         case .networkUnavailable:
             "无法连接模型供应商；请检查网络、DNS、VPN/TUN 或代理状态后重试"
         case .timedOut:
@@ -1271,6 +1283,7 @@ extension ProviderClient {
         var recoverySession: URLSession?
         defer { recoverySession?.finishTasksAndInvalidate() }
         var retryCount = 0
+        var recoveryCause: CatalogNetworkFailure?
         while true {
             do {
                 return try await performModelCatalogRequest(
@@ -1278,12 +1291,18 @@ extension ProviderClient {
                     providerKind: providerKind,
                     session: requestSession
                 )
-            } catch let error as URLError {
+            } catch let error as ProviderModelCatalogError {
+                throw error
+            } catch {
+                guard let failure = catalogNetworkFailure(from: error) else {
+                    throw error
+                }
                 if retryCount == 0,
-                   shouldReestablishCatalogSession(after: error),
+                   shouldReestablishCatalogSession(after: failure),
                    let factory = catalogRecoverySessionFactory
                 {
                     retryCount += 1
+                    recoveryCause = failure
                     let freshSession = factory()
                     recoverySession = freshSession
                     requestSession = freshSession
@@ -1292,14 +1311,20 @@ extension ProviderClient {
                     }
                     continue
                 }
-                if retryCount == 0, shouldRetryCatalogRequest(after: error) {
+                if retryCount == 0, shouldRetryCatalogRequest(after: failure) {
                     retryCount += 1
+                    recoveryCause = failure
                     if retryDelayNanoseconds > 0 {
                         try await Task.sleep(nanoseconds: retryDelayNanoseconds)
                     }
                     continue
                 }
-                throw mappedCatalogNetworkError(error)
+                throw mappedCatalogNetworkError(
+                    preferredCatalogFailure(
+                        recoveryCause: recoveryCause,
+                        finalFailure: failure
+                    )
+                )
             }
         }
     }
@@ -1381,38 +1406,110 @@ extension ProviderClient {
         return components.url?.absoluteString ?? "provider-catalog"
     }
 
-    private func shouldRetryCatalogRequest(after error: URLError) -> Bool {
-        switch error.code {
-        case .timedOut, .cannotFindHost, .cannotConnectToHost,
-             .dnsLookupFailed, .networkConnectionLost, .notConnectedToInternet,
-             .secureConnectionFailed:
+    private enum CatalogNetworkFailure {
+        case url(URLError.Code)
+        case httpsProxyConnectionFailed
+    }
+
+    private func catalogNetworkFailure(
+        from error: Error,
+        underlyingDepth: Int = 0
+    ) -> CatalogNetworkFailure? {
+        if let urlError = error as? URLError {
+            return .url(urlError.code)
+        }
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            return .url(URLError.Code(rawValue: nsError.code))
+        }
+        // CFNetwork reports an unavailable HTTPS proxy with its own positive
+        // error code instead of NSURLErrorDomain. This occurs with transparent
+        // VPN/TUN interception even when the system web-proxy toggles are off.
+        if nsError.domain == "kCFErrorDomainCFNetwork", nsError.code == 310 {
+            return .httpsProxyConnectionFailed
+        }
+        if underlyingDepth < 2,
+           let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error
+        {
+            return catalogNetworkFailure(
+                from: underlying,
+                underlyingDepth: underlyingDepth + 1
+            )
+        }
+        return nil
+    }
+
+    private func shouldRetryCatalogRequest(after failure: CatalogNetworkFailure) -> Bool {
+        switch failure {
+        case .httpsProxyConnectionFailed:
             true
-        default:
-            false
+        case .url(let code):
+            switch code {
+            case .timedOut, .cannotFindHost, .cannotConnectToHost,
+                 .dnsLookupFailed, .networkConnectionLost, .notConnectedToInternet,
+                 .secureConnectionFailed:
+                true
+            default:
+                false
+            }
         }
     }
 
-    private func shouldReestablishCatalogSession(after error: URLError) -> Bool {
-        switch error.code {
-        case .serverCertificateUntrusted, .secureConnectionFailed:
+    private func shouldReestablishCatalogSession(after failure: CatalogNetworkFailure) -> Bool {
+        switch failure {
+        case .httpsProxyConnectionFailed:
             true
-        default:
-            false
+        case .url(let code):
+            switch code {
+            case .serverCertificateUntrusted, .secureConnectionFailed:
+                true
+            default:
+                false
+            }
         }
     }
 
     private func mappedCatalogNetworkError(
-        _ error: URLError
+        _ failure: CatalogNetworkFailure
     ) -> ProviderModelCatalogError {
-        switch error.code {
-        case .serverCertificateHasBadDate, .serverCertificateUntrusted,
-             .serverCertificateNotYetValid, .clientCertificateRejected,
-             .clientCertificateRequired, .secureConnectionFailed:
-            .secureConnectionFailed
-        case .timedOut:
-            .timedOut
-        default:
-            .networkUnavailable
+        switch failure {
+        case .httpsProxyConnectionFailed:
+            .httpsProxyConnectionFailed
+        case .url(let code):
+            switch code {
+            case .serverCertificateHasBadDate, .serverCertificateUntrusted,
+                 .serverCertificateNotYetValid, .clientCertificateRejected,
+                 .clientCertificateRequired, .secureConnectionFailed:
+                .secureConnectionFailed
+            case .timedOut:
+                .timedOut
+            default:
+                .networkUnavailable
+            }
+        }
+    }
+
+    /// Preserve an initial HTTPS proxy failure when the one bounded recovery
+    /// attempt only degrades into a generic connectivity timeout. This keeps
+    /// the final diagnosis actionable without hiding a later TLS trust error.
+    private func preferredCatalogFailure(
+        recoveryCause: CatalogNetworkFailure?,
+        finalFailure: CatalogNetworkFailure
+    ) -> CatalogNetworkFailure {
+        guard case .httpsProxyConnectionFailed = recoveryCause else {
+            return finalFailure
+        }
+        switch finalFailure {
+        case .httpsProxyConnectionFailed:
+            return finalFailure
+        case .url(let code):
+            switch code {
+            case .timedOut, .cannotFindHost, .cannotConnectToHost,
+                 .dnsLookupFailed, .networkConnectionLost, .notConnectedToInternet:
+                return .httpsProxyConnectionFailed
+            default:
+                return finalFailure
+            }
         }
     }
 

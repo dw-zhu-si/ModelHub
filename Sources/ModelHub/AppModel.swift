@@ -1792,6 +1792,23 @@ final class AppModel: ObservableObject {
         refreshingProviderCatalogIDs.contains(providerID)
     }
 
+    static func providerCatalogRefreshFailureNotice(
+        savedModelCount: Int,
+        error: Error
+    ) -> String {
+        if let catalogError = error as? ProviderModelCatalogError,
+           catalogError.isTransientNetworkFailure,
+           savedModelCount > 0
+        {
+            return L10n.format(
+                "模型热更新未完成：%@；继续使用本地已保存的 %lld 个模型，现有目录和检测状态未修改。",
+                error.localizedDescription,
+                Int64(savedModelCount)
+            )
+        }
+        return L10n.format("模型热更新失败：%@", error.localizedDescription)
+    }
+
     func hotRefreshProviderCatalog(providerID: UUID) async {
         guard !isReviewDemoMode,
               !refreshingProviderCatalogIDs.contains(providerID),
@@ -1867,7 +1884,10 @@ final class AppModel: ObservableObject {
                 Int64(capabilityCount)
             )
         } catch {
-            notice = L10n.format("模型热更新失败：%@", error.localizedDescription)
+            notice = Self.providerCatalogRefreshFailureNotice(
+                savedModelCount: snapshot.models.count,
+                error: error
+            )
         }
     }
 

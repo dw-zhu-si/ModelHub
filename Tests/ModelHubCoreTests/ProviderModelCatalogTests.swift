@@ -8,6 +8,9 @@ final class ProviderModelCatalogTests: XCTestCase {
         CatalogURLProtocolStub.statusCode = 200
         CatalogURLProtocolStub.failuresBeforeSuccess = 0
         CatalogURLProtocolStub.failureCode = .unknown
+        CatalogURLProtocolStub.failureDomain = nil
+        CatalogURLProtocolStub.failureRawCode = 0
+        CatalogURLProtocolStub.failureSequence = []
         CatalogURLProtocolStub.attemptCount = 0
         super.tearDown()
     }
@@ -998,6 +1001,111 @@ final class ProviderModelCatalogTests: XCTestCase {
         }
     }
 
+    func testCatalogFetchRetriesRawCFNetworkHTTPSProxyFailure() async throws {
+        CatalogURLProtocolStub.responseBody = Data(
+            #"{"data":[{"id":"live-after-proxy-retry"}]}"#.utf8
+        )
+        CatalogURLProtocolStub.failuresBeforeSuccess = 1
+        CatalogURLProtocolStub.failureDomain = "kCFErrorDomainCFNetwork"
+        CatalogURLProtocolStub.failureRawCode = 310
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [CatalogURLProtocolStub.self]
+        let client = ProviderClient(session: URLSession(configuration: configuration))
+        let provider = ProviderConfig(
+            name: "Compatible",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.com/v1",
+            endpointURLs: [
+                ProviderEndpointRecord.key(for: .modelCatalog):
+                    "https://catalog.example.com/models"
+            ]
+        )
+
+        let result = try await client.fetchModelCatalog(
+            provider: provider,
+            apiKey: "test-key",
+            retryDelayNanoseconds: 0
+        )
+
+        XCTAssertEqual(result.models, ["live-after-proxy-retry"])
+        XCTAssertEqual(CatalogURLProtocolStub.attemptCount, 2)
+    }
+
+    func testCatalogFetchMapsPersistentRawCFNetworkHTTPSProxyFailure() async throws {
+        CatalogURLProtocolStub.failuresBeforeSuccess = .max
+        CatalogURLProtocolStub.failureDomain = "kCFErrorDomainCFNetwork"
+        CatalogURLProtocolStub.failureRawCode = 310
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [CatalogURLProtocolStub.self]
+        let client = ProviderClient(session: URLSession(configuration: configuration))
+        let provider = ProviderConfig(
+            name: "Compatible",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.com/v1",
+            endpointURLs: [
+                ProviderEndpointRecord.key(for: .modelCatalog):
+                    "https://catalog.example.com/models"
+            ]
+        )
+
+        do {
+            _ = try await client.fetchModelCatalog(
+                provider: provider,
+                apiKey: "test-key",
+                retryDelayNanoseconds: 0
+            )
+            XCTFail("Expected HTTPS proxy failure")
+        } catch {
+            XCTAssertEqual(
+                error as? ProviderModelCatalogError,
+                .httpsProxyConnectionFailed
+            )
+            XCTAssertTrue(error.localizedDescription.contains("Clash/VPN/TUN"))
+            XCTAssertEqual(CatalogURLProtocolStub.attemptCount, 2)
+        }
+    }
+
+    func testCatalogFetchPreservesProxyDiagnosisWhenRecoveryTimesOut() async throws {
+        CatalogURLProtocolStub.failureSequence = [
+            NSError(domain: "kCFErrorDomainCFNetwork", code: 310),
+            URLError(.timedOut)
+        ]
+        let makeSession: @Sendable () -> URLSession = {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [CatalogURLProtocolStub.self]
+            return URLSession(configuration: configuration)
+        }
+        let client = ProviderClient(
+            session: makeSession(),
+            catalogRecoverySessionFactory: { makeSession() }
+        )
+        let provider = ProviderConfig(
+            name: "Compatible",
+            kind: .unifiedCompatible,
+            baseURL: "https://example.com/v1",
+            endpointURLs: [
+                ProviderEndpointRecord.key(for: .modelCatalog):
+                    "https://catalog.example.com/models"
+            ]
+        )
+
+        do {
+            _ = try await client.fetchModelCatalog(
+                provider: provider,
+                apiKey: "test-key",
+                retryDelayNanoseconds: 0
+            )
+            XCTFail("Expected HTTPS proxy failure")
+        } catch {
+            XCTAssertEqual(
+                error as? ProviderModelCatalogError,
+                .httpsProxyConnectionFailed
+            )
+            XCTAssertTrue(error.localizedDescription.contains("Clash/VPN/TUN"))
+            XCTAssertEqual(CatalogURLProtocolStub.attemptCount, 2)
+        }
+    }
+
     func testCatalog401ProvidesProviderSpecificCredentialGuidance() async throws {
         CatalogURLProtocolStub.statusCode = 401
         let configuration = URLSessionConfiguration.ephemeral
@@ -1054,6 +1162,9 @@ private final class CatalogURLProtocolStub: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var statusCode = 200
     nonisolated(unsafe) static var failuresBeforeSuccess = 0
     nonisolated(unsafe) static var failureCode = URLError.Code.unknown
+    nonisolated(unsafe) static var failureDomain: String?
+    nonisolated(unsafe) static var failureRawCode = 0
+    nonisolated(unsafe) static var failureSequence: [Error] = []
     nonisolated(unsafe) static var attemptCount = 0
 
     override class func canInit(with request: URLRequest) -> Bool { true }
@@ -1061,8 +1172,20 @@ private final class CatalogURLProtocolStub: URLProtocol, @unchecked Sendable {
 
     override func startLoading() {
         Self.attemptCount += 1
+        if Self.attemptCount <= Self.failureSequence.count {
+            client?.urlProtocol(
+                self,
+                didFailWithError: Self.failureSequence[Self.attemptCount - 1]
+            )
+            return
+        }
         if Self.attemptCount <= Self.failuresBeforeSuccess {
-            client?.urlProtocol(self, didFailWithError: URLError(Self.failureCode))
+            let error: Error = if let failureDomain = Self.failureDomain {
+                NSError(domain: failureDomain, code: Self.failureRawCode)
+            } else {
+                URLError(Self.failureCode)
+            }
+            client?.urlProtocol(self, didFailWithError: error)
             return
         }
         guard let url = request.url,
